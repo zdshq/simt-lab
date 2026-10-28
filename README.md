@@ -8,6 +8,22 @@
 
 开发阶段、验收条件和当前进展见 [实施计划](docs/PLAN.md) 与 [开发记录](docs/DEVELOPMENT.md)。每个通过验收的阶段单独 Git 提交。
 
+## 构建与运行
+
+依赖 C++20 编译器、CMake、Python 3；不需要 CUDA 或 Python 第三方包。
+
+```sh
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+cmake --build build
+ctest --test-dir build --output-on-failure
+python3 examples/identifiers.py
+./build/simt-run build/identifiers.bin --sms 2 --blocks 5 --threads 37
+```
+
+加 `--dump-state` 可以查看每个 CTA/warp 的寄存器和谓词。程序输出 JSON，失败返回退出码 2，并报告 block、SM、warp 与 PC。编码规则和当前实现边界见 [ISA 规范](docs/ISA.md)。
+
+阶段 1 已实现编码生成、整数与基础浮点运算、谓词和双 SM 线程块派发，分支重聚、访存和 MMA 按计划继续加入。
+
 ## 路线依据
 
 - [ISA](https://zhuanlan.zhihu.com/p/2044711939746566963)：先定义机器状态与指令语义。

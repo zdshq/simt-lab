@@ -10,9 +10,9 @@
 
 | 阶段 | 交付内容 | 验收证据 | 状态 |
 |---|---|---|---|
-| 0 | 独立仓库、计划、开发记录 | 初始 Git 提交 | 进行中 |
-| 1 | 声明式 ISA、生成 C++ 解码表和 Python 编码接口、标量/warp 运算、命令行运行器 | 编解码往返、非法编码拒绝、算术差分、小 kernel | 待完成 |
-| 2 | per-lane PC、谓词、分支、重聚、EXIT/BREAK/YIELD、warp collective | 分支/循环/提前退出、多种调度顺序、非法参与 mask、死锁诊断 | 待完成 |
+| 0 | 独立仓库、计划、开发记录 | 初始 Git 提交 e612afb | 已完成 |
+| 1 | 声明式 ISA、生成 C++ 解码表和 Python 编码接口、标量/warp 运算、命令行运行器 | 12 项测试；1,000 次编码往返；80 个整数差分程序；双 SM 示例 | 已完成 |
+| 2 | per-lane PC、谓词、分支、重聚、EXIT/BREAK/YIELD、warp collective | 分支/循环/提前退出、多种调度顺序、非法参与 mask、死锁诊断 | 进行中 |
 | 3 | 稀疏内存、global/shared/local/constant、load/store、原子、多 warp/CTA、两个 SM | 数据隔离、规约、跨 warp 同步、原子返回值、SM 派发、公平前进 | 待完成 |
 | 4 | TMEM、描述符驱动 MMA、FP16/BF16/FP32/INT8 数值路径、2:4 与块缩放、异步搬运/mbarrier | 独立数值参考、布局/元数据验证、累加、搬运完成同步 | 待完成 |
 | 5 | 向量/规约/GEMM/小型 Transformer block 示例、易用接口和文档 | 从机器码启动组合 workload，与独立参考对照；负例与诊断可复现 | 待完成 |

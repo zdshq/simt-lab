@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "word_bytes": 16,
+  "fields": [
+    {"name":"opcode", "word":0, "shift":0, "bits":8, "default":0},
+    {"name":"rd", "word":0, "shift":8, "bits":8, "default":0},
+    {"name":"ra", "word":0, "shift":16, "bits":8, "default":0},
+    {"name":"rb", "word":0, "shift":24, "bits":8, "default":0},
+    {"name":"rc", "word":1, "shift":0, "bits":8, "default":0},
+    {"name":"guard", "word":1, "shift":8, "bits":4, "default":7},
+    {"name":"aux", "word":1, "shift":12, "bits":8, "default":0},
+    {"name":"mode", "word":1, "shift":20, "bits":8, "default":0},
+    {"name":"imm", "word":2, "shift":0, "bits":32, "default":0},
+    {"name":"control", "word":3, "shift":11, "bits":21, "default":0}
+  ],
+  "instructions": [
+    {"name":"NOP", "code":0, "fields":[], "description":"No architectural effect"},
+    {"name":"MOVI", "code":1, "fields":["rd","imm"], "description":"Move 32-bit immediate bits"},
+    {"name":"MOV", "code":2, "fields":["rd","ra"], "description":"Move register bits"},
+    {"name":"S2R", "code":3, "fields":["rd","imm"], "description":"Read lane/thread/warp/block/SM/launch identifier"},
+    {"name":"IADD", "code":4, "fields":["rd","ra","rb"], "description":"Wrapping 32-bit addition"},
+    {"name":"ISUB", "code":5, "fields":["rd","ra","rb"], "description":"Wrapping 32-bit subtraction"},
+    {"name":"IMUL", "code":6, "fields":["rd","ra","rb"], "description":"Low 32-bit integer product"},
+    {"name":"IMAD", "code":7, "fields":["rd","ra","rb","rc"], "description":"Wrapping integer multiply-add"},
+    {"name":"AND", "code":8, "fields":["rd","ra","rb"], "description":"Bitwise and"},
+    {"name":"OR", "code":9, "fields":["rd","ra","rb"], "description":"Bitwise or"},
+    {"name":"XOR", "code":10, "fields":["rd","ra","rb"], "description":"Bitwise exclusive-or"},
+    {"name":"SHL", "code":11, "fields":["rd","ra","rb"], "description":"Logical left shift, low five shift bits"},
+    {"name":"SHR", "code":12, "fields":["rd","ra","rb"], "description":"Logical right shift"},
+    {"name":"SAR", "code":13, "fields":["rd","ra","rb"], "description":"Arithmetic right shift"},
+    {"name":"ISETP", "code":14, "fields":["rd","ra","rb","mode"], "description":"Integer predicate: eq/ne/ltu/leu/lts/les"},
+    {"name":"FSETP", "code":15, "fields":["rd","ra","rb","mode"], "description":"Float predicate: eq/ne/lt/le"},
+    {"name":"FADD", "code":16, "fields":["rd","ra","rb"], "description":"Binary32 addition"},
+    {"name":"FMUL", "code":17, "fields":["rd","ra","rb"], "description":"Binary32 multiplication"},
+    {"name":"FFMA", "code":18, "fields":["rd","ra","rb","rc"], "description":"Binary32 fused multiply-add"},
+    {"name":"FEXP2", "code":19, "fields":["rd","ra"], "description":"Host-library binary32 exp2, approximate"},
+    {"name":"FRCP", "code":20, "fields":["rd","ra"], "description":"Binary32 reciprocal"},
+    {"name":"FRSQRT", "code":21, "fields":["rd","ra"], "description":"Binary32 reciprocal square root"},
+    {"name":"I2F", "code":22, "fields":["rd","ra"], "description":"Signed integer to binary32"},
+    {"name":"F2I", "code":23, "fields":["rd","ra"], "description":"Finite binary32 to signed integer, toward zero"},
+    {"name":"EXIT", "code":24, "fields":[], "description":"Retire participating lanes"}
+  ]
+}

@@ -1,0 +1,55 @@
+# Generated from isa/isa.json; do not edit build artifacts.
+# 从 isa/isa.json 生成；不要修改构建产物。
+import struct
+
+SCHEMA = @SCHEMA@
+FIELDS = {field['name']: field for field in SCHEMA['fields']}
+OPS = {op['name']: op for op in SCHEMA['instructions']}
+BY_CODE = {op['code']: op for op in SCHEMA['instructions']}
+
+
+# Validate each field before inserting it into the instruction word.
+# 将字段写入指令字之前检查其取值范围。
+def field_value(name, field, value):
+    if not isinstance(value, int):
+        raise ValueError('integer field required: ' + name)
+    if name == 'imm' and -(1 << 31) <= value < 0:
+        value += 1 << 32
+    if not 0 <= value < (1 << field['bits']):
+        raise ValueError('field out of range: ' + name)
+    return value
+
+
+# Encode only operands declared for this instruction.
+# 仅编码当前指令声明的操作数。
+def encode(name, **operands):
+    op = OPS[name]
+    allowed = set(op['fields']) | {'guard', 'control'}
+    if set(operands) - allowed:
+        raise ValueError('invalid operands for ' + name)
+    values = {field['name']: field['default'] for field in SCHEMA['fields']}
+    values.update(operands)
+    values['opcode'] = op['code']
+    words = [0] * 4
+    for name, field in FIELDS.items():
+        value = field_value(name, field, values[name])
+        words[field['word']] |= value << field['shift']
+    return struct.pack('<4I', *words)
+
+
+# Round-trip validation rejects any reserved or unused nonzero bits.
+# 通过往返检查拒绝保留位或未使用字段中的非零值。
+def decode(data):
+    if len(data) != 16:
+        raise ValueError('instruction must contain 16 bytes')
+    words = struct.unpack('<4I', data)
+    values = {name: (words[field['word']] >> field['shift']) & ((1 << field['bits']) - 1)
+              for name, field in FIELDS.items()}
+    op = BY_CODE.get(values.pop('opcode'))
+    if op is None:
+        raise ValueError('unknown opcode')
+    allowed = set(op['fields']) | {'guard', 'control'}
+    operands = {name: value for name, value in values.items() if name in allowed}
+    if encode(op['name'], **operands) != data:
+        raise ValueError('reserved encoding bits')
+    return op['name'], operands

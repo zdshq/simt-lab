@@ -1,0 +1,47 @@
+// Generated from isa/isa.json; do not edit build artifacts.
+// 从 isa/isa.json 生成；不要修改构建产物。
+#pragma once
+#include <array>
+#include <cstdint>
+#include <stdexcept>
+
+namespace simt {
+enum class Op : uint8_t {
+@ENUM@
+};
+struct Instruction {
+    Op op{};
+@FIELDS@
+};
+struct OpInfo {
+    Op op;
+    const char* name;
+    std::array<uint32_t, 4> allowed;
+};
+inline constexpr OpInfo op_table[] = {
+@TABLE@
+};
+
+// Reject unknown opcodes before inspecting instruction-specific fields.
+// 在检查指令专用字段之前拒绝未知操作码。
+inline const OpInfo& op_info(Op op) {
+    for (const auto& entry : op_table)
+        if (entry.op == op) return entry;
+    throw std::runtime_error("unknown_opcode");
+}
+
+inline const char* op_name(Op op) { return op_info(op).name; }
+
+// Enforce reserved bits and extract the shared encoding fields.
+// 检查保留位，并提取统一编码字段。
+inline Instruction decode(const std::array<uint32_t, 4>& words) {
+    Instruction i;
+    i.op = static_cast<Op>(words[0] & 255u);
+    const auto& info = op_info(i.op);
+    for (size_t word = 0; word < 4; ++word)
+        if ((words[word] & ~info.allowed[word]) != 0)
+            throw std::runtime_error("reserved_encoding_bits");
+@DECODE@
+    return i;
+}
+}
