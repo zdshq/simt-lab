@@ -41,3 +41,11 @@
 - 数值参考独立用 Python Fraction 计算精确乘加并实现最近偶数 binary32 舍入，单独检验中点、次正规数和溢出。随机矩阵使用非紧密步长，比较量化后的输入实际字节。
 - 异步 global→shared 搬运通过事件队列延迟提交；mbarrier 保存到达与字节计数，反映到受保护的 shared 记录。CTA 全阻塞或已 EXIT 时，已发起事件仍会完成。
 - 验证：五个套件共 48 项测试，包括 15 个随机 dense 矩阵、全部六种 2:4 位置、稀疏与非平凡缩放舍入组合、跨 warp DMA→MMA，以及丢失事务死锁、记录覆盖和未来令牌负例。ISA 往返为 2,360 次。
+
+## 阶段 5：组合 kernel 与可复现示例（2026-10-29）
+
+- 实现向量加、两层规约、三个 CTA 的 FP16 GEMM，以及含 LayerNorm、单头注意力、softmax、FFN 和两条残差路径的小型 Transformer block。
+- 示例发射真实指令，全部中间张量在 C++ 模拟器内计算；独立参考使用普通标量数学。Transformer 使用 8 次有效 MMA，两 warp 的指令组计数为 16，文档明确区分。
+- 每次示例保存二进制、输入、汇编清单、启动参数、完整内存结果和验证摘要。新增架构图与阅读路线。
+- 验证：`ctest --test-dir build --output-on-failure` 六个套件共 52 项测试通过；工作负载在 rr/min/max 的 PC 与 warp 策略下输出一致。`python3 examples/run_workloads.py` 全部通过，向量/整数规约误差 0，GEMM 最大绝对误差 2.980232238769531e-7，Transformer 为 1.0707641351359598e-7。
+- Python AST 检查用于本次人工审查：当前最长函数 22 行，没有添加样式计数测试。

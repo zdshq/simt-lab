@@ -18,11 +18,14 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 python3 examples/identifiers.py
 ./build/simt-run build/identifiers.bin --sms 2 --blocks 5 --threads 37
+python3 examples/run_workloads.py
 ```
 
 加 `--dump-state` 可以查看每个 CTA/warp 的寄存器和谓词。程序输出 JSON，失败返回退出码 2，并报告 block、SM、warp 与 PC。编码规则和当前实现边界见 [ISA 规范](docs/ISA.md)。
 
-阶段 4 已实现独立线程调度、分支重聚、warp 集合操作、双 SM 的多 CTA/warp 内存与屏障，以及 TMEM、五种数据格式的 MMA、2:4 稀疏、块缩放和异步搬运事务。规则与边界见 [内存规范](docs/MEMORY.md) 和 [张量规范](docs/TENSOR.md)。组合工作负载按计划继续加入。
+已实现独立线程调度、分支重聚、warp 集合操作、双 SM 的多 CTA/warp 内存与屏障，以及 TMEM、五种数据格式的 MMA、2:4 稀疏、块缩放和异步搬运事务。提供向量、规约、分块 GEMM 和小型 Transformer block 的机器码示例与独立参考。
+
+先看 [从示例读懂模拟器](docs/WALKTHROUGH.md)，再查 [内存规范](docs/MEMORY.md) 和 [张量规范](docs/TENSOR.md)。示例产物写入 `artifacts/examples/`，其中包含可阅读汇编、机器码、启动参数及验证结果。
 
 ## 路线依据
 
