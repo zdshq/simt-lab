@@ -6,11 +6,13 @@ namespace simt {
 // 计算一条指令的所有线程时保持源状态快照不变。
 struct ExecutionContext {
     const Instruction& instruction;
-    const Cta& cta;
+    Cta& cta;
     const Warp& before;
     Warp& after;
     const Config& config;
     uint32_t warp_id;
+    Memory& global;
+    const Memory& constant;
 };
 
 uint32_t lane_bit(uint32_t lane);

@@ -1,6 +1,8 @@
 #pragma once
 #include "simt/module.hpp"
+#include "simt/memory.hpp"
 #include <array>
+#include <bitset>
 #include <cstdint>
 #include <optional>
 #include <ostream>
@@ -12,7 +14,7 @@ constexpr uint32_t lanes = 32;
 constexpr uint32_t registers = 64;
 constexpr uint32_t zero_register = 63;
 
-enum class LaneState { active, reconvergence, yielded, exited };
+enum class LaneState { active, reconvergence, yielded, cta_barrier, exited };
 enum class Policy { round_robin, min_pc, max_pc };
 enum class TokenState { unarmed, armed, dissolved };
 // Reconvergence tracks a dynamic participant set separately from CTA barriers.
@@ -29,6 +31,7 @@ struct Config {
     uint32_t threads = 32;
     uint64_t max_steps = 1000000;
     Policy policy = Policy::round_robin;
+    Policy warp_policy = Policy::round_robin;
 };
 // Store logical lane state independently from the host's CPU threads.
 // 将逻辑线程状态与宿主 CPU 线程分开保存。
@@ -42,6 +45,12 @@ struct Warp {
     uint32_t valid_mask = 0;
     std::optional<uint32_t> last_pc;
 };
+struct CtaBarrier {
+    bool active = false;
+    uint32_t count = 0;
+    uint64_t generation = 0;
+    std::bitset<1024> arrived;
+};
 // A CTA owns its warps and records its assigned simulated SM.
 // CTA 持有自己的 warp，并记录分配到的模拟 SM。
 struct Cta {
@@ -49,6 +58,9 @@ struct Cta {
     uint32_t sm_id = 0;
     uint32_t warp_cursor = 0;
     std::vector<Warp> warps;
+    Memory shared{65536};
+    std::vector<Memory> local;
+    std::array<CtaBarrier, 16> barriers{};
     bool completed = false;
 };
 struct Group { uint32_t pc; uint32_t mask; };
@@ -57,10 +69,13 @@ class Machine {
 public:
     Machine(Module module, Config config);
     void run();
-    void dump(std::ostream& out, bool full_state) const;
+    void dump(std::ostream& out, bool full_state, bool memory = false) const;
+    void load_images(const std::string& global, const std::string& constant);
 private:
     Module module_;
     Config config_;
+    Memory global_;
+    Memory constant_{65536};
     std::vector<Cta> ctas_;
     std::vector<std::optional<uint32_t>> resident_;
     uint32_t next_block_ = 0;
@@ -73,5 +88,6 @@ private:
     bool step(Cta& cta);
     bool schedule_one(uint32_t& completed);
     void execute(Cta& cta, uint32_t warp_id, Group group);
+    std::string deadlock_message() const;
 };
 }

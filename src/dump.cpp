@@ -46,7 +46,7 @@ void dump_warp(std::ostream& out, const Warp& warp) {
 
 // Keep placement visible even without the detailed state dump.
 // 即使不转储详细状态，也保留派发位置。
-void dump_cta(std::ostream& out, const Cta& cta, bool full_state) {
+void dump_cta(std::ostream& out, const Cta& cta, bool full_state, bool memory) {
     out << "{\"block_id\":" << cta.block_id << ",\"sm_id\":" << cta.sm_id
         << ",\"completed\":" << (cta.completed ? "true" : "false");
     if (full_state) {
@@ -57,13 +57,23 @@ void dump_cta(std::ostream& out, const Cta& cta, bool full_state) {
         }
         out << ']';
     }
+    if (memory) {
+        out << ",\"shared\":";
+        cta.shared.dump(out);
+        out << ",\"local\":[";
+        for (size_t thread = 0; thread < cta.local.size(); ++thread) {
+            if (thread) out << ',';
+            cta.local[thread].dump(out);
+        }
+        out << ']';
+    }
     out << '}';
 }
 }
 
 // Emit JSON consumed by the CLI and independent reference tests.
 // 输出供命令行和独立参考测试读取的 JSON。
-void Machine::dump(std::ostream& out, bool full_state) const {
+void Machine::dump(std::ostream& out, bool full_state, bool memory) const {
     out << "{\"status\":\"ok\",\"sm_count\":" << config_.sms
         << ",\"blocks_completed\":" << config_.blocks << ",\"instruction_steps\":" << steps_
         << ",\"lane_instructions\":" << lane_instructions_ << ",\"op_counts\":";
@@ -71,8 +81,15 @@ void Machine::dump(std::ostream& out, bool full_state) const {
     out << ",\"ctas\":[";
     for (size_t ci = 0; ci < ctas_.size(); ++ci) {
         if (ci) out << ',';
-        dump_cta(out, ctas_[ci], full_state);
+        dump_cta(out, ctas_[ci], full_state, memory);
     }
-    out << "]}\n";
+    out << ']';
+    if (memory) {
+        out << ",\"global\":";
+        global_.dump(out);
+        out << ",\"constant\":";
+        constant_.dump(out);
+    }
+    out << "}\n";
 }
 }

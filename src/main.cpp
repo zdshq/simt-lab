@@ -5,7 +5,11 @@
 #include <string_view>
 
 namespace {
-struct Options { simt::Config config; std::string program; bool dump = false; bool help = false; };
+struct Options {
+    simt::Config config;
+    std::string program, global, constant;
+    bool dump = false, memory = false, help = false;
+};
 
 // Parse decimal arguments without accepting trailing text or overflow.
 // 解析十进制参数，拒绝尾随文本和数值溢出。
@@ -42,6 +46,9 @@ simt::Policy policy(std::string_view value) {
 void set_option(Options& options, const std::string& key, const std::string& value) {
     auto& config = options.config;
     if (key == "--policy") { config.policy = policy(value); return; }
+    if (key == "--warp-policy") { config.warp_policy = policy(value); return; }
+    if (key == "--global") { options.global = value; return; }
+    if (key == "--constant") { options.constant = value; return; }
     if (key == "--max-steps") { config.max_steps = number(value); return; }
     if (key != "--sms" && key != "--blocks" && key != "--threads")
         throw std::runtime_error("unknown_option: " + key);
@@ -60,6 +67,7 @@ Options parse_options(int argc, char** argv) {
         const std::string key = argv[at];
         if (key == "--help") { options.help = true; continue; }
         if (key == "--dump-state") { options.dump = true; continue; }
+        if (key == "--dump-memory") { options.memory = true; continue; }
         if (key.starts_with("--")) {
             if (++at >= argc) throw std::runtime_error("missing_option_value");
             set_option(options, key, argv[at]);
@@ -76,7 +84,8 @@ Options parse_options(int argc, char** argv) {
 // 说明功能模拟器接口，不暗示支持硬件时序预测。
 void print_help() {
     std::cout << "simt-run PROGRAM [--sms N] [--blocks N] [--threads N]\n"
-                 "         [--policy rr|min|max] [--max-steps N] [--dump-state]\n"
+                 "         [--policy rr|min|max] [--warp-policy rr|min|max] [--max-steps N]\n"
+                 "         [--global FILE] [--constant FILE] [--dump-state] [--dump-memory]\n"
                  "CPU functional simulator; instruction steps are not GPU cycles.\n";
 }
 
@@ -85,8 +94,9 @@ void print_help() {
 void run_simulation(const Options& options) {
     if (options.help) { print_help(); return; }
     simt::Machine machine(simt::Module::load(options.program), options.config);
+    machine.load_images(options.global, options.constant);
     machine.run();
-    machine.dump(std::cout, options.dump);
+    machine.dump(std::cout, options.dump, options.memory);
 }
 
 // Convert exceptions into JSON diagnostics and a process exit code.

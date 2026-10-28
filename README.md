@@ -22,7 +22,7 @@ python3 examples/identifiers.py
 
 加 `--dump-state` 可以查看每个 CTA/warp 的寄存器和谓词。程序输出 JSON，失败返回退出码 2，并报告 block、SM、warp 与 PC。编码规则和当前实现边界见 [ISA 规范](docs/ISA.md)。
 
-阶段 2 已实现编码生成、整数与基础浮点运算、谓词、双 SM 线程块派发、独立线程 PC、显式分支重聚和 warp 集合操作。访存和 MMA 按计划继续加入。
+阶段 3 已实现编码生成、整数与基础浮点运算、独立线程调度、分支重聚、warp 集合操作，以及双 SM 上的多 CTA/warp 访存、整数原子和屏障。MMA 与异步事务按计划继续加入。内存操作和调度策略见 [内存规范](docs/MEMORY.md)。
 
 ## 路线依据
 

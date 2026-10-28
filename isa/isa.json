@@ -47,6 +47,21 @@
     {"name":"ELECT", "code":30, "fields":["rd","imm"], "description":"Elect the lowest member lane into a predicate"},
     {"name":"VOTE", "code":31, "fields":["rd","ra","imm","mode"], "description":"Predicate ballot/any/all/equal to a register"},
     {"name":"SHFL", "code":32, "fields":["rd","ra","rb","imm"], "description":"Read a member's pre-step register using a per-lane source index"},
-    {"name":"ACTIVEMASK", "code":33, "fields":["rd"], "description":"Read the current PC-group mask"}
+    {"name":"ACTIVEMASK", "code":33, "fields":["rd"], "description":"Read the current PC-group mask"},
+    {"name":"LDG", "code":34, "fields":["rd","ra","imm","mode"], "description":"Load global bytes"},
+    {"name":"STG", "code":35, "fields":["ra","rb","imm","mode"], "description":"Store global bytes"},
+    {"name":"LDS", "code":36, "fields":["rd","ra","imm","mode"], "description":"Load CTA shared bytes"},
+    {"name":"STS", "code":37, "fields":["ra","rb","imm","mode"], "description":"Store CTA shared bytes"},
+    {"name":"LDL", "code":38, "fields":["rd","ra","imm","mode"], "description":"Load thread private bytes"},
+    {"name":"STL", "code":39, "fields":["ra","rb","imm","mode"], "description":"Store thread private bytes"},
+    {"name":"LDC", "code":40, "fields":["rd","ra","imm","mode"], "description":"Load device constants"},
+    {"name":"LD", "code":41, "fields":["rd","ra","imm","mode"], "description":"Load from a generic address"},
+    {"name":"ST", "code":42, "fields":["ra","rb","imm","mode"], "description":"Store to a generic address"},
+    {"name":"CVTA", "code":43, "fields":["rd","ra","mode"], "description":"Convert shared/local and generic addresses"},
+    {"name":"ATOM", "code":44, "fields":["rd","ra","rb","rc","imm","mode","aux"], "description":"Serialized integer atomic returning old value"},
+    {"name":"RED", "code":45, "fields":["ra","rb","rc","imm","mode","aux"], "description":"Integer atomic without returned value"},
+    {"name":"BAR_SYNC", "code":46, "fields":["rd","imm"], "description":"CTA thread arrival and wait"},
+    {"name":"BAR_ARRIVE", "code":47, "fields":["rd","imm"], "description":"CTA thread arrival without waiting"},
+    {"name":"FENCE", "code":48, "fields":["mode","aux"], "description":"Functional sequential-consistency ordering marker"}
   ]
 }

@@ -1,6 +1,7 @@
 #include "simt/machine.hpp"
 #include "simt/execution.hpp"
 #include "simt/control.hpp"
+#include "simt/memsync.hpp"
 #include <bit>
 #include <cfenv>
 #include <limits>
@@ -67,6 +68,7 @@ void Machine::admit() {
         auto& cta = ctas_[id];
         cta.block_id = id;
         cta.sm_id = sm;
+        cta.local.assign(config_.threads, Memory{16384});
         for (uint32_t wi = 0; wi < (config_.threads + lanes - 1) / lanes; ++wi)
             cta.warps.push_back(make_warp(wi, config_.threads));
         resident_[sm] = id;
@@ -94,7 +96,9 @@ std::optional<Group> Machine::select_group(const Warp& warp) const {
 bool Machine::step(Cta& cta) {
     const uint32_t count = static_cast<uint32_t>(cta.warps.size());
     for (uint32_t offset = 0; offset < count; ++offset) {
-        const uint32_t wi = (cta.warp_cursor + offset) % count;
+        uint32_t wi = (cta.warp_cursor + offset) % count;
+        if (config_.warp_policy == Policy::min_pc) wi = offset;
+        if (config_.warp_policy == Policy::max_pc) wi = count - 1 - offset;
         auto group = select_group(cta.warps[wi]);
         if (!group && resume_yielded(cta.warps[wi])) group = select_group(cta.warps[wi]);
         if (!group) continue;
@@ -137,7 +141,7 @@ void Machine::run() {
     uint32_t completed = 0;
     while (completed < config_.blocks) {
         admit();
-        if (!schedule_one(completed)) throw std::runtime_error("deadlock_no_runnable_group");
+        if (!schedule_one(completed)) throw std::runtime_error(deadlock_message());
     }
 }
 
@@ -151,14 +155,23 @@ void Machine::execute(Cta& cta, uint32_t warp_id, Group group) {
     ++op_counts_[static_cast<uint8_t>(instruction.op)];
     lane_instructions_ += std::popcount(mask);
     auto next = warp;
-    const ExecutionContext context{instruction, cta, warp, next, config_, warp_id};
+    const ExecutionContext context{instruction, cta, warp, next, config_, warp_id, global_, constant_};
     for (uint32_t lane = 0; lane < lanes; ++lane) {
         if (!(group.mask & lane_bit(lane))) continue;
         next.pc[lane] = group.pc + 1;
     }
-    if (!execute_control(context, group, mask, module_) && !execute_collective(context, group, mask))
+    if (!execute_control(context, group, mask, module_) && !execute_collective(context, group, mask) &&
+        !execute_memory(context, mask) && !execute_barrier(context, mask))
         for (uint32_t lane = 0; lane < lanes; ++lane)
             if (mask & lane_bit(lane)) execute_scalar_lane(context, lane);
     warp = std::move(next);
+    release_cta_barriers(cta);
+}
+
+// Initialize device-visible data before any CTA is admitted.
+// 在准入任何 CTA 之前初始化设备可见数据。
+void Machine::load_images(const std::string& global, const std::string& constant) {
+    if (!global.empty()) global_.load(global);
+    if (!constant.empty()) constant_.load(constant);
 }
 }
