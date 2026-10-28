@@ -16,7 +16,7 @@
 | 3 | 稀疏内存、global/shared/local/constant、load/store、原子、多 warp/CTA、两个 SM | 11 项新增测试；37 线程/5 CTA 规约、185 个唯一原子票号、三种 warp 调度、生产者前进 | 已完成 |
 | 4 | TMEM、描述符驱动 MMA、FP16/BF16/FP32/INT8 数值路径、2:4 与块缩放、异步搬运/mbarrier | 16 项新增测试；精确有理数参考、五种数据格式、稀疏/缩放组合、跨 warp DMA→MMA | 已完成 |
 | 5 | 向量/规约/GEMM/小型 Transformer block 示例、易用接口和文档 | 4 项端到端测试、三种策略；真实机器码运行与默认示例产物 | 已完成 |
-| 6 | 完整回归、sanitizer、交付审查 | 每项需求对应测试或运行结果；Git 清洁且阶段提交齐全 | 进行中 |
+| 6 | 完整回归、sanitizer、交付审查 | Debug/Release/ASan+UBSan 均通过 52 项测试；验收映射见 VALIDATION.md；阶段提交完整 | 已完成 |
 
 阶段 1/2 可以先以一个 CTA 的执行器建立规则，阶段 3 必须补齐两个 SM 的设备级运行，不能以单 warp 玩具程序替代最终交付。
 

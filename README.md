@@ -10,7 +10,7 @@
 
 ## 构建与运行
 
-依赖 C++20 编译器、CMake、Python 3；不需要 CUDA 或 Python 第三方包。
+依赖 C++20 编译器、CMake 3.20+、Python 3.10+；不需要 CUDA 或 Python 第三方包。
 
 ```sh
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
@@ -26,6 +26,8 @@ python3 examples/run_workloads.py
 已实现独立线程调度、分支重聚、warp 集合操作、双 SM 的多 CTA/warp 内存与屏障，以及 TMEM、五种数据格式的 MMA、2:4 稀疏、块缩放和异步搬运事务。提供向量、规约、分块 GEMM 和小型 Transformer block 的机器码示例与独立参考。
 
 先看 [从示例读懂模拟器](docs/WALKTHROUGH.md)，再查 [内存规范](docs/MEMORY.md) 和 [张量规范](docs/TENSOR.md)。示例产物写入 `artifacts/examples/`，其中包含可阅读汇编、机器码、启动参数及验证结果。
+
+最终验证覆盖 Debug、Release 和 ASan/UBSan 三种构建，52 项测试全部通过。命令、证据映射与未实现范围见 [验证记录](docs/VALIDATION.md)。
 
 ## 路线依据
 
