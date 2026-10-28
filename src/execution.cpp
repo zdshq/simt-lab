@@ -168,7 +168,6 @@ void execute_comparison(const ExecutionContext& context, uint32_t lane) {
 void execute_scalar_lane(const ExecutionContext& context, uint32_t lane) {
     const auto& i = context.instruction;
     if (i.op == Op::NOP) return;
-    if (i.op == Op::EXIT) { context.after.state[lane] = LaneState::exited; return; }
     if (i.op == Op::ISETP || i.op == Op::FSETP) { execute_comparison(context, lane); return; }
     write_register(context.after, i.rd, lane, scalar_result(context, lane));
 }

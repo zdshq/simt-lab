@@ -38,6 +38,15 @@
     {"name":"FRSQRT", "code":21, "fields":["rd","ra"], "description":"Binary32 reciprocal square root"},
     {"name":"I2F", "code":22, "fields":["rd","ra"], "description":"Signed integer to binary32"},
     {"name":"F2I", "code":23, "fields":["rd","ra"], "description":"Finite binary32 to signed integer, toward zero"},
-    {"name":"EXIT", "code":24, "fields":[], "description":"Retire participating lanes"}
+    {"name":"EXIT", "code":24, "fields":[], "description":"Retire lanes and remove their barrier participation"},
+    {"name":"BRA", "code":25, "fields":["imm"], "description":"Predicated absolute branch to an instruction index"},
+    {"name":"BSSY", "code":26, "fields":["rd","imm"], "description":"Arm a reconvergence token for the current group"},
+    {"name":"BSYNC", "code":27, "fields":["rd"], "description":"Wait for token participants to reconverge"},
+    {"name":"BREAK", "code":28, "fields":["rd"], "description":"Remove participating lanes from one reconvergence token"},
+    {"name":"YIELD", "code":29, "fields":[], "description":"Defer participating lanes for a group scheduling opportunity"},
+    {"name":"ELECT", "code":30, "fields":["rd","imm"], "description":"Elect the lowest member lane into a predicate"},
+    {"name":"VOTE", "code":31, "fields":["rd","ra","imm","mode"], "description":"Predicate ballot/any/all/equal to a register"},
+    {"name":"SHFL", "code":32, "fields":["rd","ra","rb","imm"], "description":"Read a member's pre-step register using a per-lane source index"},
+    {"name":"ACTIVEMASK", "code":33, "fields":["rd"], "description":"Read the current PC-group mask"}
   ]
 }

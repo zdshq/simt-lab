@@ -17,3 +17,11 @@
 - 验证：`cmake --build build` 成功；`ctest --test-dir build -V` 的 12 项测试通过，包括 1,000 次编码往返、80 个逐 lane 整数差分程序、融合舍入反例和错误诊断。
 - 示例：`python3 examples/identifiers.py` 后运行 `./build/simt-run build/identifiers.bin --sms 2 --blocks 5 --threads 37`，5 个 CTA 完成，SM 分布为 0、1、0、1、0。
 - 此阶段仍无跳转重聚、内存或 MMA，下一阶段验证分歧与线程集合的正确性。
+
+## 阶段 2：独立线程调度与重聚（2026-10-29）
+
+- 新增 BRA、BSSY、BSYNC、BREAK、YIELD 和四种 warp 集合操作，总计 34 个 opcode。
+- 重聚令牌分别保存参与和到达集合；EXIT 清理全部参与关系，BREAK 仅清理指定令牌，支持嵌套分支及逐 lane 退出循环。
+- 明确集合操作的成员约束和 YIELD 的功能语义，拒绝未初始化令牌、活动令牌覆盖、错误汇合 PC 和缺席成员。
+- 控制、集合、逐 lane 算术保持独立模块，按短函数及相邻中英文注释规范实现。
+- 验证：`cmake --build build && ctest --test-dir build --output-on-failure` 通过两个测试套件，共 21 项测试；编码随机往返随 ISA 扩展为 1,360 次。新增 9 项行为测试覆盖三种调度策略下的嵌套重聚、31 次逐 lane 循环、提前退出、集合操作和死锁。

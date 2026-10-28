@@ -12,8 +12,17 @@ constexpr uint32_t lanes = 32;
 constexpr uint32_t registers = 64;
 constexpr uint32_t zero_register = 63;
 
-enum class LaneState { active, exited };
+enum class LaneState { active, reconvergence, yielded, exited };
 enum class Policy { round_robin, min_pc, max_pc };
+enum class TokenState { unarmed, armed, dissolved };
+// Reconvergence tracks a dynamic participant set separately from CTA barriers.
+// 重聚跟踪动态参与集合，与 CTA 屏障分别管理。
+struct Reconvergence {
+    TokenState state = TokenState::unarmed;
+    uint32_t participants = 0;
+    uint32_t arrived = 0;
+    uint32_t target_pc = 0;
+};
 struct Config {
     uint32_t sms = 2;
     uint32_t blocks = 1;
@@ -28,6 +37,8 @@ struct Warp {
     std::array<uint32_t, 8> predicates{};
     std::array<uint32_t, lanes> pc{};
     std::array<LaneState, lanes> state{};
+    std::array<uint32_t, lanes> blocked_token{};
+    std::array<Reconvergence, 16> reconvergence{};
     uint32_t valid_mask = 0;
     std::optional<uint32_t> last_pc;
 };

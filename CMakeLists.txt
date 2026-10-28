@@ -12,7 +12,8 @@ add_custom_command(OUTPUT ${GENERATED_DIR}/isa.hpp ${GENERATED_DIR}/simt_isa.py
     DEPENDS tools/gen_isa.py tools/templates/isa.hpp.in tools/templates/isa.py.in isa/isa.json VERBATIM)
 add_custom_target(generate_isa DEPENDS ${GENERATED_DIR}/isa.hpp ${GENERATED_DIR}/simt_isa.py)
 
-add_library(simt_core src/machine.cpp src/execution.cpp src/dump.cpp src/module.cpp ${GENERATED_DIR}/isa.hpp)
+add_library(simt_core src/machine.cpp src/execution.cpp src/control.cpp src/collective.cpp
+    src/dump.cpp src/module.cpp ${GENERATED_DIR}/isa.hpp)
 add_dependencies(simt_core generate_isa)
 target_include_directories(simt_core PUBLIC include ${GENERATED_DIR})
 target_compile_options(simt_core PRIVATE -Wall -Wextra -Wpedantic -Werror -ffp-contract=off)
@@ -26,9 +27,12 @@ if(SIMT_SANITIZE)
 endif()
 
 enable_testing()
-add_test(NAME isa_and_execution
-    COMMAND ${CMAKE_COMMAND} -E env
+function(add_simt_test name script)
+    add_test(NAME ${name} COMMAND ${CMAKE_COMMAND} -E env
         "PYTHONPATH=${GENERATED_DIR}:${CMAKE_CURRENT_SOURCE_DIR}/python"
         "SIMT_RUNNER=$<TARGET_FILE:simt-run>"
-        ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_simulator.py)
-set_tests_properties(isa_and_execution PROPERTIES TIMEOUT 90)
+        ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/${script})
+    set_tests_properties(${name} PROPERTIES TIMEOUT 90)
+endfunction()
+add_simt_test(isa_and_execution test_simulator.py)
+add_simt_test(control_and_collectives test_control.py)

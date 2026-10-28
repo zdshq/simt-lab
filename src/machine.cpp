@@ -1,5 +1,6 @@
 #include "simt/machine.hpp"
 #include "simt/execution.hpp"
+#include "simt/control.hpp"
 #include <bit>
 #include <cfenv>
 #include <limits>
@@ -95,7 +96,9 @@ bool Machine::step(Cta& cta) {
     for (uint32_t offset = 0; offset < count; ++offset) {
         const uint32_t wi = (cta.warp_cursor + offset) % count;
         auto group = select_group(cta.warps[wi]);
+        if (!group && resume_yielded(cta.warps[wi])) group = select_group(cta.warps[wi]);
         if (!group) continue;
+        resume_yielded(cta.warps[wi]);
         if (steps_ >= config_.max_steps) throw std::runtime_error("step_limit_exceeded");
         try { execute(cta, wi, *group); }
         catch (const std::exception& error) {
@@ -152,8 +155,10 @@ void Machine::execute(Cta& cta, uint32_t warp_id, Group group) {
     for (uint32_t lane = 0; lane < lanes; ++lane) {
         if (!(group.mask & lane_bit(lane))) continue;
         next.pc[lane] = group.pc + 1;
-        if (mask & lane_bit(lane)) execute_scalar_lane(context, lane);
     }
+    if (!execute_control(context, group, mask, module_) && !execute_collective(context, group, mask))
+        for (uint32_t lane = 0; lane < lanes; ++lane)
+            if (mask & lane_bit(lane)) execute_scalar_lane(context, lane);
     warp = std::move(next);
 }
 }

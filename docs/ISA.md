@@ -1,4 +1,4 @@
-# 功能 ISA 规范（阶段 1）
+# 功能 ISA 规范
 
 本项目使用自定义 ISA。编码唯一来源是 `isa/isa.json`，CMake 在构建目录生成 C++ 解码器和 Python 编码器。
 
@@ -36,6 +36,30 @@ MOVI 写入原始位模式；Python 的 `f32(value)` 用于构造浮点位模式
 
 指令从执行前的 warp 状态读取源操作数，计算完成后统一提交寄存器状态，避免遍历 lane 顺序形成隐式通信。
 
+## 分支与独立线程调度
+
+每个 lane 保存自己的 PC 和 active/reconvergence/yielded/exited 状态。调度器只合并当前 PC 相同的活跃线程，不把“处于同一个 warp”视为自动同步。
+
+- BRA imm：guard 为真的 lane 跳转到绝对指令索引。
+- BSSY rd, imm：初始化 0..15 号 warp 内重聚令牌，记录当前 PC group 的成员；imm 必须指向同一令牌的 BSYNC。
+- BSYNC rd：到达成员阻塞，所有剩余成员到齐后一起推进到 BSYNC 的下一条指令。BSSY/BSYNC 必须不带谓词。活动令牌不能被覆盖。
+- BREAK rd：guard 为真的线程退出指定令牌的参与集合；不自动分支。全部成员 BREAK 后令牌变成 dissolved，此时原目标 BSYNC 可以直接通过。
+- EXIT：退出线程同时从全部重聚令牌移除，可能释放正在等待的其他线程。
+- YIELD：只提供调度提示，在本 warp 内最多让出一次选择机会；不提供内存同步。这里是本项目定义的功能语义，不承诺模拟硬件调度细节。
+
+令牌属于 warp，不能代替跨 warp 的 CTA 屏障。没有任何线程可运行时报告死锁；仍有线程循环执行时由 max-steps 限制终止。
+
+## Warp 集合操作
+
+ELECT/VOTE/SHFL 的 imm 为成员掩码；非空执行时，必须非零且是当前 guard 为真线程集合的子集。所有指定成员必须同时执行这一动态指令，否则报错，不隐式等待分支另一侧。结果只写成员线程，其他线程正常推进 PC。
+
+| 指令 | 语义 |
+|---|---|
+| ELECT rd, imm | 将成员中编号最小的 lane 的目标谓词设为真，其他成员设为假 |
+| VOTE rd, ra, imm, mode | ra 是源谓词编号；mode 0=ballot、1=any、2=all、3=所有成员投票相同；结果写普通寄存器 |
+| SHFL rd, ra, rb, imm | 每个成员从自身 rb 取得源 lane 索引，从该成员的 ra 读取执行前值；源 lane 必须属于成员集合 |
+| ACTIVEMASK rd | 写入谓词筛选前的当前 PC group 掩码，不能把它当作未来执行点的成员保证 |
+
 ## 当前边界
 
-阶段 1 尚不包含分支重聚、访存、CTA barrier 和 MMA；这些按实施计划继续加入。程序不是 PTX，不能直接装载 CUDA cubin。执行步数不表示延迟，两个模拟 SM 不意味着宿主 CPU 必须启动两个 OS 线程。
+阶段 2 尚不包含访存、CTA barrier 和 MMA；这些按实施计划继续加入。程序不是 PTX，不能直接装载 CUDA cubin。执行步数不表示延迟，两个模拟 SM 不意味着宿主 CPU 必须启动两个 OS 线程。
