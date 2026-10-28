@@ -14,7 +14,8 @@ add_custom_target(generate_isa DEPENDS ${GENERATED_DIR}/isa.hpp ${GENERATED_DIR}
 
 add_library(simt_core src/machine.cpp src/execution.cpp src/control.cpp src/collective.cpp
     src/dump.cpp src/module.cpp src/memory.cpp src/memory_execution.cpp src/barrier.cpp
-    src/diagnostics.cpp ${GENERATED_DIR}/isa.hpp)
+    src/diagnostics.cpp src/tensor.cpp src/tensor_numeric.cpp src/matrix.cpp src/matrix_descriptor.cpp
+    src/async.cpp src/async_copy.cpp ${GENERATED_DIR}/isa.hpp)
 add_dependencies(simt_core generate_isa)
 target_include_directories(simt_core PUBLIC include ${GENERATED_DIR})
 target_compile_options(simt_core PRIVATE -Wall -Wextra -Wpedantic -Werror -ffp-contract=off)
@@ -38,3 +39,5 @@ endfunction()
 add_simt_test(isa_and_execution test_simulator.py)
 add_simt_test(control_and_collectives test_control.py)
 add_simt_test(memory_and_barriers test_memory.py)
+add_simt_test(tensor_numeric test_tensor.py)
+add_simt_test(async_transactions test_async.py)

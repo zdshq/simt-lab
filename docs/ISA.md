@@ -62,4 +62,4 @@ ELECT/VOTE/SHFL 的 imm 为成员掩码；非空执行时，必须非零且是�
 
 ## 当前边界
 
-访存、原子与 CTA 屏障的详细操作数见 [内存规范](MEMORY.md)。阶段 3 尚不包含 MMA 和异步事务屏障。程序不是 PTX，不能直接装载 CUDA cubin。执行步数不表示延迟，两个模拟 SM 不意味着宿主 CPU 必须启动两个 OS 线程。
+访存、原子与 CTA 屏障的详细操作数见 [内存规范](MEMORY.md)，MMA、TMEM 和异步事务见 [张量规范](TENSOR.md)。程序不是 PTX，不能直接装载 CUDA cubin。执行步数不表示延迟，两个模拟 SM 不意味着宿主 CPU 必须启动两个 OS 线程。

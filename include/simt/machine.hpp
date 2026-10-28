@@ -5,6 +5,7 @@
 #include <bitset>
 #include <cstdint>
 #include <optional>
+#include <map>
 #include <ostream>
 #include <string>
 #include <vector>
@@ -14,7 +15,7 @@ constexpr uint32_t lanes = 32;
 constexpr uint32_t registers = 64;
 constexpr uint32_t zero_register = 63;
 
-enum class LaneState { active, reconvergence, yielded, cta_barrier, exited };
+enum class LaneState { active, reconvergence, yielded, cta_barrier, async_barrier, exited };
 enum class Policy { round_robin, min_pc, max_pc };
 enum class TokenState { unarmed, armed, dissolved };
 // Reconvergence tracks a dynamic participant set separately from CTA barriers.
@@ -41,6 +42,7 @@ struct Warp {
     std::array<uint32_t, lanes> pc{};
     std::array<LaneState, lanes> state{};
     std::array<uint32_t, lanes> blocked_token{};
+    std::array<uint32_t, lanes> waiting_phase{};
     std::array<Reconvergence, 16> reconvergence{};
     uint32_t valid_mask = 0;
     std::optional<uint32_t> last_pc;
@@ -50,6 +52,18 @@ struct CtaBarrier {
     uint32_t count = 0;
     uint64_t generation = 0;
     std::bitset<1024> arrived;
+};
+struct TransactionBarrier {
+    uint32_t phase = 0;
+    uint32_t expected = 0;
+    uint32_t arrivals = 0;
+    uint32_t bytes = 0;
+    uint32_t issued = 0;
+};
+struct AsyncCopy {
+    uint32_t destination, barrier, phase;
+    uint32_t opportunities = 3;
+    std::vector<uint8_t> bytes;
 };
 // A CTA owns its warps and records its assigned simulated SM.
 // CTA 持有自己的 warp，并记录分配到的模拟 SM。
@@ -61,6 +75,11 @@ struct Cta {
     Memory shared{65536};
     std::vector<Memory> local;
     std::array<CtaBarrier, 16> barriers{};
+    Memory tmem{128 * 256 * 4};
+    std::bitset<256> tensor_columns;
+    std::map<uint32_t, uint32_t> tensor_allocations;
+    std::map<uint32_t, TransactionBarrier> transactions;
+    std::vector<AsyncCopy> pending_copies;
     bool completed = false;
 };
 struct Group { uint32_t pc; uint32_t mask; };
@@ -86,7 +105,8 @@ private:
     std::optional<Group> select_group(const Warp& warp) const;
     void admit();
     bool step(Cta& cta);
-    bool schedule_one(uint32_t& completed);
+    bool schedule_one();
+    uint32_t retire_completed();
     void execute(Cta& cta, uint32_t warp_id, Group group);
     std::string deadlock_message() const;
 };

@@ -1,4 +1,5 @@
 #include "simt/memsync.hpp"
+#include "simt/async.hpp"
 #include <algorithm>
 #include <bit>
 #include <stdexcept>
@@ -87,7 +88,11 @@ std::vector<Access> accesses(const ExecutionContext& context, uint32_t mask, uin
 void load_store(const ExecutionContext& context, uint32_t mask, bool store) {
     const auto& i = context.instruction;
     const auto size = width(i.mode);
-    for (const auto& access : accesses(context, mask, space(i.op), size)) {
+    const auto targets = accesses(context, mask, space(i.op), size);
+    if (store)
+        for (const auto& access : targets)
+            if (access.destination == &context.cta.shared) check_shared_write(context.cta, access.address, size);
+    for (const auto& access : targets) {
         if (store) access.destination->write(access.address, size, access.value);
         else write_register(context.after, i.rd, access.lane,
                             extended(access.source->read(access.address, size), i.mode));
@@ -119,6 +124,7 @@ void atomic(const ExecutionContext& context, uint32_t mask) {
     if (i.aux > 1) throw std::runtime_error("invalid_atomic_space");
     if (i.mode > 9) throw std::runtime_error("invalid_atomic_mode");
     for (const auto& access : accesses(context, mask, i.aux, 4)) {
+        if (i.aux == 1) check_shared_write(context.cta, access.address, 4);
         const auto replacement = read_register(context.before, i.rc, access.lane);
         const auto old = access.source->read(access.address, 4);
         if (i.op == Op::ATOM) write_register(context.after, i.rd, access.lane, old);

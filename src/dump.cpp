@@ -60,6 +60,8 @@ void dump_cta(std::ostream& out, const Cta& cta, bool full_state, bool memory) {
     if (memory) {
         out << ",\"shared\":";
         cta.shared.dump(out);
+        out << ",\"tmem\":";
+        cta.tmem.dump(out);
         out << ",\"local\":[";
         for (size_t thread = 0; thread < cta.local.size(); ++thread) {
             if (thread) out << ',';

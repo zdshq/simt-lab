@@ -16,7 +16,8 @@ std::string Machine::deadlock_message() const {
                 if (warp.state[lane] == LaneState::exited) continue;
                 out << " [block=" << cta.block_id << " sm=" << cta.sm_id << " warp=" << wi
                     << " lane=" << lane << " pc=" << warp.pc[lane] << " wait="
-                    << (warp.state[lane] == LaneState::cta_barrier ? "cta_barrier" : "reconvergence")
+                    << (warp.state[lane] == LaneState::cta_barrier ? "cta_barrier" :
+                        warp.state[lane] == LaneState::async_barrier ? "mbarrier" : "reconvergence")
                     << " token=" << warp.blocked_token[lane] << ']';
                 break;
             }

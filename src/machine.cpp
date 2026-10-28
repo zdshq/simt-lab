@@ -2,6 +2,8 @@
 #include "simt/execution.hpp"
 #include "simt/control.hpp"
 #include "simt/memsync.hpp"
+#include "simt/tensor.hpp"
+#include "simt/async.hpp"
 #include <bit>
 #include <cfenv>
 #include <limits>
@@ -37,9 +39,14 @@ Warp make_warp(uint32_t warp_id, uint32_t threads) {
 // Release a CTA only after all its valid lanes have retired.
 // 只有全部有效线程退出后才释放 CTA。
 bool retired(const Cta& cta) {
+    if (!cta.pending_copies.empty()) return false;
     for (const auto& warp : cta.warps)
         for (auto state : warp.state)
             if (state != LaneState::exited) return false;
+    for (const auto& [address, barrier] : cta.transactions) {
+        static_cast<void>(address);
+        if (barrier.bytes) throw std::runtime_error("incomplete_async_transaction");
+    }
     return true;
 }
 
@@ -118,21 +125,29 @@ bool Machine::step(Cta& cta) {
 
 // Rotate between SMs and reclaim completed block slots.
 // 在 SM 之间轮转，并回收已完成线程块的位置。
-bool Machine::schedule_one(uint32_t& completed) {
+bool Machine::schedule_one() {
     for (uint32_t offset = 0; offset < config_.sms; ++offset) {
         const uint32_t sm = (sm_cursor_ + offset) % config_.sms;
         if (!resident_[sm]) continue;
         auto& cta = ctas_[*resident_[sm]];
         if (!step(cta)) continue;
         sm_cursor_ = (sm + 1) % config_.sms;
-        if (retired(cta)) {
-            cta.completed = true;
-            resident_[sm].reset();
-            ++completed;
-        }
         return true;
     }
     return false;
+}
+
+// Retire also after an asynchronous completion when no instruction was issued.
+// 即使没有发射指令，也在异步完成后检查线程块退出。
+uint32_t Machine::retire_completed() {
+    uint32_t count = 0;
+    for (auto& slot : resident_) {
+        if (!slot || !retired(ctas_[*slot])) continue;
+        ctas_[*slot].completed = true;
+        slot.reset();
+        ++count;
+    }
+    return count;
 }
 
 // Advance the functional machine until completion or a proven lack of progress.
@@ -141,7 +156,13 @@ void Machine::run() {
     uint32_t completed = 0;
     while (completed < config_.blocks) {
         admit();
-        if (!schedule_one(completed)) throw std::runtime_error(deadlock_message());
+        bool progress = false;
+        for (const auto& slot : resident_)
+            if (slot) progress |= progress_async(ctas_[*slot]);
+        progress |= schedule_one();
+        const auto retired_count = retire_completed();
+        completed += retired_count;
+        if (!progress && !retired_count) throw std::runtime_error(deadlock_message());
     }
 }
 
@@ -161,11 +182,13 @@ void Machine::execute(Cta& cta, uint32_t warp_id, Group group) {
         next.pc[lane] = group.pc + 1;
     }
     if (!execute_control(context, group, mask, module_) && !execute_collective(context, group, mask) &&
-        !execute_memory(context, mask) && !execute_barrier(context, mask))
+        !execute_memory(context, mask) && !execute_barrier(context, mask) &&
+        !execute_tensor(context, mask) && !execute_async(context, mask))
         for (uint32_t lane = 0; lane < lanes; ++lane)
             if (mask & lane_bit(lane)) execute_scalar_lane(context, lane);
     warp = std::move(next);
     release_cta_barriers(cta);
+    release_async_waiters(cta);
 }
 
 // Initialize device-visible data before any CTA is admitted.

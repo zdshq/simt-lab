@@ -62,6 +62,16 @@
     {"name":"RED", "code":45, "fields":["ra","rb","rc","imm","mode","aux"], "description":"Integer atomic without returned value"},
     {"name":"BAR_SYNC", "code":46, "fields":["rd","imm"], "description":"CTA thread arrival and wait"},
     {"name":"BAR_ARRIVE", "code":47, "fields":["rd","imm"], "description":"CTA thread arrival without waiting"},
-    {"name":"FENCE", "code":48, "fields":["mode","aux"], "description":"Functional sequential-consistency ordering marker"}
+    {"name":"FENCE", "code":48, "fields":["mode","aux"], "description":"Functional sequential-consistency ordering marker"},
+    {"name":"TMEM_ALLOC", "code":49, "fields":["rd","imm"], "description":"Allocate contiguous tensor columns"},
+    {"name":"TMEM_FREE", "code":50, "fields":["ra","imm"], "description":"Release an exact tensor allocation"},
+    {"name":"LDT", "code":51, "fields":["rd","ra","rb"], "description":"Load a tensor cell by row and column"},
+    {"name":"STT", "code":52, "fields":["ra","rb","rc"], "description":"Store a tensor cell by row and column"},
+    {"name":"MMA", "code":53, "fields":["ra"], "description":"Execute a shared-memory matrix descriptor"},
+    {"name":"MB_INIT", "code":54, "fields":["ra","imm"], "description":"Initialize a shared-address transaction barrier"},
+    {"name":"MB_EXPECT", "code":55, "fields":["ra","imm"], "description":"Add expected transaction bytes"},
+    {"name":"MB_ARRIVE", "code":56, "fields":["rd","ra"], "description":"Arrive and return the current phase token"},
+    {"name":"MB_WAIT", "code":57, "fields":["ra","rb"], "description":"Wait until a recorded transaction phase completes"},
+    {"name":"CP_ASYNC", "code":58, "fields":["ra","rb","rc","imm"], "description":"Enqueue global-to-shared copy bound to a transaction barrier"}
   ]
 }
