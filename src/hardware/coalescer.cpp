@@ -4,9 +4,11 @@
 namespace simt::hw {
 // Validate all active lanes before any request can cause a partial memory operation.
 // 任何请求产生部分内存操作之前，先验证全部活动 lane。
-void validate_access(const WarpAccess& access, const Memory& memory) {
+void validate_access(const WarpAccess& access, const MemoryBacking& memory) {
     if (access.width != 1 && access.width != 2 && access.width != 4)
         throw std::runtime_error("invalid_memory_width");
+    if (access.atomic && (*access.atomic > 9 || access.width != 4 || !access.write))
+        throw std::runtime_error("invalid_atomic_access");
     for (uint32_t lane = 0; lane < 32; ++lane)
         if (access.mask & (uint32_t{1} << lane)) memory.check(access.address[lane], access.width, access.width);
 }
@@ -32,7 +34,8 @@ void add_lane(std::map<uint64_t, Coalesced>& packets, const WarpAccess& access, 
 // Merge lane accesses by 32-byte sector, preserving byte enables and participating masks.
 // 按 32 字节 sector 合并 lane 访问，保留字节使能与参与掩码。
 std::vector<Coalesced> coalesce(const WarpAccess& access) {
-    validate_access(access, Memory{});
+    validate_access(access, Memory{UINT64_MAX});
+    if (access.atomic) throw std::runtime_error("cannot_coalesce_atomics");
     std::map<uint64_t, Coalesced> packets;
     for (uint32_t lane = 0; lane < 32; ++lane)
         if (access.mask & (uint32_t{1} << lane)) add_lane(packets, access, lane);

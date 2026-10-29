@@ -35,11 +35,18 @@ void collective(Footprint& f, const Instruction& i, uint32_t mask) {
 }
 
 void memory(Footprint& f, const Instruction& i, uint32_t mask) {
-    if (i.op == Op::LDL || i.op == Op::STL) throw std::runtime_error("timing_local_memory_not_connected");
     f.pipe = Pipe::memory;
-    f.store = i.op == Op::STG || i.op == Op::STS || i.op == Op::ST;
+    f.store = i.op == Op::STG || i.op == Op::STS || i.op == Op::STL || i.op == Op::ST;
     source(f, i.ra, mask);
     if (f.store) source(f, i.rb, mask); else f.destination = i.rd;
+}
+
+// Atomics share warp memory ordering and hold their old-value destination until acknowledgement.
+// 原子操作遵循 warp 访存顺序，并持有旧值目标寄存器直到确认完成。
+void atomic(Footprint& f, const Instruction& i, uint32_t mask) {
+    f.pipe = Pipe::memory; f.store = true;
+    source(f, i.ra, mask); source(f, i.rb, mask); source(f, i.rc, mask);
+    if (i.op == Op::ATOM) f.destination = i.rd;
 }
 
 // Tensor commands serialize their issuing warp while the SM unit completes asynchronously.
@@ -78,6 +85,7 @@ Footprint instruction_footprint(const Instruction& i, uint32_t mask) {
     else if (i.op >= Op::ELECT && i.op <= Op::ACTIVEMASK) collective(f, i, mask);
     else if (i.op >= Op::LDG && i.op <= Op::ST) memory(f, i, mask);
     else if (i.op == Op::CVTA) { source(f, i.ra, mask); f.destination = i.rd; }
+    else if (i.op == Op::ATOM || i.op == Op::RED) atomic(f, i, mask);
     else if (i.op >= Op::BAR_SYNC && i.op <= Op::FENCE) { f.pipe = Pipe::control; f.boundary = true; }
     else if (i.op >= Op::TMEM_ALLOC && i.op <= Op::MMA) tensor(f, i, mask);
     else if (i.op >= Op::MB_INIT && i.op <= Op::CP_ASYNC) asynchronous(f, i, mask);

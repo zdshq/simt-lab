@@ -49,12 +49,12 @@ struct DramRequest { Ticket ticket; Packet packet; uint64_t due = 0; };
 // open-page FCFS bank 与共享数据总线构成显式的研究型 DRAM 控制器。
 class Dram final : public SectorPort {
 public:
-    Dram(Memory& memory, DramConfig config = {});
+    Dram(MemoryBacking& memory, DramConfig config = {});
     std::optional<Ticket> submit(const Packet& packet) override;
     void tick() override;
     const DramStats& stats() const { return stats_; }
 private:
-    Memory& memory_;
+    MemoryBacking& memory_;
     DramConfig config_;
     DramStats stats_;
     std::vector<DramBank> banks_;
@@ -129,16 +129,25 @@ struct WarpAccess {
     bool write = false;
     std::array<uint64_t, 32> address{};
     std::array<uint32_t, 32> value{};
+    std::optional<uint32_t> atomic{};
+    std::array<uint32_t, 32> replacement{};
 };
 struct Coalesced { Packet packet; uint32_t lanes = 0; };
 std::vector<Coalesced> coalesce(const WarpAccess& access);
-void validate_access(const WarpAccess& access, const Memory& memory);
+void validate_access(const WarpAccess& access, const MemoryBacking& memory);
 
+struct AtomicConfig { uint32_t banks = 8, latency = 4, capacity = 8; };
+struct AtomicStats {
+    uint64_t requests = 0, lanes = 0, completed = 0, bank_stalls = 0, queue_stalls = 0;
+    uint64_t read_stalls = 0, write_stalls = 0;
+};
+class GlobalAtomics;
 struct HierarchyConfig {
     uint32_t sms = 2, capacity = 64;
     CacheConfig l1;
     CacheConfig l2{262144, 128, 8, 8, 12, 32, 32, 256};
     DramConfig dram;
+    AtomicConfig atomic;
 };
 struct SectorFlight { size_t index; Ticket ticket; };
 struct WarpRequest {
@@ -149,13 +158,15 @@ struct WarpRequest {
     size_t issued = 0;
     bool done = false, invalidated = false;
     std::array<uint32_t, 32> result{};
+    std::optional<Ticket> atomic_ticket{};
 };
 
 // Per-SM L1s share L2/DRAM; conservative global store ordering provides an explicit coherence rule.
 // 每 SM 的 L1 共享 L2/DRAM，保守的全局写顺序提供明确的一致性规则。
 class MemoryHierarchy {
 public:
-    MemoryHierarchy(Memory& memory, HierarchyConfig config = {});
+    MemoryHierarchy(MemoryBacking& memory, HierarchyConfig config = {});
+    ~MemoryHierarchy();
     std::optional<Ticket> submit(uint32_t sm, const WarpAccess& access);
     void tick();
     std::optional<std::array<uint32_t, 32>> take(Ticket ticket);
@@ -164,23 +175,29 @@ public:
     const CacheStats& l1_stats(uint32_t sm) const;
     const CacheStats& l2_stats() const { return l2_.stats(); }
     const DramStats& dram_stats() const { return dram_.stats(); }
+    const AtomicStats& atomic_stats() const;
 private:
-    Memory& memory_;
+    MemoryBacking& memory_;
     HierarchyConfig config_;
     Dram dram_;
     SectorCache l2_;
     std::vector<std::unique_ptr<SectorCache>> l1_;
+    std::unique_ptr<GlobalAtomics> atomics_;
     Ticket next_ = 1;
     std::map<Ticket, WarpRequest> requests_;
     void service_requests();
     void service(WarpRequest& request);
+    void service_atomic(WarpRequest& request);
     void collect(WarpRequest& request, SectorPort& port);
     void gather(WarpRequest& request, size_t index, const Sector& data);
     void invalidate_l1();
 };
 
-struct SharedConfig { uint32_t bytes = 65536, banks = 32, latency = 2, capacity = 8; };
-struct SharedStats { uint64_t bank_services = 0, broadcasts = 0, bank_stalls = 0, queue_stalls = 0; };
+struct SharedConfig { uint32_t bytes = 65536, banks = 32, latency = 2, capacity = 8, atomic_latency = 4; };
+struct SharedStats {
+    uint64_t bank_services = 0, broadcasts = 0, bank_stalls = 0, queue_stalls = 0;
+    uint64_t atomic_started = 0, atomic_completed = 0;
+};
 struct SharedRequest {
     Ticket ticket;
     WarpAccess access;
@@ -188,7 +205,9 @@ struct SharedRequest {
     uint64_t due = UINT64_MAX;
     std::array<uint32_t, 32> result{};
     Memory* backing = nullptr;
+    uint32_t atomic_inflight = 0;
 };
+struct SharedAtomic { Ticket request; uint32_t lane, old, value; uint64_t due; };
 
 // Shared memory serves one word per bank per clock and broadcasts same-word reads.
 // shared 每个 bank 每拍服务一个字，并广播同字读取。
@@ -207,7 +226,10 @@ private:
     uint64_t cycle_ = 0;
     Ticket next_ = 1;
     std::deque<SharedRequest> requests_;
+    std::vector<std::optional<SharedAtomic>> atomics_;
     void service(SharedRequest& request, std::vector<bool>& used);
     void serve_word(SharedRequest& request, uint32_t first);
+    void start_atomic(SharedRequest& request, uint32_t lane, uint32_t bank);
+    void retire_atomics(std::vector<bool>& used);
 };
 }

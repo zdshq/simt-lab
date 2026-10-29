@@ -12,22 +12,23 @@ void validate_async_config(const hw::AsyncConfig& config) {
 }
 }
 
-TimedSm::TimedSm(const hw::PipelineConfig& config, const hw::TensorConfig& tensor)
+TimedSm::TimedSm(const hw::PipelineConfig& config, const hw::TensorConfig& tensor, const hw::AtomicConfig& atomic)
     : resources(config), owners(config.max_warps),
+      shared({65536, 32, 2, 8, atomic.latency}),
       tmem({131072, tensor.tmem_banks, tensor.tmem_latency, 8}), array(tensor) {
     for (uint32_t part = 0; part < config.partitions; ++part) partitions.emplace_back(config.register_banks);
 }
 
-TimingMachine::TimingMachine(Machine& machine) : machine_(machine) {
+TimingMachine::TimingMachine(Machine& machine) : machine_(machine), physical_(*machine.global_) {
     const auto& config = machine_.config_;
     if (!config.max_cycles) throw std::runtime_error("invalid_cycle_limit");
     validate_async_config(config.async);
     hw::SmResources probe(config.pipeline);
     if (!probe.acquire(0, config.threads, config.cta_shared_bytes))
         throw std::runtime_error("kernel_exceeds_sm_resources");
-    hw::HierarchyConfig memory_config; memory_config.sms = config.sms;
-    memory_ = std::make_shared<hw::MemoryHierarchy>(*machine_.global_, memory_config);
-    for (uint32_t sm = 0; sm < config.sms; ++sm) sms_.push_back(std::make_unique<TimedSm>(config.pipeline, config.tensor));
+    hw::HierarchyConfig memory_config; memory_config.sms = config.sms; memory_config.atomic = config.atomic;
+    memory_ = std::make_shared<hw::MemoryHierarchy>(physical_, memory_config);
+    for (uint32_t sm = 0; sm < config.sms; ++sm) sms_.push_back(std::make_unique<TimedSm>(config.pipeline, config.tensor, config.atomic));
     warps_.resize(config.blocks);
 }
 
@@ -53,6 +54,8 @@ void TimingMachine::place(uint32_t block, uint32_t sm, const hw::Residency& resi
     machine_.initialize_cta(block, sm);
     warps_[block].resize(residency.slots.size());
     for (uint32_t warp = 0; warp < residency.slots.size(); ++warp) {
+        auto threads = std::span<Memory>(machine_.ctas_[block].local).subspan(warp * lanes);
+        physical_.attach(block * 32 + warp, threads.first(std::min<size_t>(threads.size(), lanes)));
         const auto slot = residency.slots[warp];
         warps_[block][warp].slot = slot;
         sms_[sm]->owners[slot] = WarpOwner{block, warp};

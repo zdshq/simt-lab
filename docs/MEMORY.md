@@ -1,6 +1,6 @@
 # 内存与同步规范
 
-这里采用确定调度下的串行提交模型。它能检查功能、通信和同步错误，不建模 cache、合并访问、bank conflict、访存延迟或弱内存允许的全部结果。
+本页主要描述默认功能模式的串行提交约定和两种模式共用的地址/数值规则。功能模式不建模 cache、合并、bank conflict 或访存延迟。`--timing` 已接入这些结构，并通过真实存储单元执行 local 和整数原子，见 [存储硬件](HARDWARE_MEMORY.md) 和 [local/原子通路](HARDWARE_ATOMIC_LOCAL.md)；两种模式均未实现真实弱内存允许的全部结果。
 
 ## 地址空间
 
@@ -29,7 +29,7 @@ CVTA 的 mode 0/1 将 shared/local offset 转成通用地址，2/3 做反向转�
 
 ATOM 的 rd 接收旧值，RED 不返回值。ra+imm 为地址，rb 为值或 CAS 期望值，rc 为 CAS 替换值；aux=0 选择 global，aux=1 选择 shared。固定 32 位且自然对齐。
 
-mode：0 add、1 exchange、2 compare-exchange、3 and、4 or、5 xor、6 unsigned min、7 unsigned max、8 signed min、9 signed max。按 lane 编号升序逐个完成整个读改写，不能让所有 lane 先读同一个旧值。
+mode：0 add、1 exchange、2 compare-exchange、3 and、4 or、5 xor、6 unsigned min、7 unsigned max、8 signed min、9 signed max。功能模式按 lane 编号升序逐个完成整个读改写。时序模式可并行处理不同 bank，同 bank 的较早请求/较小 lane 优先；同址原子仍逐个完成，不能让所有 lane 先读同一个旧值。
 
 原子加最终和可跨调度顺序比较；旧值分配和 exchange/CAS 的逐线程结果可能依赖调度。票号测试检查旧值集合唯一完整，不错误要求每线程票号跨调度一致。
 

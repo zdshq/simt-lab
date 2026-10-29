@@ -1,6 +1,6 @@
 # 逐周期存储单元：当前实现与剩余接入
 
-这些单元已经实现真实数据流和逐拍资源约束，位于 `src/hardware/`。现已接入 `simt-run --timing` 的基础 load/store、Tensor 操作数和异步搬运路径，详细范围见 [SM 时序执行](HARDWARE_SM.md)、[Tensor 通路](HARDWARE_TENSOR.md) 与 [DMA 通路](HARDWARE_ASYNC.md)。默认功能模式以及主机 CP/Graph 仍使用原功能内存；原子和 local 尚未接入时序通路，不能描述为整个 GPU 已经完成微架构模拟。
+这些单元已经实现真实数据流和逐拍资源约束，位于 `src/hardware/`。现已接入 `simt-run --timing` 的 load/store、Tensor 操作数、异步搬运及 local/整数原子路径，详细范围见 [SM 时序执行](HARDWARE_SM.md)、[Tensor 通路](HARDWARE_TENSOR.md)、[DMA 通路](HARDWARE_ASYNC.md) 和 [local/原子通路](HARDWARE_ATOMIC_LOCAL.md)。默认功能模式以及主机 CP/Graph 仍使用原功能内存，不能描述为整个 GPU 已经完成微架构模拟。
 
 ## 数据通路
 
@@ -39,7 +39,7 @@ flowchart LR
 
 缓存采用 write-through/no-write-allocate：写入使对应缓存 sector 失效，携带 byte mask 向下游传递，在 DRAM 完成时修改字节。下游队列满时保留 MSHR 并重试，不丢请求或重复写入。
 
-目前 `MemoryHierarchy` 选择保守而明确的全局写顺序：写入开始前排空较早的读取，使全部 L1 失效，写入绕过 L1，经 L2 完成后才允许较新的请求。两个 SM 的旧 L1 不会掩盖写结果。它牺牲并行性，**不是 NVIDIA 的实际一致性协议或弱内存模型**；后续接入 fence、原子及 copy engine 时仍需实现并验证相应顺序。
+目前 `MemoryHierarchy` 选择保守而明确的全局写顺序：写入开始前排空较早的读取，使全部 L1 失效，写入绕过 L1，经 L2 完成后才允许较新的请求。local 物理请求也经过该层次。global 原子先排空普通流量，连续原子批次共享 bank 阵列，后续普通请求等待其完成；两个 SM 的旧 L1 不会掩盖写结果。它牺牲并行性，**不是 NVIDIA 的实际一致性协议或弱内存模型**；主机 copy engine 接入时仍需验证相应顺序。
 
 主机直接修改 backing memory 必须先排空并执行 `invalidate()`；忙碌时拒绝失效。内部接口不是并发宿主线程共享内存协议。
 
@@ -65,4 +65,4 @@ ctest --test-dir build --output-on-failure
 
 随机差分另外包含在一个检查中：320 个混合大小、掩码、两 SM 读写请求，独立参考为普通字节向量；比较每次读回及最终全部 2048 字节。Debug、Release、ASan+UBSan 都通过，原 75 项功能检查也保持通过。
 
-剩余工作仍以 [总计划](HARDWARE_PLAN.md) 为准。SM/Tensor/异步流水线和 NVML 已有各自的增量验收，不能由存储单元测试替代；CP、原子/local、RTL 和参数校准仍未完成。
+剩余工作仍以 [总计划](HARDWARE_PLAN.md) 为准。SM/Tensor/异步/local/原子流水线和 NVML 已有各自的增量验收，不能由存储单元测试替代；持久 CP/Graph 时钟、RTL 和参数校准仍未完成。

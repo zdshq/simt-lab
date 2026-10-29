@@ -48,7 +48,8 @@ void TimingMachine::dump_memory(std::ostream& out) const {
         if (sm) out << ',';
         const auto& shared = sms_[sm]->shared.stats();
         out << "{\"bank_services\":" << shared.bank_services << ",\"broadcasts\":" << shared.broadcasts
-            << ",\"bank_stalls\":" << shared.bank_stalls << '}';
+            << ",\"bank_stalls\":" << shared.bank_stalls << ",\"atomic_started\":" << shared.atomic_started
+            << ",\"atomic_completed\":" << shared.atomic_completed << '}';
     }
     out << ']';
 }
@@ -89,6 +90,7 @@ void TimingMachine::dump(std::ostream& out) const {
     dump_memory(out);
     dump_tensor(out);
     dump_async(out);
+    dump_atomic(out);
     if (machine_.config_.hardware_trace) dump_trace(out);
     out << '}';
 }

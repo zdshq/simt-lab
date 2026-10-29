@@ -1,5 +1,6 @@
 #include "simt/memsync.hpp"
 #include "simt/async.hpp"
+#include "simt/atomic.hpp"
 #include <algorithm>
 #include <bit>
 #include <stdexcept>
@@ -96,24 +97,6 @@ void load_store(const ExecutionContext& context, uint32_t mask, bool store) {
         if (store) access.destination->write(access.address, size, access.value);
         else write_register(context.after, i.rd, access.lane,
                             extended(access.source->read(access.address, size), i.mode));
-    }
-}
-
-// Atomic modes use wrapping integer arithmetic and explicitly signed comparisons.
-// 原子操作采用整数取模运算和显式有符号比较。
-uint32_t atomic_result(uint32_t mode, uint32_t old, uint32_t value, uint32_t replacement) {
-    switch (mode) {
-    case 0: return old + value;
-    case 1: return value;
-    case 2: return old == value ? replacement : old;
-    case 3: return old & value;
-    case 4: return old | value;
-    case 5: return old ^ value;
-    case 6: return std::min(old, value);
-    case 7: return std::max(old, value);
-    case 8: return std::bit_cast<int32_t>(old) < std::bit_cast<int32_t>(value) ? old : value;
-    case 9: return std::bit_cast<int32_t>(old) > std::bit_cast<int32_t>(value) ? old : value;
-    default: throw std::runtime_error("invalid_atomic_mode");
     }
 }
 

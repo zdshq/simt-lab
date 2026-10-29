@@ -1,6 +1,6 @@
 # 验证记录
 
-本页原表记录阶段 0–10 的 75 项功能验收。后续硬件目标仍在进行中：目前额外通过 17 项存储硬件检查、6 项 NVML 端到端检查、7 项流水线单元检查、35 项基础时序执行检查、6 项 Tensor 阵列检查、19 项 Tensor 时序执行检查，以及 29 项异步/组合时序检查。三种构建均通过 16 套件、194 项检查（164 项 Python、30 项 C++）。具体证据见 [存储单元](HARDWARE_MEMORY.md)、[SM 时序执行](HARDWARE_SM.md)、[Tensor 时序执行](HARDWARE_TENSOR.md)、[DMA/事务屏障](HARDWARE_ASYNC.md) 和 [原版 nvidia-smi](NVIDIA_SMI.md)。这些增量不证明整个微架构已经接入。
+本页原表记录阶段 0–10 的 75 项功能验收。后续硬件目标仍在进行中：目前额外通过 17 项存储硬件检查、6 项 NVML 端到端检查、7 项流水线单元检查、35 项基础时序执行检查、6 项 Tensor 阵列检查、19 项 Tensor 时序执行检查、29 项异步/组合时序检查，以及 9 项 C++/17 项 Python local 与原子检查。三种构建均通过 18 套件、220 项检查（181 项 Python、39 项 C++）。具体证据见 [存储单元](HARDWARE_MEMORY.md)、[SM 时序执行](HARDWARE_SM.md)、[Tensor 时序执行](HARDWARE_TENSOR.md)、[DMA/事务屏障](HARDWARE_ASYNC.md)、[local/原子通路](HARDWARE_ATOMIC_LOCAL.md) 和 [原版 nvidia-smi](NVIDIA_SMI.md)。这些增量不证明整个微架构已经接入。
 
 验收日期：2026-10-29。环境：Linux、GCC 11.4、CMake 3.22、Python 3.13.5。构建要求 C++20、CMake 3.20+ 和 Python 3.10+，无第三方运行时依赖。
 
@@ -30,6 +30,7 @@ ctest --test-dir build-sanitize --output-on-failure
 python3 examples/run_workloads.py
 python3 examples/host_graph.py
 python3 examples/hardware_async.py
+python3 examples/hardware_memory_ops.py
 python3 examples/run_workloads.py --timing --out artifacts/timed
 ```
 
@@ -73,10 +74,10 @@ python3 examples/run_workloads.py --timing --out artifacts/timed
 - 主机接口及 CUDA Graph 风格功能通过 Python/C++ 进程协议运行，不实现 NVIDIA `cudaGraph*` API/ABI、驱动、PCIe/MMIO 或系统可枚举的 CUDA 设备。
 - Graph 支持范围见 [主机接口规范](HOST.md)：无 child graph、host callback、条件/内存分配节点、device-side launch 或完整 capture mode；单计算引擎不支持并发 kernel。
 - 主机提交通过显式推进执行；完成历史保留到进程退出。kernel 的原始 global 访存不自动检查分配归属，硬编码地址需显式声明资源引用。
-- 默认功能模式不启用 cache、bank conflict、scoreboard 和时序限制；`--timing` 已接入这些结构及多 CTA 同驻留，但仅支持 HARDWARE_SM.md 列出的基础指令，仍未实现真实弱内存全结果。
+- 默认功能模式不启用 cache、bank conflict、scoreboard 和时序限制；`--timing` 已为自定义 59 个 opcode 接入相应结构及多 CTA 同驻留，但仍未实现真实弱内存全结果或 NVIDIA 原生 ISA。
 - TMEM 使用本项目显式坐标接口；MMA tile 范围、浮点累加与异步事件规则是公开功能约定，非 NVIDIA 精确硬件复刻。
 - FP4 数据与 binary32 块系数已实现；完整 MXFP4/NVFP4 scale 编码、tensor 级 scale、多维 TMA 和异步 MMA 未实现。
 - 顺序敏感原子和无同步竞争程序不能要求跨所有调度顺序逐线程结果一致；没有实现自动 race checker。
 - 测试覆盖所声明的功能案例和负例，并非形式验证或所有输入穷举。
 
-阶段 0–10 的功能 ISS、持久主机链路与任务图已完成其原有验收。新的完整硬件目标仍未完成，剩余原子/local 通路、PTX 异步矩阵提交、CP/Graph 集成、RTL 和参数校准以 HARDWARE_PLAN.md 为准。
+阶段 0–10 的功能 ISS、持久主机链路与任务图已完成其原有验收。新的完整硬件目标仍未完成，剩余 PTX 异步矩阵提交、CP/Graph 集成、RTL 和参数校准以 HARDWARE_PLAN.md 为准。

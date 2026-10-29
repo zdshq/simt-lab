@@ -5,7 +5,7 @@
 namespace simt::hw {
 // Timing values define this controller; they are not inferred NVIDIA memory timings.
 // 时序值定义本控制器，不代表推断出的 NVIDIA 显存时序。
-Dram::Dram(Memory& memory, DramConfig config) : memory_(memory), config_(config) {
+Dram::Dram(MemoryBacking& memory, DramConfig config) : memory_(memory), config_(config) {
     if (!config.banks || config.banks > 1024 || !config.row_bytes || config.row_bytes % sector_bytes ||
         !config.capacity || !config.rcd || !config.cas || !config.rp || !config.burst)
         throw std::runtime_error("invalid_dram_config");

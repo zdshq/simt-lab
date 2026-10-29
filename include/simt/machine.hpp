@@ -3,6 +3,7 @@
 #include "simt/memory.hpp"
 #include "simt/hardware_pipeline.hpp"
 #include "simt/hardware_tensor.hpp"
+#include "simt/hardware_memory.hpp"
 #include <array>
 #include <bitset>
 #include <cstdint>
@@ -43,6 +44,7 @@ struct Config {
     hw::PipelineConfig pipeline;
     hw::TensorConfig tensor;
     hw::AsyncConfig async;
+    hw::AtomicConfig atomic;
 };
 // Store logical lane state independently from the host's CPU threads.
 // 将逻辑线程状态与宿主 CPU 线程分开保存。

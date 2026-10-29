@@ -1,6 +1,7 @@
 #pragma once
 #include "simt/machine.hpp"
 #include "simt/hardware_memory.hpp"
+#include "simt/hardware_local.hpp"
 #include "simt/timing_tensor.hpp"
 #include "simt/timing_async.hpp"
 #include <deque>
@@ -47,7 +48,7 @@ struct TimedSm {
     std::optional<BarrierJob> barrier_job;
     AsyncStats async_stats;
     uint32_t copy_cursor = 0, copy_fragments = 0, barrier_entries = 0;
-    explicit TimedSm(const hw::PipelineConfig& config, const hw::TensorConfig& tensor);
+    explicit TimedSm(const hw::PipelineConfig& config, const hw::TensorConfig& tensor, const hw::AtomicConfig& atomic);
 };
 struct MemoryFlight {
     uint32_t space = 0;
@@ -90,6 +91,7 @@ public:
     void dump(std::ostream& out) const;
 private:
     Machine& machine_;
+    hw::LocalAddressSpace physical_;
     std::shared_ptr<hw::MemoryHierarchy> memory_;
     std::vector<std::unique_ptr<TimedSm>> sms_;
     std::vector<std::vector<TimedWarp>> warps_;
@@ -115,6 +117,7 @@ private:
     void commit_control(Inflight& entry);
     void poll_memory(Inflight& entry);
     void prepare_memory(Inflight& entry);
+    void prepare_atomic(Inflight& entry);
     void finish_memory(Inflight& entry, const MemoryFlight& flight, const std::array<uint32_t, 32>& values);
     void poll_tensor(Inflight& entry);
     void advance_tensor(Inflight& entry);
@@ -167,6 +170,7 @@ private:
     void dump_memory(std::ostream& out) const;
     void dump_tensor(std::ostream& out) const;
     void dump_async(std::ostream& out) const;
+    void dump_atomic(std::ostream& out) const;
     void dump_trace(std::ostream& out) const;
 };
 }

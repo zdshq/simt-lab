@@ -4,7 +4,8 @@
 namespace simt::hw {
 BankedShared::BankedShared(SharedConfig config) : memory(config.bytes), config_(config) {
     if (!config.bytes || config.bytes % 4 || !config.banks || config.banks > 1024 ||
-        !config.latency || !config.capacity) throw std::runtime_error("invalid_shared_config");
+        !config.latency || !config.capacity || !config.atomic_latency) throw std::runtime_error("invalid_shared_config");
+    atomics_.resize(config.banks);
 }
 
 std::optional<Ticket> BankedShared::submit(const WarpAccess& access, Memory* backing) {
@@ -43,14 +44,16 @@ void BankedShared::service(SharedRequest& request, std::vector<bool>& used) {
         const auto bank = request.access.address[lane] / 4 % config_.banks;
         if (used[bank]) { ++stats_.bank_stalls; continue; }
         used[bank] = true;
-        serve_word(request, lane);
+        if (request.access.atomic) start_atomic(request, lane, static_cast<uint32_t>(bank));
+        else serve_word(request, lane);
     }
-    if (!request.remaining) request.due = cycle_ + config_.latency;
+    if (!request.remaining && !request.atomic_inflight) request.due = cycle_ + config_.latency;
 }
 
 void BankedShared::tick() {
     ++cycle_;
     std::vector<bool> used(config_.banks);
+    retire_atomics(used);
     for (auto& request : requests_) service(request, used);
 }
 

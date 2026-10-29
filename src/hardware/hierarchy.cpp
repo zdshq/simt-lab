@@ -1,13 +1,19 @@
 #include "simt/hardware_memory.hpp"
+#include "simt/hardware_atomic.hpp"
 #include <stdexcept>
 
 namespace simt::hw {
-MemoryHierarchy::MemoryHierarchy(Memory& memory, HierarchyConfig config)
+MemoryHierarchy::MemoryHierarchy(MemoryBacking& memory, HierarchyConfig config)
     : memory_(memory), config_(config), dram_(memory, config.dram), l2_(dram_, config.l2) {
     if (!config.sms || config.sms > 64 || !config.capacity) throw std::runtime_error("invalid_hierarchy_config");
     for (uint32_t sm = 0; sm < config.sms; ++sm)
         l1_.push_back(std::make_unique<SectorCache>(l2_, config.l1));
+    atomics_ = std::make_unique<GlobalAtomics>(l2_, config.atomic);
 }
+
+MemoryHierarchy::~MemoryHierarchy() = default;
+
+const AtomicStats& MemoryHierarchy::atomic_stats() const { return atomics_->stats(); }
 
 // Warp requests retain capacity even when responses are ready but not yet consumed.
 // warp 请求即使响应已就绪，也保留容量直到消费者取走结果。
@@ -16,7 +22,8 @@ std::optional<Ticket> MemoryHierarchy::submit(uint32_t sm, const WarpAccess& acc
     validate_access(access, memory_);
     if (requests_.size() == config_.capacity) return {};
     const auto ticket = next_++;
-    requests_.emplace(ticket, WarpRequest{sm, access, coalesce(access), {}, 0, false, false, {}});
+    auto packets = access.atomic ? std::vector<Coalesced>{} : coalesce(access);
+    requests_.emplace(ticket, WarpRequest{sm, access, std::move(packets), {}, 0, false, false, {}});
     return ticket;
 }
 
@@ -63,14 +70,19 @@ void MemoryHierarchy::service(WarpRequest& request) {
 }
 
 void MemoryHierarchy::service_requests() {
-    bool older_pending = false;
+    bool older_pending = false, atomic_batch = false;
     for (auto& [ticket, request] : requests_) {
         static_cast<void>(ticket);
         if (request.done) continue;
-        if (request.access.write && older_pending) break;
-        service(request);
+        if (request.access.atomic) {
+            if (older_pending && !atomic_batch) break;
+            service_atomic(request); atomic_batch = true;
+        } else {
+            if (atomic_batch || (request.access.write && older_pending)) break;
+            service(request);
+        }
         older_pending |= !request.done;
-        if (request.access.write) break;
+        if (request.access.write && !request.access.atomic) break;
     }
 }
 
@@ -80,7 +92,18 @@ void MemoryHierarchy::tick() {
     dram_.tick();
     l2_.tick();
     for (auto& cache : l1_) cache->tick();
+    atomics_->tick();
     service_requests();
+}
+
+// Consecutive atomics can share bank resources; ordinary traffic waits at the coherence boundary.
+// 连续原子请求可共享 bank 资源，普通流量在一致性边界等待。
+void MemoryHierarchy::service_atomic(WarpRequest& request) {
+    if (!request.invalidated) { invalidate_l1(); request.invalidated = true; }
+    if (!request.atomic_ticket) request.atomic_ticket = atomics_->submit(request.access);
+    if (!request.atomic_ticket) return;
+    const auto result = atomics_->take(*request.atomic_ticket);
+    if (result) { request.result = *result; request.done = true; }
 }
 
 std::optional<std::array<uint32_t, 32>> MemoryHierarchy::take(Ticket ticket) {

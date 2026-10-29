@@ -81,6 +81,9 @@ bool async_option(simt::Config& config, const std::string& key, uint32_t value) 
     else if (key == "--async-chunk") config.async.chunk_bytes = value;
     else if (key == "--mbarrier-slots") config.async.barrier_slots = value;
     else if (key == "--mbarrier-latency") config.async.barrier_latency = value;
+    else if (key == "--atomic-banks") config.atomic.banks = value;
+    else if (key == "--atomic-depth") config.atomic.capacity = value;
+    else if (key == "--atomic-latency") config.atomic.latency = value;
     else return false;
     return true;
 }
@@ -144,6 +147,7 @@ void print_help() {
                  "         [--tmem-banks N] [--tmem-latency N] [--tmem-columns N]\n"
                  "         [--async-depth N] [--async-fragments N] [--async-chunk N]\n"
                  "         [--mbarrier-slots N] [--mbarrier-latency N]\n"
+                 "         [--atomic-banks N] [--atomic-depth N] [--atomic-latency N]\n"
                  "CPU simulator; --timing enables a partial research model, not NVIDIA timing prediction.\n";
 }
 

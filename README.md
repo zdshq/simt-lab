@@ -54,4 +54,6 @@ python3 examples/host_graph.py
 
 已验证 [原版 nvidia-smi 接入](docs/NVIDIA_SMI.md)：终端一运行 `python3 examples/nvml_device.py`，终端二运行 `python3 tools/simt_smi.py`，可查看实际模拟设备及其分配内存。专用 NVML 后端只作用于该子进程，系统默认命令仍查询真实显卡；没有 CUDA 或 PCIe 兼容。
 
-当前三种构建均通过 16 个 CTest 套件、194 项检查（164 项 Python、30 项 C++）。原子/local、主机 CP/Graph 的时序接入、RTL 和参数校准仍未完成，完整剩余目标以硬件计划为准。
+[Local 与原子通路](docs/HARDWARE_ATOMIC_LOCAL.md) 已接入字交错物理映射、同一缓存/DRAM 层次，以及 global/shared 原子的 bank 预约、读取、ALU 延迟和写确认。`python3 examples/hardware_memory_ops.py` 可生成合并、缓存和原子竞争实验。自定义 59 个 opcode 均有时序路径，仍不表示支持 NVIDIA 的全部硬件。
+
+当前三种构建均通过 18 个 CTest 套件、220 项检查（181 项 Python、39 项 C++）。主机 CP/Graph 的统一时钟与持久缓存、RTL 和参数校准仍未完成，完整剩余目标以硬件计划为准。

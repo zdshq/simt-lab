@@ -12,7 +12,7 @@ add_custom_command(OUTPUT ${GENERATED_DIR}/isa.hpp ${GENERATED_DIR}/simt_isa.py
     DEPENDS tools/gen_isa.py tools/templates/isa.hpp.in tools/templates/isa.py.in isa/isa.json VERBATIM)
 add_custom_target(generate_isa DEPENDS ${GENERATED_DIR}/isa.hpp ${GENERATED_DIR}/simt_isa.py)
 
-add_library(simt_storage src/memory.cpp)
+add_library(simt_storage src/memory.cpp src/atomic_numeric.cpp)
 target_include_directories(simt_storage PUBLIC include)
 target_compile_options(simt_storage PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_library(simt_core src/machine.cpp src/execution.cpp src/control.cpp src/collective.cpp
@@ -22,7 +22,7 @@ add_library(simt_core src/machine.cpp src/execution.cpp src/control.cpp src/coll
     src/timing/execute.cpp src/timing/memory.cpp src/timing/retire.cpp src/timing/report.cpp
     src/hardware/tensor_array.cpp src/timing/tensor_transfer.cpp src/timing/tensor_control.cpp
     src/timing/tensor_tile.cpp src/timing/tensor_operands.cpp src/timing/async_launch.cpp
-    src/timing/async_barrier.cpp src/timing/async_dma.cpp src/timing/async_report.cpp ${GENERATED_DIR}/isa.hpp)
+    src/timing/async_barrier.cpp src/timing/async_dma.cpp src/timing/async_report.cpp src/timing/atomic.cpp ${GENERATED_DIR}/isa.hpp)
 add_dependencies(simt_core generate_isa)
 target_include_directories(simt_core PUBLIC include ${GENERATED_DIR})
 target_compile_options(simt_core PRIVATE -Wall -Wextra -Wpedantic -Werror -ffp-contract=off)
@@ -42,7 +42,8 @@ target_link_libraries(simt-device PRIVATE simt_host)
 target_compile_options(simt-device PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_library(simt_hardware src/hardware/port.cpp src/hardware/dram.cpp src/hardware/cache_tags.cpp
     src/hardware/cache_request.cpp src/hardware/cache_fill.cpp src/hardware/coalescer.cpp src/hardware/shared.cpp
-    src/hardware/hierarchy.cpp src/hardware/scoreboard.cpp src/hardware/resources.cpp)
+    src/hardware/hierarchy.cpp src/hardware/scoreboard.cpp src/hardware/resources.cpp src/hardware/local.cpp
+    src/hardware/atomic_queue.cpp src/hardware/atomic_execute.cpp src/hardware/shared_atomic.cpp)
 target_link_libraries(simt_hardware PUBLIC simt_storage)
 target_link_libraries(simt_core PUBLIC simt_hardware)
 target_compile_options(simt_hardware PRIVATE -Wall -Wextra -Wpedantic -Werror)
@@ -94,6 +95,11 @@ target_link_libraries(test-hardware-tensor PRIVATE simt_core)
 target_compile_options(test-hardware-tensor PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME hardware_tensor_array COMMAND test-hardware-tensor)
 set_tests_properties(hardware_tensor_array PROPERTIES TIMEOUT 90)
+add_executable(test-hardware-atomic tests/test_hardware_atomic.cpp)
+target_link_libraries(test-hardware-atomic PRIVATE simt_hardware)
+target_compile_options(test-hardware-atomic PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME hardware_atomic_local COMMAND test-hardware-atomic)
+set_tests_properties(hardware_atomic_local PROPERTIES TIMEOUT 90)
 function(add_simt_test name script)
     add_test(NAME ${name} COMMAND ${CMAKE_COMMAND} -E env
         "PYTHONPATH=${GENERATED_DIR}:${CMAKE_CURRENT_SOURCE_DIR}/python"
@@ -105,6 +111,7 @@ add_simt_test(isa_and_execution test_simulator.py)
 add_simt_test(timed_sm_execution test_timing.py)
 add_simt_test(timed_tensor_execution test_timed_tensor.py)
 add_simt_test(timed_async_execution test_timed_async.py)
+add_simt_test(timed_memory_execution test_timed_memory.py)
 add_simt_test(control_and_collectives test_control.py)
 add_simt_test(memory_and_barriers test_memory.py)
 add_simt_test(tensor_numeric test_tensor.py)

@@ -13,6 +13,8 @@
 | [NVIDIA NVML](https://developer.nvidia.com/management-library-nvml) / 本机 `nvml.h` | 原版 nvidia-smi 底层管理接口及公开 ABI | 管理接口返回设备不代表 NVIDIA 内核驱动或 CUDA 执行兼容 |
 | [PTX ISA 9.4 Tensor Memory / tcgen05](https://docs.nvidia.com/cuda/parallel-thread-execution/#tensor-memory) §9.7.18.1/6，2026-10-29 核对 | 特定 SM100 目标的 TMEM 组织、同步/异步分类、完成与 proxy 顺序要求 | 不是乘加阵列内部电路图；本项目的 128×256 窗口、阻塞式 MMA、分配粒度及失败规则不能称为 PTX 兼容 |
 | [PTX ISA 9.4 cp.async](https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-async)，2026-10-29 核对 | 非阻塞 global→shared、4/8/16 B 大小及指定完成机制；`.ca/.cg` 缓存提示 | 本项目 1..4096 B 命令、32 B 事务记录、有限 DMA 池是自定义设计；未实现 async-group/TMA/proxy 的精确接口 |
+| [CUDA SIMT kernels / local memory](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/writing-cuda-kernels.html)，2026-10-29 核对 | local 的线程私有逻辑归属、位于设备内存、同 warp 同偏移访问可合并 | 本项目 16 KiB 窗口、4 GiB 以上物理布局及 CTA/warp 编号公式均非 NVIDIA 逆向地址映射 |
+| [CUDA C++ language extensions / atomics](https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/cpp-language-extensions.html)，2026-10-29 核对 | 原子读改写与对应的可见语义 | 不支持推断具体 bank/端口/锁粒度；本项目仅有自定义 32 位整数操作和保守一致性顺序 |
 
 ## 首版存储单元中的设计参数
 
@@ -36,5 +38,7 @@ SM 时序模式新增的 4 分区、4 寄存器 banks、每 bank 向量读写端
 Tensor 模式的 4×4 输出驻留阵列、相邻 PE 每拍转发、4 拍乘加、深度 2 的输入 FIFO、每 SM 256 列预算、16 个 TMEM banks 和 modulo bank 映射同样是模型假设。块缩放复用 PE 三段执行、稀疏按逻辑 K 传输并禁用缺失项是本项目选择；不得宣称它们是 NVIDIA 的实际 datapath、稀疏吞吐或隐藏延迟。来源、差异、可观测结果见 [HARDWARE_TENSOR.md](HARDWARE_TENSOR.md)。
 
 异步模式的每 SM 8 个命令、4 个片段、每片段至多 128 B、16 个事务条目、单控制端口及 2 拍处理延迟全部是模型假设。shared 记录按端口发布、逻辑表等待发布确认、完成优先仲裁和未对齐 byte 路径是本项目选择，不是逆向得到的 NVIDIA 实现。对照实验与协议差异见 [HARDWARE_ASYNC.md](HARDWARE_ASYNC.md)。
+
+local 的具体字交错物理布局、global 原子 8 banks/8 请求/4 拍 ALU、bank 锁直到写穿确认、连续原子批次前后排空普通请求，以及 shared 原子独占 bank 等待 ALU 均为模型选择。没有将写穿导致的 DRAM 反复访问当成 NVIDIA 原子延迟；证据及限制见 [HARDWARE_ATOMIC_LOCAL.md](HARDWARE_ATOMIC_LOCAL.md)。
 
 实现 CUDA pointer-chase、合并和 shared bank 微基准，记录原始结果、GPU/驱动/编译器信息、样本分布和计时开销。结果用于判断模型能否解释趋势，不通过调参强行宣称结构唯一可识别。

@@ -145,3 +145,17 @@
 - `python3 examples/run_workloads.py --timing --out artifacts/timed` 原四类负载全部运行。Transformer 实际搬运 2176 B，执行 8 个有效 MMA、2304 次乘积，32 个输出最大误差约 1.07e-7，5637 模型周期。谓词关闭指令仍计入 op_counts，不能将其中 2 次 CP/16 次 MMA 误报为有效命令数。
 - 新增 HARDWARE_ASYNC.md，核对官方 PTX 9.4 的 cp.async 大小和完成规则，所有队列/控制延迟保持“设计假设”标注。短函数与英中相邻注释约定保持，入口仅调用流程函数，没有增加样式测试。
 - 原子/local 时序通路、持久 CP/copy/Graph 时钟与缓存、RTL、校准和最终审计仍待完成；专用启动器下原版 nvidia-smi 可见能力保持通过，系统默认视图合并未实现。完整目标仍 active。
+
+## 阶段 15 第四部分：Local 物理映射与分阶段整数原子（2026-10-29）
+
+- 开始前核对工作区干净及上一阶段 `b894e96` 提交，确认前一轮有实现/测试/文档进展。继续完整硬件目标，没有把阶段通过等同于最终完成。
+- 将底层存储接口与稀疏 Memory 分离，增加实际 local 地址解码器。16 KiB 线程窗口按字交错映射到 global ISA 窗口以外，经过原有 coalescer/L1/L2/DRAM；DRAM 完成直接更新实际线程存储，不维护影子快照。部分 warp 填充读取和 CTA 生命周期均保留归属。
+- 物理 sector/coalescer 支持 64 位地址；逻辑 global 仍限定 32 位，原高地址负例改为分别验证物理保留高位与逻辑越界。generic LD/ST 可在同一指令中拆分 global/shared/local 请求。
+- 新增 global 原子 bank 阵列，每 lane 经 L2 读、整数 ALU 等待、4 B byte-mask 写穿、确认后返回旧值。有限请求队列包含未取响应；同 bank 锁至写确认，连续原子请求可共同使用阵列，普通读写在保守一致性边界排空。
+- shared 原子复用真实 shared banks，读/ALU/写期间独占相应 bank，与普通访存/DMA/Tensor/事务记录竞争。没有同址原子广播，CTA 存储隔离保持。纯整数模式语义提取复用，执行器没有借此绕过内存单元。
+- 自定义 59 个 opcode 均有 CLI 时序路径；新增 atomic/local 提交 trace 和 global/shared 原子统计、bank/queue/ALU 参数。该覆盖不等于原生 PTX/CUDA 或全部 NVIDIA 硬件。
+- 验证新增 9 项 C++/17 项 Python 检查：精确 shared 时钟、普通 store 排斥、跨 SM 冷/热缓存、240 个混合请求差分、185 个唯一原子票号、6×48 条随机原子序列、local 冷热/分散/边界/CTA 槽复用和混合 generic 空间。新增 C++ 随机测试首次编译发现同一 auto 声明推断不同整数类型，拆开声明后通过，未改变算法来适配结果。
+- Debug、Release、ASan+UBSan 均通过 18 套件、220 项检查（181 项 Python、39 项 C++），sanitizer 无错误；`git diff --check` 通过。既有数值、异步、Graph 和原版 nvidia-smi 套件保持通过。
+- `python3 examples/hardware_memory_ops.py` 保存机器码/命令/完整状态与验证：同偏移/分散 local 两次读取为 133/606 模型周期、4/32 个 DRAM sector；global 原子同址/分 bank 为 2815/1081，shared 为 179/24。计时只描述当前设计，写穿策略的 DRAM 开销不是 NVIDIA 实测参数。
+- 新增 HARDWARE_ATOMIC_LOCAL.md，更新整体范围与来源台账。核对官方 local 和 atomic 语义；具体物理映射、bank 锁与延迟均保持设计假设标注。按职责保留短函数，入口仅调流程函数，英中解释性注释相邻，没有添加样式测试。
+- 持久设备 CP/copy/Graph 的统一时钟与跨 kernel 缓存、可综合 RTL、实卡校准和最终审计仍待完成。专用启动器可见模拟设备，系统默认 nvidia-smi 合并仍未实现；目标保持 active。

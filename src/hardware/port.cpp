@@ -23,10 +23,10 @@ void SectorPort::complete(Ticket ticket, const Sector& data, uint64_t delay) {
     responses_.at(ticket) = {cycle_ + delay, data};
 }
 
-// Sector packets never cross the existing machine's 32-bit global address domain.
-// sector 包不得越过现有机器的 32 位 global 地址域。
+// Physical addresses can include translated local storage; backing decoders enforce ownership.
+// 物理地址可以包含转换后的 local 存储，由底层解码器检查归属。
 void SectorPort::check_packet(const Packet& packet) const {
-    if (packet.address % sector_bytes || packet.address > (uint64_t{1} << 32) - sector_bytes)
+    if (packet.address % sector_bytes || packet.address > UINT64_MAX - sector_bytes)
         throw std::runtime_error("invalid_sector_address");
 }
 }

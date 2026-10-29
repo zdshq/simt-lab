@@ -167,9 +167,9 @@ class TimingTest(SimulationCase):
             result = self.timed(p.emit('EXIT'), '--threads', 1, '--collectors', 1 + case % 4)
             self.assertEqual([self.registers(result, r)[0] for r in range(16)], values)
 
-    def test_explicit_limits_and_unconnected_units(self):
-        self.timed(Program().emit('LDL', rd=0, ra=Z), error='timing_local_memory_not_connected')
-        self.timed(Program().emit('ATOM', ra=Z), error='timing_unit_not_connected: ATOM')
+    def test_explicit_limits_and_memory_errors(self):
+        self.timed(Program().emit('LDL', rd=0, ra=Z, imm=16384), error='memory_out_of_bounds')
+        self.timed(Program().emit('ATOM', ra=Z, mode=10), error='invalid_atomic_mode')
         self.timed(Program().emit('BRA', imm=0), '--max-cycles', 10, error='cycle_limit_exceeded')
         self.timed(Program().emit('BRA', imm=0), '--max-steps', 5, error='step_limit_exceeded')
         self.timed(Program().emit('LDS', rd=0, ra=Z, imm=256, mode=4), '--shared-bytes', 256,

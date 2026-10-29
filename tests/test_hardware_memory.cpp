@@ -136,6 +136,9 @@ void coalescing_store_bytes_and_validation() {
     require(packets[0].packet.byte_mask == 15 && packets[0].lanes == 3, "store masks");
     require(packets[0].packet.data[0] == 1 && packets[0].packet.data[3] == 0xAB, "deterministic overlapping store");
     access.address[1] = uint64_t{1} << 32;
+    require(coalesce(access).size() == 2, "physical coalescing retains high local address bits");
+    rejects([&] { validate_access(access, Memory{}); }, "out_of_bounds");
+    access.address[1] = UINT64_MAX - 3;
     rejects([&] { coalesce(access); }, "out_of_bounds");
     access.address[1] = 1;
     rejects([&] { coalesce(access); }, "misaligned");

@@ -88,4 +88,4 @@ python3 examples/run_workloads.py --workload gemm --timing --out artifacts/timed
 
 本阶段的 Debug、Release、ASan+UBSan 全部通过，当时为 15 个 CTest 套件、165 项检查。后续异步增量见 [HARDWARE_ASYNC.md](HARDWARE_ASYNC.md)，当前总数见 [VALIDATION.md](VALIDATION.md)。源码主要在 `src/hardware/tensor_array.cpp` 和 `src/timing/tensor_*.cpp`。
 
-CP_ASYNC/mbarrier 时序通路已接入，原 Transformer 可执行 DMA→shared→MMA→TMEM 路径。剩余完整硬件目标仍包括 local/原子时序通路、CP/copy/Graph 统一时钟与持久缓存、RTL、参数校准和最终逐项审计，见 [HARDWARE_PLAN.md](HARDWARE_PLAN.md)。
+CP_ASYNC/mbarrier 时序通路已接入，原 Transformer 可执行 DMA→shared→MMA→TMEM 路径；local/整数原子也有独立增量验证。剩余完整硬件目标仍包括 CP/copy/Graph 统一时钟与持久缓存、RTL、参数校准和最终逐项审计，见 [HARDWARE_PLAN.md](HARDWARE_PLAN.md)。
