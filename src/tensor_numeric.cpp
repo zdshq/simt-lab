@@ -30,6 +30,13 @@ uint32_t tensor_element_size(uint32_t format) {
 float tensor_float(const Memory& memory, uint32_t base, uint64_t index, uint32_t format) {
     const auto size = tensor_element_size(format);
     const auto bits = memory.read(uint64_t{base} + (format == 4 ? index / 2 : index * size), size);
+    return decode_tensor_float(bits, index, format);
+}
+
+// Format conversion consumes supplied bytes and never fetches backing memory itself.
+// 格式转换仅消费传入字节，本身不读取底层内存。
+float decode_tensor_float(uint32_t bits, uint64_t index, uint32_t format) {
+    tensor_element_size(format);
     if (format == 0) return to_float(bits);
     if (format == 1) return half_float(bits);
     if (format == 2) return to_float(bits << 16);

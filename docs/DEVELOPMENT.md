@@ -120,3 +120,15 @@
 - 复用屏障负例时发现旧例依赖顺序执行：时序发射延迟允许另一 warp 在两次到达之间前进，因而输入可以合法完成。新负例显式延迟另一 warp，验证同代重复到达被拒绝，未修改屏障语义迎合旧调度假设。
 - `python3 examples/hardware_pipeline.py` 生成机器码、完整状态、命令和轨迹。依赖/独立 13 指令实验分别为 63/19 模型周期；shared 连续/冲突/广播为 19/50/19。冷 load 等待期间独立 MOV 在 cycle 7 写回，而 load 在 cycle 65 写回。均未宣称真实 GPU 周期。
 - 文档见 HARDWARE_SM.md，参数来源新增明确假设条目。主机 CP/Graph 仍走功能模式，缓存尚未跨 kernel 保留；Tensor 数据通路、RTL 和参数校准仍待完成，完整目标保持 active。
+
+## 阶段 14 与 15 第二部分：逐拍 Tensor 阵列与真实供数（2026-10-29）
+
+- 继续目标前核对工作区干净、上阶段提交 `931da4a` 及 HARDWARE_PLAN.md；上次属于有代码、测试和提交的实际进展。没有将阶段完成视为整个硬件目标完成。
+- 新增参数化 1–4 行/列阵列，默认 4×4。A/B 错拍注入并逐拍传向相邻 PE；每 PE 保持累加器、块点积、待完成结果。有限输入 FIFO 和未取响应占用均形成反压，不在单次宿主循环中计算整矩阵。
+- Tensor 前端逐拍读取 shared 描述符、经真实 global/cache 或 shared banks 获取 A/B/稀疏 metadata/scale；复用纯数值解码，禁止读取底层内存旁路。输出按微 tile 经 TMEM 端口写入，全部确认后退休。
+- TMEM 分配采用每 SM 共享列预算，按 bank 清零；显式释放及 CTA 退休归还容量。LDT/STT、已有 D 装载与结果存放共享 TMEM 仲裁。默认 16 banks、2 拍返回，参数均明确标为设计假设。
+- 支持五种格式、2:4 不同行的位置选择、跳过缺失 NaN 乘积、binary32 块缩放三段及已有 D 累加；原功能数值规范不变。Tensor 单元独立推进，但发起 warp 仍阻塞到完成，没有宣称 PTX 非阻塞 MMA/commit 兼容。
+- 复核 NVIDIA PTX 9.4 的 TMEM 和异步语义并记录差异，不用本研究阵列猜测 NVIDIA 原电路。新增 HARDWARE_TENSOR.md，更新 SM/内存/张量规范及来源台账。
+- 验证：6 项 C++ 阵列检查覆盖精确波前时序、有限队列/响应、输入气泡、尺度三段和数值边界；19 项 Python 检查包括独立有理数参考、bank 冲突/容量、其他 warp 前进、原完整 GEMM 和最大 32×32×256 描述符。三种构建全部通过 15 套件、165 项检查，sanitizer 无错误。
+- `python3 examples/run_workloads.py --workload gemm --timing --out artifacts/timed` 实际完成两个 SM、3 CTA、96 输出，最大绝对误差约 2.98e-7，共 1,536 次乘加。4×4/2×2 阵列分别为 2,245/3,811 模型周期，命令/输入/完整轨迹保存在 artifacts/timed/gemm。
+- 仍未完成 local、原子、CP_ASYNC/mbarrier 的时序通路、CP/copy/Graph 统一时钟与跨 kernel 缓存、RTL 和校准；系统默认 nvidia-smi 视图合并也尚未实现。目标保持 active。

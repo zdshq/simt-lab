@@ -4,7 +4,9 @@
 #include <stdexcept>
 
 namespace simt {
-TimedSm::TimedSm(const hw::PipelineConfig& config) : resources(config), owners(config.max_warps) {
+TimedSm::TimedSm(const hw::PipelineConfig& config, const hw::TensorConfig& tensor)
+    : resources(config), owners(config.max_warps),
+      tmem({131072, tensor.tmem_banks, tensor.tmem_latency, 8}), array(tensor) {
     for (uint32_t part = 0; part < config.partitions; ++part) partitions.emplace_back(config.register_banks);
 }
 
@@ -16,7 +18,7 @@ TimingMachine::TimingMachine(Machine& machine) : machine_(machine) {
         throw std::runtime_error("kernel_exceeds_sm_resources");
     hw::HierarchyConfig memory_config; memory_config.sms = config.sms;
     memory_ = std::make_shared<hw::MemoryHierarchy>(*machine_.global_, memory_config);
-    for (uint32_t sm = 0; sm < config.sms; ++sm) sms_.push_back(std::make_unique<TimedSm>(config.pipeline));
+    for (uint32_t sm = 0; sm < config.sms; ++sm) sms_.push_back(std::make_unique<TimedSm>(config.pipeline, config.tensor));
     warps_.resize(config.blocks);
 }
 
@@ -64,6 +66,8 @@ void TimingMachine::retire_ctas() {
         auto& sm = *sms_[cta.sm_id];
         for (const auto& warp : warps_[cta.block_id]) sm.owners[warp.slot].reset();
         sm.resources.release(cta.block_id);
+        sm.allocated_columns -= sm.tensor_columns[cta.block_id];
+        sm.tensor_columns.erase(cta.block_id);
         cta.completed = true; ++machine_.completed_;
         Inflight event; event.cta = cta.block_id; event.sm = cta.sm_id; trace(event, "cta_retire");
     }
@@ -94,7 +98,7 @@ bool TimingMachine::advance() {
     if (cycle_ >= machine_.config_.max_cycles) throw std::runtime_error("cycle_limit_exceeded");
     admit(); ++cycle_;
     memory_->tick();
-    for (auto& sm : sms_) { sm->shared.tick(); sm->constant.tick(); }
+    for (auto& sm : sms_) { sm->shared.tick(); sm->constant.tick(); sm->tmem.tick(); sm->array.tick(); }
     retire_results(); collect_operands(); launch_ready();
     bool issued = false;
     for (uint32_t sm = 0; sm < sms_.size(); ++sm)

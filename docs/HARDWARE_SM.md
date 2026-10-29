@@ -2,7 +2,7 @@
 
 `simt-run --timing` 已将基础 ISA 接入实际的 SM 流水线和存储模型。默认功能模式保持原有语义。两者都在 CPU 上执行；时序模式的 `hardware.cycles` 是本项目研究架构的时钟，未校准为 RTX 4070 SUPER、SM100 或 SM120 的周期预测。
 
-当前接入范围：整数/标量浮点、谓词、控制流/重聚、warp 集合操作、global/shared/constant 的 load/store、通用 shared 地址、CTA 屏障和 fence。**Tensor/TMEM、CP_ASYNC/mbarrier、原子与 local memory 尚未接入时序执行**，遇到这些指令明确报错。原功能模式仍支持它们，不能把功能模式测试算作相应硬件流水线已完成。
+当前接入范围：整数/标量浮点、谓词、控制流/重聚、warp 集合操作、global/shared/constant 的 load/store、通用 shared 地址、CTA 屏障和 fence，以及 [Tensor/TMEM 时序通路](HARDWARE_TENSOR.md)。**CP_ASYNC/mbarrier、原子与 local memory 尚未接入时序执行**，遇到这些指令明确报错。原功能模式仍支持它们，不能把功能模式测试算作相应硬件流水线已完成。
 
 ## 从一条指令到真实结果
 
@@ -84,7 +84,7 @@ python3 examples/hardware_pipeline.py
 
 ## 仍然没有完成的硬件
 
-- Tensor 乘加阵列、分拍供数、TMEM bank、异步矩阵完成。
+- Tensor 阵列、分拍供数和 TMEM bank 已实现；PTX 异步 MMA/commit 协议及浮点乘加电路仍未实现。
 - local/spill、原子执行单元、异步拷贝和事务屏障的时序通路。
 - 指令 cache、TLB/页表、跨 SM 互连网络、真实弱内存一致性协议。
 - 持久设备 CP/copy/Graph 的统一时钟与跨 kernel 缓存保留；当前 CLI 每次运行创建新的缓存，主机协议仍走功能模式。

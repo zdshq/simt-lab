@@ -54,6 +54,7 @@ void TimingMachine::launch(Inflight& entry) {
     auto& partition = sms_[entry.sm]->partitions[entry.partition];
     const auto& config = machine_.config_.pipeline;
     const auto pipe = entry.footprint.pipe;
+    if (pipe == Pipe::tensor && sms_[entry.sm]->tensor_owner) { ++stats_.unit_stalls; return; }
     const auto index = static_cast<size_t>(pipe);
     if (partition.available[index] > cycle_) { ++stats_.unit_stalls; return; }
     const uint32_t latency = pipe == Pipe::integer ? config.integer_latency :
@@ -61,7 +62,9 @@ void TimingMachine::launch(Inflight& entry) {
     const uint32_t interval = pipe == Pipe::integer ? config.integer_interval :
         pipe == Pipe::floating ? config.float_interval : pipe == Pipe::special ? config.special_interval : 1;
     partition.available[index] = cycle_ + interval;
-    if (pipe == Pipe::memory) { prepare_memory(entry); entry.stage = Stage::memory; }
+    if (pipe == Pipe::tensor) {
+        sms_[entry.sm]->tensor_owner = entry.id; entry.tensor.emplace(); entry.stage = Stage::tensor;
+    } else if (pipe == Pipe::memory) { prepare_memory(entry); entry.stage = Stage::memory; }
     else {
         if (!entry.footprint.boundary) evaluate_scalar(entry);
         entry.stage = Stage::executing; entry.due = cycle_ + latency;

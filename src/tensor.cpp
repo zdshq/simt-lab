@@ -10,20 +10,18 @@ uint32_t issuer(uint32_t mask) {
     if (std::popcount(mask) != 1) throw std::runtime_error("tensor_single_issuer_required");
     return static_cast<uint32_t>(std::countr_zero(mask));
 }
+}
 
-// Allocate contiguous columns and initialize every cell in the allocation.
-// 分配连续列，并初始化分配区域中的每个单元。
-uint32_t allocate(Cta& cta, uint32_t count) {
+// Reserve ownership separately from data initialization so timed zeroing uses physical ports.
+// 将归属预约与数据初始化分开，使时序清零通过物理端口完成。
+uint32_t reserve_tensor_columns(Cta& cta, uint32_t count) {
     if (!count || count > 256 || count % 8) throw std::runtime_error("invalid_tensor_allocation");
     for (uint32_t base = 0; base + count <= 256; base += 8) {
         bool available = true;
         for (uint32_t column = base; column < base + count; ++column)
             available &= !cta.tensor_columns[column];
         if (!available) continue;
-        for (uint32_t column = base; column < base + count; ++column) {
-            cta.tensor_columns.set(column);
-            for (uint32_t row = 0; row < 128; ++row) cta.tmem.write((column * 128 + row) * 4, 4, 0);
-        }
+        for (uint32_t column = base; column < base + count; ++column) cta.tensor_columns.set(column);
         cta.tensor_allocations[base] = count;
         return base;
     }
@@ -32,12 +30,22 @@ uint32_t allocate(Cta& cta, uint32_t count) {
 
 // Free requires the exact original allocation rather than an overlapping subrange.
 // 释放必须对应完整原始分配，不能释放重叠子区间。
-void free_columns(Cta& cta, uint32_t base, uint32_t count) {
+void free_tensor_columns(Cta& cta, uint32_t base, uint32_t count) {
     const auto allocation = cta.tensor_allocations.find(base);
     if (allocation == cta.tensor_allocations.end() || allocation->second != count)
         throw std::runtime_error("invalid_tensor_free");
     for (uint32_t column = base; column < base + count; ++column) cta.tensor_columns.reset(column);
     cta.tensor_allocations.erase(allocation);
+}
+
+namespace {
+// The functional path still initializes the reserved cells immediately.
+// 功能路径仍即时初始化已预约单元。
+uint32_t allocate(Cta& cta, uint32_t count) {
+    const auto base = reserve_tensor_columns(cta, count);
+    for (uint32_t column = base; column < base + count; ++column)
+        for (uint32_t row = 0; row < 128; ++row) cta.tmem.write((column * 128 + row) * 4, 4, 0);
+    return base;
 }
 
 // Coordinate loads and stores expose accumulator cells to ordinary lane registers.
@@ -71,7 +79,7 @@ bool execute_tensor(const ExecutionContext& context, uint32_t mask) {
     if (!mask) return true;
     const auto lane = issuer(mask);
     if (i.op == Op::TMEM_ALLOC) write_register(context.after, i.rd, lane, allocate(context.cta, i.imm));
-    if (i.op == Op::TMEM_FREE) free_columns(context.cta, read_register(context.before, i.ra, lane), i.imm);
+    if (i.op == Op::TMEM_FREE) free_tensor_columns(context.cta, read_register(context.before, i.ra, lane), i.imm);
     if (i.op == Op::MMA) matrix_multiply(context, read_register(context.before, i.ra, lane));
     return true;
 }

@@ -169,7 +169,7 @@ class TimingTest(SimulationCase):
 
     def test_explicit_limits_and_unconnected_units(self):
         self.timed(Program().emit('LDL', rd=0, ra=Z), error='timing_local_memory_not_connected')
-        self.timed(Program().emit('MMA', ra=Z), error='timing_unit_not_connected: MMA')
+        self.timed(Program().emit('ATOM', ra=Z), error='timing_unit_not_connected: ATOM')
         self.timed(Program().emit('BRA', imm=0), '--max-cycles', 10, error='cycle_limit_exceeded')
         self.timed(Program().emit('BRA', imm=0), '--max-steps', 5, error='step_limit_exceeded')
         self.timed(Program().emit('LDS', rd=0, ra=Z, imm=256, mode=4), '--shared-bytes', 256,

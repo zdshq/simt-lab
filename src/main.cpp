@@ -59,6 +59,20 @@ bool hardware_option(simt::Config& config, const std::string& key, uint32_t valu
     return true;
 }
 
+// Tensor geometry and port settings describe this research machine, not NVIDIA hardware constants.
+// 张量几何结构和端口配置描述本研究机器，不是 NVIDIA 硬件常量。
+bool tensor_option(simt::Config& config, const std::string& key, uint32_t value) {
+    if (key == "--tensor-rows") config.tensor.rows = value;
+    else if (key == "--tensor-columns") config.tensor.columns = value;
+    else if (key == "--tensor-latency") config.tensor.latency = value;
+    else if (key == "--tensor-queue") config.tensor.input_capacity = value;
+    else if (key == "--tmem-banks") config.tensor.tmem_banks = value;
+    else if (key == "--tmem-latency") config.tensor.tmem_latency = value;
+    else if (key == "--tmem-columns") config.tensor.tmem_columns = value;
+    else return false;
+    return true;
+}
+
 // Keep ordinary launch options independent from research hardware parameters.
 // 将普通启动选项与研究型硬件参数分开。
 void set_option(Options& options, const std::string& key, const std::string& value) {
@@ -72,6 +86,7 @@ void set_option(Options& options, const std::string& key, const std::string& val
     const auto numeric = number(value);
     if (numeric > UINT32_MAX) throw std::runtime_error("argument_out_of_range");
     if (hardware_option(config, key, static_cast<uint32_t>(numeric))) return;
+    if (tensor_option(config, key, static_cast<uint32_t>(numeric))) return;
     if (key != "--sms" && key != "--blocks" && key != "--threads")
         throw std::runtime_error("unknown_option: " + key);
     if (key == "--sms") config.sms = static_cast<uint32_t>(numeric);
@@ -112,6 +127,8 @@ void print_help() {
                  "         [--partitions N] [--register-banks N] [--collectors N] [--max-ctas N]\n"
                  "         [--max-warps N] [--sm-registers N] [--int-latency N] [--fp-latency N]\n"
                  "         [--sfu-latency N] [--sfu-interval N]\n"
+                 "         [--tensor-rows N] [--tensor-columns N] [--tensor-latency N] [--tensor-queue N]\n"
+                 "         [--tmem-banks N] [--tmem-latency N] [--tmem-columns N]\n"
                  "CPU simulator; --timing enables a partial research model, not NVIDIA timing prediction.\n";
 }
 

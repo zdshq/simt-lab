@@ -19,7 +19,9 @@ add_library(simt_core src/machine.cpp src/execution.cpp src/control.cpp src/coll
     src/dump.cpp src/module.cpp src/memory_execution.cpp src/barrier.cpp
     src/diagnostics.cpp src/tensor.cpp src/tensor_numeric.cpp src/matrix.cpp src/matrix_descriptor.cpp
     src/async.cpp src/async_copy.cpp src/timing/footprint.cpp src/timing/scheduler.cpp src/timing/issue.cpp
-    src/timing/execute.cpp src/timing/memory.cpp src/timing/retire.cpp src/timing/report.cpp ${GENERATED_DIR}/isa.hpp)
+    src/timing/execute.cpp src/timing/memory.cpp src/timing/retire.cpp src/timing/report.cpp
+    src/hardware/tensor_array.cpp src/timing/tensor_transfer.cpp src/timing/tensor_control.cpp
+    src/timing/tensor_tile.cpp src/timing/tensor_operands.cpp ${GENERATED_DIR}/isa.hpp)
 add_dependencies(simt_core generate_isa)
 target_include_directories(simt_core PUBLIC include ${GENERATED_DIR})
 target_compile_options(simt_core PRIVATE -Wall -Wextra -Wpedantic -Werror -ffp-contract=off)
@@ -86,6 +88,11 @@ target_link_libraries(test-hardware-pipeline PRIVATE simt_hardware)
 target_compile_options(test-hardware-pipeline PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME hardware_pipeline_units COMMAND test-hardware-pipeline)
 set_tests_properties(hardware_pipeline_units PROPERTIES TIMEOUT 90)
+add_executable(test-hardware-tensor tests/test_hardware_tensor.cpp)
+target_link_libraries(test-hardware-tensor PRIVATE simt_core)
+target_compile_options(test-hardware-tensor PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME hardware_tensor_array COMMAND test-hardware-tensor)
+set_tests_properties(hardware_tensor_array PROPERTIES TIMEOUT 90)
 function(add_simt_test name script)
     add_test(NAME ${name} COMMAND ${CMAKE_COMMAND} -E env
         "PYTHONPATH=${GENERATED_DIR}:${CMAKE_CURRENT_SOURCE_DIR}/python"
@@ -95,6 +102,7 @@ function(add_simt_test name script)
 endfunction()
 add_simt_test(isa_and_execution test_simulator.py)
 add_simt_test(timed_sm_execution test_timing.py)
+add_simt_test(timed_tensor_execution test_timed_tensor.py)
 add_simt_test(control_and_collectives test_control.py)
 add_simt_test(memory_and_barriers test_memory.py)
 add_simt_test(tensor_numeric test_tensor.py)

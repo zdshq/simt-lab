@@ -1,11 +1,12 @@
 #pragma once
 #include "simt/machine.hpp"
 #include "simt/hardware_memory.hpp"
+#include "simt/timing_tensor.hpp"
 #include <deque>
 
 namespace simt {
-enum class Pipe { integer, floating, special, memory, control };
-enum class Stage { collect, ready, executing, memory, writeback };
+enum class Pipe { integer, floating, special, memory, control, tensor };
+enum class Stage { collect, ready, executing, memory, tensor, writeback };
 struct Footprint {
     Pipe pipe = Pipe::integer;
     std::vector<hw::RegisterUse> reads;
@@ -26,7 +27,7 @@ struct WarpOwner { uint32_t cta, warp; };
 struct Partition {
     hw::RegisterPorts ports;
     uint32_t cursor = 0;
-    std::array<uint64_t, 5> available{};
+    std::array<uint64_t, 6> available{};
     std::optional<uint64_t> predicate_write;
     explicit Partition(uint32_t banks) : ports(banks) {}
 };
@@ -36,7 +37,12 @@ struct TimedSm {
     std::vector<std::optional<WarpOwner>> owners;
     hw::BankedShared shared;
     hw::BankedShared constant{{65536, 1, 4, 8}};
-    explicit TimedSm(const hw::PipelineConfig& config);
+    hw::BankedShared tmem;
+    hw::TensorArray array;
+    std::optional<uint64_t> tensor_owner;
+    std::map<uint32_t, uint32_t> tensor_columns;
+    uint32_t allocated_columns = 0;
+    explicit TimedSm(const hw::PipelineConfig& config, const hw::TensorConfig& tensor);
 };
 struct MemoryFlight {
     uint32_t space = 0;
@@ -57,6 +63,7 @@ struct Inflight {
     Warp operands, result;
     std::vector<hw::RegisterUse> unread;
     std::vector<MemoryFlight> memory;
+    std::optional<TensorFlight> tensor;
 };
 struct TimingStats {
     uint64_t issued = 0, retired = 0, scoreboard_stalls = 0, boundary_stalls = 0;
@@ -103,12 +110,34 @@ private:
     void poll_memory(Inflight& entry);
     void prepare_memory(Inflight& entry);
     void finish_memory(Inflight& entry, const MemoryFlight& flight, const std::array<uint32_t, 32>& values);
+    void poll_tensor(Inflight& entry);
+    void advance_tensor(Inflight& entry);
+    void start_tensor(Inflight& entry);
+    void start_tensor_transfer(Inflight& entry);
+    void start_tensor_descriptor(Inflight& entry, uint32_t address);
+    void free_tensor(Inflight& entry, uint32_t address);
+    void allocate_tensor(Inflight& entry);
+    void zero_tensor(Inflight& entry);
+    bool poll_tensor_transfers(Inflight& entry);
+    bool service_tensor_transfer(Inflight& entry, TensorTransfer& part);
+    void tensor_descriptor(Inflight& entry);
+    void begin_tensor_tile(Inflight& entry);
+    void initial_tensor_tile(Inflight& entry);
+    void prepare_tensor_wave(Inflight& entry);
+    void tensor_metadata(Inflight& entry);
+    void prepare_tensor_operands(Inflight& entry);
+    void prepare_tensor_scales(Inflight& entry);
+    void decode_tensor_operands(Inflight& entry);
+    void feed_tensor(Inflight& entry);
+    void drain_tensor(Inflight& entry);
+    void store_tensor(Inflight& entry);
     void retire_results();
     bool writeback_available(Inflight& entry);
     void commit(Inflight& entry);
     void trace(const Inflight& entry, const std::string& action);
     void dump_statistics(std::ostream& out) const;
     void dump_memory(std::ostream& out) const;
+    void dump_tensor(std::ostream& out) const;
     void dump_trace(std::ostream& out) const;
 };
 }

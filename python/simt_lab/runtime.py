@@ -41,7 +41,7 @@ def compare(workload, report):
 
 # Persist exact inputs and invocation arguments before launching the executable.
 # 启动可执行文件之前保存精确输入和调用参数。
-def save_inputs(workload, runner, destination, policy):
+def save_inputs(workload, runner, destination, policy, timing=False):
     destination.mkdir(parents=True,exist_ok=True)
     program, image = destination/'kernel.bin', destination/'global.bin'
     workload.program.save(program)
@@ -50,20 +50,25 @@ def save_inputs(workload, runner, destination, policy):
     command = [str(Path(runner).resolve()),str(program.resolve()),'--global',str(image.resolve()),
                '--sms','2','--blocks',str(workload.blocks),'--threads',str(workload.threads),
                '--policy',policy,'--warp-policy',policy,'--dump-memory']
+    if timing:
+        command.append('--hardware-trace')
     (destination/'launch.json').write_text(json.dumps(command,indent=2)+'\n')
     return command
 
 
 # Execute machine code and preserve both raw output and comparison evidence.
 # 执行机器码，并保留原始输出和比较证据。
-def run_workload(workload, runner, destination, policy='rr'):
+def run_workload(workload, runner, destination, policy='rr', timing=False):
     destination = Path(destination)
-    command = save_inputs(workload,runner,destination,policy)
+    command = save_inputs(workload,runner,destination,policy,timing)
     result = subprocess.run(command,text=True,capture_output=True,timeout=30)
     if result.returncode:
         raise RuntimeError(result.stderr)
     (destination/'state.json').write_text(result.stdout)
     report = json.loads(result.stdout)
     summary = compare(workload,report)
+    if timing:
+        summary['model_cycles'] = report['hardware']['cycles']
+        summary['tensor_products'] = sum(sm['products'] for sm in report['hardware']['tensor'])
     (destination/'validation.json').write_text(json.dumps(summary,indent=2)+'\n')
     return summary

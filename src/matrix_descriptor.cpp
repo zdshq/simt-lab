@@ -30,6 +30,12 @@ MatrixDescriptor read_descriptor(const Cta& cta, uint32_t address) {
     cta.shared.check(address, 80, 16);
     std::array<uint32_t, 20> words{};
     for (uint32_t index = 0; index < words.size(); ++index) words[index] = cta.shared.read(address + 4 * index, 4);
+    return decode_descriptor(words);
+}
+
+// Decode only returned bytes so timing frontends cannot bypass descriptor memory ports.
+// 只解码已返回字节，避免时序前端绕过描述符内存端口。
+MatrixDescriptor decode_descriptor(const std::array<uint32_t, 20>& words) {
     if (words[0] != 0x31414D4D) throw std::runtime_error("invalid_matrix_descriptor_magic");
     const MatrixDescriptor d{words[1], words[2], words[3], words[4], words[5], words[6], words[7],
                              words[8], words[9], words[10], words[11], words[12], words[13], words[14],

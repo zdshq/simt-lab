@@ -66,9 +66,28 @@ void TimingMachine::dump_trace(std::ostream& out) const {
     out << ']';
 }
 
+void TimingMachine::dump_tensor(std::ostream& out) const {
+    const auto& config = machine_.config_.tensor;
+    out << ",\"tensor_config\":{\"rows\":" << config.rows << ",\"columns\":" << config.columns
+        << ",\"latency\":" << config.latency << ",\"input_capacity\":" << config.input_capacity
+        << ",\"tmem_banks\":" << config.tmem_banks << ",\"tmem_latency\":" << config.tmem_latency
+        << ",\"tmem_columns\":" << config.tmem_columns << "},\"tensor\":[";
+    for (uint32_t sm = 0; sm < sms_.size(); ++sm) {
+        if (sm) out << ',';
+        const auto& s = sms_[sm]->array.stats(); const auto& t = sms_[sm]->tmem.stats();
+        out << "{\"tiles\":" << s.tiles << ",\"waves\":" << s.waves << ",\"products\":" << s.products
+            << ",\"skipped\":" << s.skipped << ",\"scale_products\":" << s.scale_products
+            << ",\"scale_accumulates\":" << s.scale_accumulates << ",\"input_stalls\":" << s.input_stalls
+            << ",\"queue_stalls\":" << s.queue_stalls << ",\"tmem_bank_services\":" << t.bank_services
+            << ",\"tmem_bank_stalls\":" << t.bank_stalls << ",\"tmem_broadcasts\":" << t.broadcasts << '}';
+    }
+    out << ']';
+}
+
 void TimingMachine::dump(std::ostream& out) const {
     dump_statistics(out);
     dump_memory(out);
+    dump_tensor(out);
     if (machine_.config_.hardware_trace) dump_trace(out);
     out << '}';
 }

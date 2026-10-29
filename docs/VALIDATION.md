@@ -1,6 +1,6 @@
 # 验证记录
 
-本页原表记录阶段 0–10 的 75 项功能验收。后续硬件目标仍在进行中：目前额外通过 17 项存储硬件检查、6 项 NVML 端到端检查、7 项流水线单元检查和 35 项时序执行检查。三种构建均通过 13 套件、140 项检查（116 项 Python、24 项 C++）。具体证据见 [存储单元](HARDWARE_MEMORY.md)、[SM 时序执行](HARDWARE_SM.md) 和 [原版 nvidia-smi](NVIDIA_SMI.md)。这些增量不证明整个微架构已经接入。
+本页原表记录阶段 0–10 的 75 项功能验收。后续硬件目标仍在进行中：目前额外通过 17 项存储硬件检查、6 项 NVML 端到端检查、7 项流水线单元检查、35 项基础时序执行检查，以及 6 项 Tensor 阵列检查和 19 项 Tensor 时序执行检查。三种构建均通过 15 套件、165 项检查（135 项 Python、30 项 C++）。具体证据见 [存储单元](HARDWARE_MEMORY.md)、[SM 时序执行](HARDWARE_SM.md)、[Tensor 时序执行](HARDWARE_TENSOR.md) 和 [原版 nvidia-smi](NVIDIA_SMI.md)。这些增量不证明整个微架构已经接入。
 
 验收日期：2026-10-29。环境：Linux、GCC 11.4、CMake 3.22、Python 3.13.5。构建要求 C++20、CMake 3.20+ 和 Python 3.10+，无第三方运行时依赖。
 
@@ -77,4 +77,4 @@ python3 examples/host_graph.py
 - 顺序敏感原子和无同步竞争程序不能要求跨所有调度顺序逐线程结果一致；没有实现自动 race checker。
 - 测试覆盖所声明的功能案例和负例，并非形式验证或所有输入穷举。
 
-阶段 0–10 的功能 ISS、持久主机链路与任务图已完成其原有验收。新的完整硬件目标仍未完成，剩余 Tensor/异步/原子/local 通路、CP/Graph 集成、RTL 和参数校准以 HARDWARE_PLAN.md 为准。
+阶段 0–10 的功能 ISS、持久主机链路与任务图已完成其原有验收。新的完整硬件目标仍未完成，剩余异步/原子/local 通路、PTX 异步矩阵提交、CP/Graph 集成、RTL 和参数校准以 HARDWARE_PLAN.md 为准。

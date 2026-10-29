@@ -2,6 +2,7 @@
 #include "simt/module.hpp"
 #include "simt/memory.hpp"
 #include "simt/hardware_pipeline.hpp"
+#include "simt/hardware_tensor.hpp"
 #include <array>
 #include <bitset>
 #include <cstdint>
@@ -39,6 +40,7 @@ struct Config {
     uint64_t max_cycles = 100000000;
     uint32_t cta_shared_bytes = 65536;
     hw::PipelineConfig pipeline;
+    hw::TensorConfig tensor;
 };
 // Store logical lane state independently from the host's CPU threads.
 // 将逻辑线程状态与宿主 CPU 线程分开保存。

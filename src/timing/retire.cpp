@@ -22,7 +22,7 @@ void TimingMachine::commit(Inflight& entry) {
     const auto& f = entry.footprint;
     auto& warp = machine_.ctas_[entry.cta].warps[entry.warp];
     auto& timed = warps_[entry.cta][entry.warp];
-    if (f.boundary) commit_control(entry);
+    if (f.pipe == Pipe::control) commit_control(entry);
     else for (uint32_t lane = 0; lane < lanes; ++lane) {
         if (!(f.write_mask & lane_bit(lane))) continue;
         if (f.destination) write_register(warp, *f.destination, lane, entry.result.r[*f.destination][lane]);
@@ -30,6 +30,11 @@ void TimingMachine::commit(Inflight& entry) {
     }
     if (f.destination) timed.scoreboard.retire_write(*f.destination, f.write_mask);
     if (f.predicate) timed.scoreboard.retire_predicate(*f.predicate, f.write_mask);
+    if (f.pipe == Pipe::tensor) {
+        for (uint32_t lane = 0; lane < lanes; ++lane)
+            if (entry.group.mask & lane_bit(lane)) warp.pc[lane] = entry.group.pc + 1;
+        sms_[entry.sm]->tensor_owner.reset();
+    }
     --timed.inflight;
     if (f.boundary) timed.boundary = false;
     if (f.pipe == Pipe::memory) timed.memory = false;
@@ -41,6 +46,7 @@ void TimingMachine::retire_results() {
     while (at != inflight_.end()) {
         auto& entry = *at->second;
         if (entry.stage == Stage::memory) poll_memory(entry);
+        if (entry.stage == Stage::tensor) poll_tensor(entry);
         if (entry.stage == Stage::executing && entry.due <= cycle_) entry.stage = Stage::writeback;
         if (entry.stage != Stage::writeback || !writeback_available(entry)) { ++at; continue; }
         try { commit(entry); }

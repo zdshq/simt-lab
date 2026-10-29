@@ -2,11 +2,13 @@
 
 实现顺序遵循“先确定数学语义，再建立数据通路”。本项目的格式、tile 范围、描述符和同步规则公开定义，不能据此声称兼容真实 Tensor Core 的指令、布局、吞吐或数值细节。
 
-本页描述现有**功能模式**。新增 `--timing` 尚未接入 Tensor/TMEM 与异步搬运指令，遇到它们会明确报错；当前没有完成 Tensor Core 的乘加阵列和逐拍供数通路。已有 SM 流水线范围见 [HARDWARE_SM.md](HARDWARE_SM.md)。
+本页主要描述现有**功能模式**及共同数值规则。`--timing` 已将 Tensor/TMEM 接入逐拍乘加阵列、真实内存供数和 TMEM bank 端口，见 [Tensor 硬件通路](HARDWARE_TENSOR.md)。CP_ASYNC/mbarrier 仍仅有功能实现；尚未完成完整 NVIDIA Tensor Core 电路或 PTX 异步接口。
 
 ## TMEM
 
 每个 CTA 有独立的 128 行 × 256 列 TMEM，每单元 32 位；一列占 512 字节。物理字节地址为 `(column * 128 + row) * 4`。
+
+以上为项目逻辑窗口。时序模式还施加每 SM 共享的物理列预算，并通过 bank 端口执行初始化和读写，详见 HARDWARE_TENSOR.md。
 
 - TMEM_ALLOC rd, imm：恰好一个线程发起，分配 imm 列，数量必须为 8 的正整数倍且不超过 256；rd 返回首列编号。分配区域初始化为零。
 - TMEM_FREE ra, imm：恰好一个线程发起，R[ra] 是原始首列，imm 必须等于原始分配大小。
@@ -34,7 +36,7 @@ MMA ra 由一个线程发起，R[ra] 指向本 CTA shared 中 16 字节对齐的
 | 17..18 | stride_scale_A, stride_scale_B | 缩放矩阵每行元素步长 |
 | 19 | space | 0 从 shared 读取矩阵、元数据及缩放；1 从 global 读取这些数据 |
 
-整个结果 tile 完成计算后统一写入 TMEM。普通程序须用 CTA 屏障在生产、MMA 和多 warp drain 之间建立执行同步。
+功能模式在整个结果 tile 完成计算后统一写入 TMEM；时序模式按微 tile 经 bank 端口写入，指令退休表示全部写入完成，不提供整个 tile 的中途原子可见性。普通程序须用 CTA 屏障在生产、MMA 和多 warp drain 之间建立执行同步。
 
 ## 数值规则
 
@@ -67,4 +69,4 @@ MB_INIT ra, imm 在 R[ra] 指向的 shared 地址初始化 32 字节记录，地
 
 记录中的八个 word 为 magic `0x3152424D`、phase、expected arrivals、remaining arrivals、remaining bytes、issued outstanding bytes、0、0，可通过 shared 快照审查。
 
-本版本 MMA 自身在一条功能指令中同步计算；异步实现覆盖 global→shared 搬运与事务完成，不声称实现 TMA descriptor、多维 DMA、异步 MMA 或真实硬件流水线。
+功能模式 MMA 在一条功能指令中同步计算；时序模式的逐拍 Tensor 单元对发起 warp 仍提供阻塞完成语义。上述异步搬运仅是功能模式实现，不声称实现 TMA descriptor、多维 DMA 或 PTX 的异步 MMA/commit 协议。

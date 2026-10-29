@@ -42,6 +42,16 @@ void memory(Footprint& f, const Instruction& i, uint32_t mask) {
     if (f.store) source(f, i.rb, mask); else f.destination = i.rd;
 }
 
+// Tensor commands serialize their issuing warp while the SM unit completes asynchronously.
+// 张量命令串行化发起 warp，SM 单元则异步推进到完成。
+void tensor(Footprint& f, const Instruction& i, uint32_t mask) {
+    f.pipe = Pipe::tensor; f.boundary = true;
+    if (i.op == Op::TMEM_ALLOC || i.op == Op::LDT) f.destination = i.rd;
+    if (i.op != Op::TMEM_ALLOC) source(f, i.ra, mask);
+    if (i.op == Op::LDT || i.op == Op::STT) source(f, i.rb, mask);
+    if (i.op == Op::STT) source(f, i.rc, mask);
+}
+
 void validate(const Footprint& f) {
     if (f.destination && *f.destination >= registers) throw std::runtime_error("register_out_of_range");
     if (f.predicate && *f.predicate >= 7) throw std::runtime_error("predicate_out_of_range");
@@ -59,6 +69,7 @@ Footprint instruction_footprint(const Instruction& i, uint32_t mask) {
     else if (i.op >= Op::LDG && i.op <= Op::ST) memory(f, i, mask);
     else if (i.op == Op::CVTA) { source(f, i.ra, mask); f.destination = i.rd; }
     else if (i.op >= Op::BAR_SYNC && i.op <= Op::FENCE) { f.pipe = Pipe::control; f.boundary = true; }
+    else if (i.op >= Op::TMEM_ALLOC && i.op <= Op::MMA) tensor(f, i, mask);
     else throw std::runtime_error(std::string("timing_unit_not_connected: ") + op_name(i.op));
     validate(f);
     return f;
