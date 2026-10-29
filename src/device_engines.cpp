@@ -97,5 +97,6 @@ void Device::tick() {
     service_copy();
     service_compute();
     finish_graphs();
+    if (ticks_ % 64 == 0) publish_monitor();
 }
 }

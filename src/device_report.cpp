@@ -3,6 +3,17 @@
 #include <stdexcept>
 
 namespace simt {
+// Periodic publications expose live CP state without allowing monitoring to advance execution.
+// 周期性发布暴露存活 CP 状态，监控本身不推进执行。
+void Device::publish_monitor() {
+    if (!monitor_) return;
+    MonitorRecord record;
+    record.sms = sms_; record.used = arena.allocated_bytes();
+    record.ticks = ticks_; record.completed = notifications_;
+    record.compute = compute_.value_or(0); record.copy = copy_.value_or(0);
+    monitor_->publish(record);
+}
+
 const char* state_name(JobState state) {
     switch (state) {
     case JobState::queued: return "queued";

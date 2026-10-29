@@ -58,4 +58,15 @@ void DeviceArena::pin(const std::set<uint32_t>& addresses) {
 void DeviceArena::unpin(const std::set<uint32_t>& addresses) {
     for (auto address : addresses) --allocations_.at(address).pins;
 }
+
+// Monitoring reports allocated device bytes, not host process RSS or cache-model capacity.
+// 监控报告已分配的设备字节，不是宿主 RSS 或缓存模型容量。
+uint64_t DeviceArena::allocated_bytes() const {
+    uint64_t total = 0;
+    for (const auto& [address, allocation] : allocations_) {
+        static_cast<void>(address);
+        total += allocation.size;
+    }
+    return total;
+}
 }

@@ -99,3 +99,13 @@
 - 实现 warp 合并器、逐拍 shared bank/广播，以及两个 SM 独立 L1/共享 L2 的数据层次结构；全局写采用明确但保守的排空/失效协议。
 - 验证：17 项 C++ 硬件单元/组合检查，包含 320 请求随机字节差分；三种构建的十个 CTest 套件全部通过，即原 75 项加新 17 项检查。ASan+UBSan 无错误。
 - 当前硬件单元尚未接入 Machine/CP，且 RTL、Tensor 流水线和 NVML 仍未完成。详细结构和可复现实验见 HARDWARE_MEMORY.md。
+
+## 阶段 17 第一部分：原版 nvidia-smi 与活会话 NVML（2026-10-29）
+
+- 在等待检测方式偏好时，按已说明的专用启动命令推进。实际使用未修改的 `/usr/bin/nvidia-smi`，不创建仿制表格脚本，不修改系统驱动或库。
+- 首次纯公开 NVML 探针被 575.57.08 拒绝；动态加载日志定位到私有 `nvmlInternalGetExportTable` 握手。当前仅将该握手转发给匹配的已安装 NVIDIA 库，公开设备接口由模拟器后端提供。
+- `Device(monitor_dir=...)` 发布实际分配表和 CP 状态；状态快照锁与生命周期锁分离。正常退出清理，异常死亡即使残留文件也不被枚举；旧句柄返回 GPU_IS_LOST。
+- 原版 `-L`、默认表格和 CSV 查询均成功；7 MiB 分配显示 64/7/57 MiB，释放回到 64/0/64 MiB。温度、功耗、频率、CUDA、PCIe 等未实现属性保持 N/A。
+- 新增六项端到端检查及 C++ ABI 辅助程序，覆盖多会话、退出、SIGKILL、坏快照、结构体版本和精确字节数。Debug/Release/ASan+UBSan 的 11 套件全部通过；当前共 98 项检查。
+- sanitizer 对项目 monitor/NVML 插桩，外部原版程序预加载 libasan 并关闭其泄漏报告，地址/UB 检查仍启用。未修改系统 `nvidia-smi -L` 仍只返回 RTX 4070 SUPER。
+- 文档和双终端运行方法见 NVIDIA_SMI.md。系统默认视图合并、CUDA 执行兼容、SM/Tensor 流水线与 RTL 尚未完成，完整目标保持进行中。

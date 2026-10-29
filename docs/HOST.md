@@ -2,7 +2,7 @@
 
 本扩展把原来“装载文件并执行一次”的 ISS 接到持久设备进程上。Python 主机可以分配内存、提交拷贝与 kernel、使用 stream/event、构建任务图并重复启动。所有 kernel 仍由 C++ ISA 执行器运行。
 
-它实现 CUDA Graph 风格的核心功能语义，不提供 NVIDIA 的 `cudaGraph*` API/ABI、PTX、驱动或 PCIe 设备。启动后 `nvidia-smi` 和标准 `cudaGetDeviceCount()` 不会因此多出设备。
+它实现 CUDA Graph 风格的核心功能语义，不提供 NVIDIA 的 `cudaGraph*` API/ABI、PTX、驱动或 PCIe 设备。默认系统 `nvidia-smi` 和标准 `cudaGetDeviceCount()` 不会因此多出设备。后续新增的 [NVML 管理面接入](NVIDIA_SMI.md) 可以通过专用启动方式让原版 nvidia-smi 查询模拟器；这不提供 CUDA 执行兼容。
 
 ## 运行
 

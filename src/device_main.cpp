@@ -7,8 +7,10 @@ namespace {
 void respond(simt::Device& device, const std::string& line) {
     try {
         const auto result = simt::execute_request(device, line);
+        device.publish_monitor();
         std::cout << "{\"ok\":true,\"result\":" << result << "}\n";
     } catch (const std::exception& error) {
+        device.publish_monitor();
         std::cout << "{\"ok\":false,\"error\":" << simt::json_string(error.what()) << "}\n";
     }
     std::cout.flush();

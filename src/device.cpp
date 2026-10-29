@@ -1,5 +1,6 @@
 #include "simt/device.hpp"
 #include <algorithm>
+#include <cstdlib>
 #include <stdexcept>
 
 namespace simt {
@@ -11,6 +12,8 @@ bool terminal(JobState state) {
 // 独立于计算和拷贝引擎占用情况，限制软件队列容量。
 Device::Device(uint32_t sms, uint32_t capacity) : sms_(sms), ring_(capacity) {
     if (!sms || sms > 64 || !capacity || capacity > 4096) throw std::runtime_error("invalid_device_config");
+    if (std::getenv("SIMT_MONITOR_DIR")) monitor_ = std::make_unique<MonitorPublisher>(monitor_directory().string());
+    publish_monitor();
 }
 
 // Modules are decoded once and retained for repeated kernel or graph launches.

@@ -1,5 +1,6 @@
 #pragma once
 #include "simt/machine.hpp"
+#include "simt/monitor.hpp"
 #include <deque>
 #include <set>
 
@@ -34,6 +35,7 @@ public:
     void validate(uint32_t address) const;
     void pin(const std::set<uint32_t>& addresses);
     void unpin(const std::set<uint32_t>& addresses);
+    uint64_t allocated_bytes() const;
 private:
     std::map<uint32_t, Allocation> allocations_;
 };
@@ -72,6 +74,7 @@ public:
     std::string job_json(JobId id) const;
     std::string stats_json() const;
     std::string trace_json() const;
+    void publish_monitor();
 private:
     uint32_t sms_;
     uint64_t written_ = 0, fetched_ = 0, published_ = 0, ticks_ = 0, notifications_ = 0;
@@ -84,6 +87,7 @@ private:
     std::map<uint64_t, GraphExecutable> graphs_;
     std::deque<TraceEntry> trace_;
     std::optional<JobId> compute_, copy_;
+    std::unique_ptr<MonitorPublisher> monitor_;
     void validate(const Command& command) const;
     std::set<uint32_t> references(const Command& command) const;
     void fetch();
