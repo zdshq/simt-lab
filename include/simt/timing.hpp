@@ -8,11 +8,12 @@
 #include "simt/register_file.hpp"
 #include "simt/operand_collector.hpp"
 #include "simt/writeback.hpp"
+#include "simt/integer_execution.hpp"
 #include <deque>
 
 namespace simt {
 enum class Pipe { integer, floating, special, memory, control, tensor, async };
-enum class Stage { collect, ready, executing, memory, tensor, async, writeback };
+enum class Stage { collect, ready, executing, integer, memory, tensor, async, writeback };
 struct Footprint {
     Pipe pipe = Pipe::integer;
     std::vector<hw::RegisterUse> reads;
@@ -131,6 +132,7 @@ private:
     bool async_dispatch_eligible(const Inflight& entry) const;
     void reserve_collector(Inflight& entry);
     void take_collector(Inflight& entry);
+    void release_collector_owner(Inflight& entry);
     bool collect_operand(Inflight& entry, const hw::RegisterUse& use);
     void commit_register_data(Inflight& entry);
     void write_result(const Inflight& entry, Warp& warp) const;
@@ -142,6 +144,8 @@ private:
     void launch_ready();
     void launch(Inflight& entry);
     void evaluate_scalar(Inflight& entry);
+    bool launch_integer(Inflight& entry);
+    void poll_integer(Inflight& entry);
     void commit_control(Inflight& entry);
     void poll_memory(Inflight& entry);
     void prepare_memory(Inflight& entry);

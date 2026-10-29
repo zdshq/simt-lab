@@ -5,6 +5,7 @@
 #include "Vsimt_operands32.h"
 #include "register_file_impl.hpp"
 #include "writeback_impl.hpp"
+#include "integer_impl.hpp"
 
 namespace simt::hw {
 namespace {
@@ -13,7 +14,7 @@ class RtlOperandUnit final : public detail::RtlRegisterFile<Circuit, Slots>, pub
     using Base = detail::RtlRegisterFile<Circuit, Slots>;
     using Base::dut_;
 public:
-    RtlOperandUnit(uint32_t banks, uint32_t collectors) : Base(banks), writeback_(dut_) {
+    RtlOperandUnit(uint32_t banks, uint32_t collectors) : Base(banks), writeback_(dut_), integer_(dut_) {
         if (!collectors || collectors > 32) throw std::runtime_error("invalid_collector_limit");
         dut_.entry_limit = collectors; dut_.collect_enable = 0;
         dut_.allocate_valid = 0; dut_.release_entries = 0;
@@ -21,6 +22,7 @@ public:
     }
     OperandCollector* collector() override { return this; }
     Writeback* writeback() override { return &writeback_; }
+    IntegerExecution* integer() override { return &integer_; }
     bool available() override { return !dut_.allocate_valid && dut_.allocate_ready; }
     uint32_t allocate(uint32_t warp, std::span<const RegisterUse> sources, uint32_t pipe) override;
     std::vector<CollectorGrant> collect() override;
@@ -48,6 +50,7 @@ public:
 private:
     CollectorStats stats_;
     detail::RtlWriteback<Circuit, Slots> writeback_;
+    detail::RtlInteger<Circuit> integer_;
     bool serviced_ = false, dispatched_ = false;
     std::optional<uint32_t> selected_port(uint32_t entry) const;
     uint32_t pending_count() const;
@@ -115,7 +118,7 @@ template<class C, uint32_t S> void RtlOperandUnit<C,S>::dispatch(uint32_t eligib
 template<class C, uint32_t S> std::optional<uint32_t> RtlOperandUnit<C,S>::selected_port(uint32_t entry) const {
     if (entry >= 32) throw std::out_of_range("collector_entry");
     for (uint32_t port = 0; port < 7; ++port)
-        if ((dut_.dispatch_valid & ~dut_.dispatch_accept) & (1u << port))
+        if ((dut_.dispatch_valid & ~dut_.dispatch_accept_events) & (1u << port))
             if (((dut_.dispatch_entries >> (port*5)) & 31u) == entry) return port;
     return {};
 }
@@ -146,11 +149,13 @@ template<class C, uint32_t S> void RtlOperandUnit<C,S>::tick() {
     stats_.active_clocks += bool(dut_.collector_clock_enable);
     stats_.allocated += bool(dut_.allocate_valid && dut_.allocate_ready);
     stats_.released += std::popcount(uint32_t{dut_.release_entries | dut_.dispatch_releases});
-    stats_.dispatches += std::popcount(static_cast<uint32_t>(dut_.dispatch_accept & dut_.dispatch_valid));
+    stats_.dispatches += std::popcount(static_cast<uint32_t>(dut_.dispatch_accept_events & dut_.dispatch_valid));
     stats_.dispatch_waits += std::popcount(uint32_t{dut_.ready_entries & ~dut_.dispatch_releases});
     stats_.reads += std::popcount(uint32_t{dut_.read_events});
     writeback_.sample();
+    integer_.sample();
     Base::tick();
+    integer_.clear();
     writeback_.clear();
     if (dut_.allocate_valid || dut_.release_entries || dut_.collect_enable || dut_.dispatch_enable || dut_.dispatch_accept) {
         dut_.allocate_valid = 0; dut_.release_entries = 0; dut_.collect_enable = 0;

@@ -4,7 +4,7 @@
 
 项目使用 C++20 实现执行核心，Python 生成 ISA 编码接口、构造 kernel 和独立参考结果。默认设备含两个 SM，每个 warp 有 32 个逻辑线程。它运行在 CPU 上，模拟的是自定义机器的行为，不预测真实 GPU 周期、面积或功耗。
 
-这里使用自己的指令编码与数值规范，借鉴作者公开的设计方法，不宣称兼容 curryGPU 的私有二进制、NVIDIA SASS 或完整 CUDA。ISS 和时序模型已运行；缓存、scoreboard、寄存器 bank 仲裁及 Tensor 数值/乘加阵列已有验证的 RTL。L1/L2、Tensor、scoreboard、寄存器数据与操作数收集器 RTL 已可选接入 ISA 和主机 Graph；完整 RTL GPU、PTX 编译器和 FPGA 实现仍未完成。
+这里使用自己的指令编码与数值规范，借鉴作者公开的设计方法，不宣称兼容 curryGPU 的私有二进制、NVIDIA SASS 或完整 CUDA。ISS 和时序模型已运行；缓存、scoreboard、寄存器 bank 仲裁及 Tensor 数值/乘加阵列已有验证的 RTL。L1/L2、Tensor、scoreboard、寄存器数据、操作数收集器、整数执行与写回 RTL 已可选接入 ISA 和主机 Graph；完整 RTL GPU、PTX 编译器和 FPGA 实现仍未完成。
 
 开发阶段、验收条件和当前进展见 [实施计划](docs/PLAN.md)、[主机与 Graph 扩展计划](docs/HOST_PLAN.md) 和 [开发记录](docs/DEVELOPMENT.md)。每个通过验收的阶段单独 Git 提交。
 
@@ -72,8 +72,10 @@ python3 examples/host_graph.py
 
 [寄存器数据 RTL 后端](docs/RTL_REGISTERS.md) 用 `-DSIMT_REGISTER_RTL=ON` 构建、`--register-rtl` 或 Python `register_rtl=True` 启用。每 SM 256 KiB 数据按 partition 与四个物理 bank 划分，包含逐 lane 有效位、masked write、写回旁路和槽复用清零；源操作数来自实际电路输出，可与其他三个 RTL 后端联合运行。
 
-[操作数收集器 RTL](docs/RTL_COLLECTOR.md) 通过 `--register-rtl --collector-rtl` 或 Python `register_rtl=True, collector_rtl=True` 启用。每分区 32 个物理条目保存三个源向量、待收集位和相对年龄；读请求由电路仲裁，寄存器数据直接连入收集器，执行接收后才传给 C++ 执行锁存器。现已有 [七个物理执行输出端口](docs/RTL_DISPATCH.md)，由电路按年龄选择候选，同端口每拍最多确认一次。
+[操作数收集器 RTL](docs/RTL_COLLECTOR.md) 通过 `--register-rtl --collector-rtl` 或 Python `register_rtl=True, collector_rtl=True` 启用。每分区 32 个物理条目保存三个源向量、待收集位和相对年龄；读请求由电路仲裁，寄存器数据直接连入收集器。现已有 [七个物理执行输出端口](docs/RTL_DISPATCH.md)，由电路按年龄选择候选，同端口每拍最多确认一次；整数端直接连接下面的 RTL，其余端口仍由 C++ 执行锁存器接收。
 
 [写回 RTL](docs/RTL_WRITEBACK.md) 现随 collector 后端启用。每分区 32 个完成槽在发射时预约，接收七类执行结果，按年龄竞争有限写端口，直接驱动寄存器堆。满槽阻止继续发射，等待结果由电路保存；执行流水线和部分控制仍由 C++ 提供。完整 32 槽写回模块的综合和五项网表检查通过。
 
-当前默认 Debug 运行 26 套件、274 项（272 通过，2 项未构建 RTL 而跳过）；联合 Release 构建通过 42 套件、839 项；寄存器/collector/写回 RTL 的 Debug ASan/UBSan 构建最终通过 33 套件、545 项。构建范围、早期套件超时与复跑记录见 [验证记录](docs/VALIDATION.md)。不同构建包含既有场景复跑，独立 RTL 检查另计，各套件按其目的选择后端，并非全部同时启用所有 RTL。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。
+[整数执行 RTL](docs/RTL_INTEGER.md) 同样随 collector 后端启用。16 种整数操作的源数据直接来自 collector，32 lane 电路执行算术、比较、特殊寄存器和地址转换，结果经过 32 项 FIFO 直接进入写回端口 0。延迟由 RTL 倒计数推进，已验证 1/4/100 拍；这是组合 ALU 加有界结果队列，没有宣称乘法器已切成对应数量的内部流水级。完整 32 项整数模块已通过实际综合和四项网表行为检查。
+
+当前默认 Debug 运行 26 套件、274 项（272 通过，2 项未构建 RTL 而跳过）；联合 Release 构建通过 42 套件、841 项；寄存器/collector/整数/写回 RTL 的 Debug ASan/UBSan 构建通过 33 套件、547 项。构建范围、实际结果与各阶段失败记录见 [验证记录](docs/VALIDATION.md)。不同构建包含既有场景复跑，独立 RTL 检查另计，各套件按其目的选择后端，并非全部同时启用所有 RTL。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。

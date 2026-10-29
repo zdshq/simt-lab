@@ -63,6 +63,11 @@ void TimingMachine::take_collector(Inflight& entry) {
     auto& partition = sms_[entry.sm]->partitions[entry.partition];
     for (const auto& source : partition.registers->collector()->take(*entry.collector))
         entry.operands.r[source.reg] = source.values;
+    release_collector_owner(entry);
+}
+
+void TimingMachine::release_collector_owner(Inflight& entry) {
+    auto& partition = sms_[entry.sm]->partitions[entry.partition];
     partition.collector_owners[*entry.collector].reset();
     entry.collector.reset();
 }

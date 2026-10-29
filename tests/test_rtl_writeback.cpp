@@ -1,5 +1,6 @@
 #include "simt/writeback.hpp"
 #include "simt/operand_collector.hpp"
+#include "simt/integer_execution.hpp"
 #include <iostream>
 #include <stdexcept>
 
@@ -75,7 +76,44 @@ void full_table_and_reuse() {
     require(wb.occupancy() == 32,"same-cycle release/reserve lost capacity");
 }
 
+// Exercise real collector-to-ALU-to-WB-to-RF wires without sending a host-computed vector to completion.
+// 验证实际 collector→ALU→WB→RF 连线，不向完成端发送宿主计算的向量。
+void connected_integer_execution_and_persistent_results() {
+    for (uint32_t partitions : {1,2,4,8}) {
+        auto file = make_register_file(partitions,4,4); auto& wb = *file->writeback();
+        auto& col = *file->collector(); auto& integer = *file->integer(); const auto slot = file->slots()-1;
+        file->write(slot,1,UINT32_MAX,values(100)); file->tick();
+        file->write(slot,2,UINT32_MAX,values(10)); file->tick();
+        const auto completion = wb.reserve({slot,0,1,3,0x80000001});
+        const RegisterUse sources[] = {{1,0x80000001},{2,0x80000001}};
+        const auto collector = col.allocate(slot,sources); file->tick();
+        col.collect(); col.dispatch(UINT32_MAX);
+        IntegerCommand command{collector,completion,4,0,1,2,63,0x80000001,0,4};
+        command.opcode = 255; rejects([&] { integer.launch(command); });
+        require(col.selected(collector),"rejected integer command consumed collector");
+        command.opcode = 4;
+        const auto clocks = file->stats().clocks;
+        require(integer.launch(command),"integer circuit rejected selected collector");
+        require(!col.selected(collector),"integer handshake did not acknowledge collector");
+        rejects([&] { col.take(collector); });
+        require(file->stats().clocks == clocks,"integer launch inserted hidden clock");
+        for (uint32_t tick = 0; tick < 4; ++tick) {
+            require(!wb.completed(completion),"integer completion arrived early"); file->tick();
+        }
+        require(wb.completed(completion),"integer completion did not reach WB circuit");
+        require(!wb.complete(completion,0,values(999)),"host producer overwrote integer result bus");
+        wb.arbitrate(); const auto result = wb.take(completion); file->tick();
+        require(result[0] == 110 && result[31] == 172 && result[1] == 0,"integer physical result/mask differs");
+        const RegisterUse reader[] = {{3,UINT32_MAX}};
+        const auto id = col.allocate(slot,reader); file->tick(); col.collect(); col.dispatch(UINT32_MAX);
+        require(col.take(id)[0].values == result,"integer result did not persist in physical RF"); file->tick();
+        require(integer.occupancy() == 0 && integer.integer_stats().accepted == 1 && integer.integer_stats().completed == 1,
+                "integer handshake counts or capacity differ");
+    }
+}
+
 void run_cases() {
+    connected_integer_execution_and_persistent_results(); std::cout << "PASS integer collector-to-ALU-to-WB-to-RF route across four geometries\n";
     direct_register_route_and_lane_masks(); std::cout << "PASS writeback actual RF bypass, storage and lane masks across four geometries\n";
     held_results_and_phase_errors(); std::cout << "PASS writeback retained results, finite ports and phase errors\n";
     full_table_and_reuse(); std::cout << "PASS writeback 32-slot capacity and same-cycle reuse\n";

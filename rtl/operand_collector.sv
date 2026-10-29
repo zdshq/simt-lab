@@ -5,7 +5,8 @@ module operand_collector #(
     parameter integer ENTRY_BITS = $clog2(ENTRIES),
     parameter integer SLOTS = 8,
     parameter integer SLOT_BITS = $clog2(SLOTS),
-    parameter integer ROW_BITS = SLOT_BITS+4
+    parameter integer ROW_BITS = SLOT_BITS+4,
+    parameter integer SHARED_CLOCK = 0
 ) (
     input wire clk, reset, collect_enable,
     input wire [5:0] entry_limit,
@@ -114,7 +115,9 @@ module operand_collector #(
     end endgenerate
     assign release_error = release_entries & ~ready_entries;
     assign clock_enable = reset || allocate_valid || (|release_entries) || collect_enable || (|dispatch_accept);
-    wire state_clock = clk && clock_enable;
+    // Internally generated dispatch acceptance must not change a clock gate during the active edge.
+    // 内部生成的分派确认不能在有效边沿期间改变时钟门控。
+    wire state_clock = SHARED_CLOCK != 0 ? clk : clk && clock_enable;
     integer free_index, check_source, check_other;
     reg found_free;
     reg [5:0] remaining;

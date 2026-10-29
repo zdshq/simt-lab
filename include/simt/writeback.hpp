@@ -20,6 +20,7 @@ public:
     virtual uint32_t reserve(const WritebackDestination& destination) = 0;
     virtual bool complete(uint32_t entry, uint32_t pipe, const RegisterVector& values) = 0;
     virtual void arbitrate() = 0;
+    virtual bool completed(uint32_t entry) const = 0;
     virtual bool selected(uint32_t entry) const = 0;
     virtual RegisterVector take(uint32_t entry) = 0;
     virtual uint32_t occupancy() const = 0;

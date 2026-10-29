@@ -18,6 +18,13 @@ class RtlCollector:
             hardware = report['hardware']
             self.assertTrue(hardware['collectors'])
             self.assertTrue(hardware['writeback_units'])
+            self.assertTrue(hardware['integer_units'])
+            for unit in hardware['integer_units']:
+                self.assertEqual(unit['backend'], 'rtl')
+                self.assertEqual(unit['entries'], 32)
+                self.assertEqual(unit['occupancy'], 0)
+                self.assertEqual(unit['accepted'], unit['completed'])
+                self.assertEqual(unit['clocks'], hardware['cycles'])
             for field in ('reserved', 'completed', 'retired'):
                 self.assertEqual(sum(unit[field] for unit in hardware['writeback_units']), hardware['issued'])
             for unit in hardware['writeback_units']:
@@ -92,6 +99,19 @@ class WritebackCapacity(RtlCollector, SimulationCase):
                 active -= 1
             self.assertLessEqual(active, 32)
         self.assertEqual((active, peak), (0, 32))
+
+    def test_integer_hardware_latency_and_dependent_result(self):
+        program = Program().emit('MOVI', rd=1, imm=0xffffffff).emit('MOVI', rd=2, imm=3)
+        program.emit('IMAD', rd=3, ra=1, rb=2, rc=2).emit('IADD', rd=4, ra=3, rb=2).emit('EXIT')
+        for latency in (1, 4, 100):
+            result = self.execute(program, '--threads', 1, '--int-latency', latency, '--hardware-trace')
+            self.assertEqual(self.registers(result, 3)[0], 0)
+            self.assertEqual(self.registers(result, 4)[0], 3)
+            self.assertEqual(sum(unit['accepted'] for unit in result['hardware']['integer_units']), 4)
+            starts = {event['instruction']: event['cycle'] for event in result['hardware']['trace'] if event['action'] == 'execute'}
+            for event in result['hardware']['trace']:
+                if event['action'] == 'retire' and event['pc'] < 4:
+                    self.assertEqual(event['cycle']-starts[event['instruction']], latency)
 
 
 if __name__ == '__main__':

@@ -13,6 +13,10 @@ public:
     uint32_t reserve(const WritebackDestination& destination) override;
     bool complete(uint32_t entry, uint32_t pipe, const RegisterVector& values) override;
     void arbitrate() override { sealed_ = true; }
+    bool completed(uint32_t entry) const override {
+        if (entry >= 32) throw std::out_of_range("writeback_entry");
+        return (dut_.wb_completed_entries & (1u << entry)) != 0;
+    }
     bool selected(uint32_t entry) const override;
     RegisterVector take(uint32_t entry) override;
     uint32_t occupancy() const override { return dut_.wb_occupancy; }
@@ -43,6 +47,7 @@ template<class C, uint32_t S> bool RtlWriteback<C,S>::complete(uint32_t entry, u
     if (sealed_ || dut_.wb_reserve_valid) throw std::runtime_error("writeback_completion_phase");
     const auto bit = 1u << pipe;
     if (dut_.wb_complete_valid & bit) return false;
+    if (pipe == 0 && dut_.integer_output_valid) return false;
     const auto shift = pipe*5;
     dut_.wb_complete_entries = (dut_.wb_complete_entries & ~(uint64_t{31} << shift)) | (uint64_t{entry} << shift);
     for (uint32_t lane = 0; lane < 32; ++lane) dut_.wb_complete_data[pipe*32+lane] = values[lane];

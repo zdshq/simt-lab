@@ -63,6 +63,11 @@ void TimingMachine::launch(Inflight& entry) {
     if (entry.collector && !partition.registers->collector()->selected(*entry.collector)) {
         ++stats_.unit_stalls; return;
     }
+    if (pipe == Pipe::integer && entry.collector) {
+        if (!launch_integer(entry)) { ++stats_.unit_stalls; return; }
+        partition.available[index] = cycle_ + interval;
+        trace(entry, "execute"); return;
+    }
     take_collector(entry);
     partition.available[index] = cycle_ + interval;
     if (pipe == Pipe::async) start_async(entry);

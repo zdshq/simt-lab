@@ -335,10 +335,36 @@ PCI 选择在原程序私有路径中假定所有设备都有 PCI 状态，模�
 
 目标仍未完成：执行流水线与各生产端口的输入选择、完整谓词值存储、跨分区共享资源仲裁和其他整机 RTL 连接仍有 C++，还需实卡参数校准、PTX 异步矩阵协议与最终要求审计。
 
+## 阶段 16：整数数值、有限执行队列与写回直连（2026-10-30）
+
+从 `09000bb` 接续。16 种整数操作全部进入 32 lane RTL，源值由 collector 总线直接供给，结果经过 32 项 FIFO 到写回端口 0。C++ 只传递元数据并追踪指令身份，既不复制整数源向量，也不计算整数结果或按 `due` 时间完成。队列包含真实存储、倒计数、容量和反压；组合 ALU 没有被描述成内部四级流水乘法器，详见 [RTL_INTEGER.md](RTL_INTEGER.md)。
+
+| 验证 | 实际结果与范围 |
+|---|---|
+| 默认 Debug | `ctest --test-dir build --output-on-failure -j3`：26 套件、274 项（231 Python / 43 C++），272 通过、2 跳过，3.21 秒 |
+| 联合 Release | `ctest --test-dir build-cache-rtl --output-on-failure -j3`：42 套件、841 项（773 Python / 68 C++）全部通过，8.80 秒 |
+| Debug ASan/UBSan 全量 | `UBSAN_OPTIONS=halt_on_error=1 ctest --test-dir build-register-sanitize --output-on-failure -j3`：33 套件、547 项（493 Python / 54 C++）全部通过，598.32 秒；其中实际 collector/整数指令套件 98 项。构建包含寄存器/collector/整数/写回 RTL，其余为 C++；保留原 600 秒套件限制，无 sanitizer 报告 |
+| 完整 32 项整数 RTL / sanitizer | 四项独立检查均通过：全部整数操作与数值参考、地址转换/非法命令、容量/保持/复用/复位/1/4/100 拍、6,000 拍随机时间与反压参考；产物 `rtl-integer` / `rtl-integer-sanitize` |
+| 完整 32 项整数综合与网表 | `--module integer --synth` 实际得到 314,847 generic cells / 34,005 FF 位；`check -assert` 及相同四项 `--gate-sim` 全部通过，产物 `rtl-integer-synth` |
+| 两项小队列 | `--module integer --collector-entries 2` 同四项 RTL 检查通过，验证最小公开工具配置的满队列与首尾回绕；未声称此配置另做门级仿真 |
+| 组合顶层与写回 | `--module operand_unit` 普通/sanitizer 各五项，含实际最后源旁路→整数 ALU→写回→后续 RF 读取；`--module writeback` 当前源码普通/sanitizer 各五项，新增完成位观测不改变原行为 |
+| 四种分区几何 | C++ 写回适配器新增一项覆盖 1/2/4/8 分区的整数直连、掩码、拒绝后重试、生产端口所有权、无隐藏时钟和持久数据；包含在上述 CTest 总数中 |
+| 组合顶层保留存储综合 | 8 warp 槽、32 collector、32 完成槽、32 整数结果槽的 `--infer-only` 和 `check -assert` 通过；按实际层次实例展开为 144 个数组 / 564,096 数组位，加 147,600 FF 位。没有进行整个组合顶层的通用门网表仿真 |
+| 主机 Graph | `hardware_host.py --build build-cache-rtl --register-rtl --collector-rtl --scoreboard-rtl --cache-rtl --tensor-rtl --out artifacts/rtl-integer-host`：四负载各两次重放全部通过，完整验证汇总与 `rtl-writeback-host` 相等，设备总计 64,500 模型周期 |
+| 实际监控 | 另一个启用联合 RTL 的活设备完成两次 Graph GEMM，每次验证 96 个输出及 114 条整数 RTL 指令；普通 nvidia-smi 同时显示实卡和模拟器，7 MiB→0 MiB→退出移除；系统绝对路径只显示实卡。证据 `rtl-integer-host/monitor/` |
+
+八份完整负载报告除新增 `integer_units` 字段外，架构状态、原有统计和原始逐拍 trace 均与上一阶段全量相等。每次 vector/reduction/GEMM/Transformer 重放分别有 100/510/114/874 条整数指令，实际电路的 accepted/completed 与 trace 中的整数执行数逐一相等，所有结果队列最终为空；证据 `rtl-integer-host/backend-audit.json`。没有用“数值相等”代替后端身份和实际握手检查。
+
+首次连接的 RTL lint 指出了整数接收→collector 门控时钟的反馈路径。组合顶层改用 collector 的 `SHARED_CLOCK=1`，保留独立模块配置和各数据存储写使能，严格 lint 后通过；不是屏蔽 UNOPT 告警。日志为 `rtl-integer-history/collector-clock-lint.log`。组合测试驱动首次还出现同一 `auto` 声明推导为不同整数类型的编译错误，改成明确的 `uint32_t` 后复跑通过，原日志保留为 `connected-build-type-failure.log`。
+
+独立工具集合由 59 增至 64 项，本次运行受影响的 14 项：整数 4、组合顶层 5、写回 5。不同构建、队列大小和网表复跑不重复增加独立场景。当前源码与网表 SHA-256 审计见 `rtl-integer-final/evidence-audit.json`；CTest 原始输出及计数见同目录。上述 generic cells 不是 NAND2 等效门数，也没有给出 FPGA/ASIC 布局布线或频率结论。
+
+完整目标仍未完成：整数算术内部流水级、浮点/SFU/控制执行、完整谓词值存储、跨分区共享单元仲裁、其余 GPU RTL 连接、实卡参数校准和 PTX 异步矩阵协议仍需继续。
+
 ## 明确边界
 
 - 功能模式和时序模式都在 CPU 上执行；不会利用 RTX 4070 SUPER 来获得模拟 GPU 的实际吞吐。
-- 两个 SM 已有基础时序资源模型；缓存、Tensor、scoreboard、寄存器数据、collector/读请求年龄仲裁、七执行端口与完成存储/写回仲裁 RTL 已接入实际执行，早期循环 bank 仲裁 RTL 仍独立，尚未连接成两份完整 RTL SM。仅报告实际模块的 generic-cell 统计，没有整卡门数、工艺频率、面积或功耗结论。
+- 两个 SM 已有基础时序资源模型；缓存、Tensor、scoreboard、寄存器数据、collector/读请求年龄仲裁、七执行端口、整数数值与完成存储/写回仲裁 RTL 已接入实际执行，早期循环 bank 仲裁 RTL 仍独立，尚未连接成两份完整 RTL SM。仅报告实际模块的 generic-cell 统计，没有整卡门数、工艺频率、面积或功耗结论。
 - 自定义编码不兼容 CUDA/PTX/SASS/curryGPU 私有二进制；Python Program 是指令构造接口，不是 CUDA 编译器。
 - 主机接口及 CUDA Graph 风格功能通过 Python/C++ 进程协议运行，不实现 NVIDIA `cudaGraph*` API/ABI、驱动、PCIe/MMIO 或系统可枚举的 CUDA 设备。
 - Graph 支持范围见 [主机接口规范](HOST.md)：无 child graph、host callback、条件/内存分配节点、device-side launch 或完整 capture mode；单计算引擎不支持并发 kernel。

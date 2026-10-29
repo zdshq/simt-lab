@@ -86,6 +86,26 @@ void writeback_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedS
     out << ']';
 }
 
+// Integer counts observe real acceptance and completion edges on the connected execution circuit.
+// 整数计数观测已连接执行电路的实际接收与完成边沿。
+void integer_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedSm>>& sms) {
+    out << ",\"integer_units\":[";
+    bool first = true;
+    for (uint32_t sm = 0; sm < sms.size(); ++sm)
+        for (uint32_t part = 0; part < sms[sm]->partitions.size(); ++part) {
+            const auto& file = sms[sm]->partitions[part].registers;
+            auto* unit = file ? file->integer() : nullptr;
+            if (!unit) continue;
+            if (!first) out << ',';
+            first = false;
+            const auto& s = unit->integer_stats();
+            out << "{\"sm\":" << sm << ",\"partition\":" << part << ",\"backend\":\"rtl\",\"entries\":32"
+                << ",\"occupancy\":" << unit->occupancy() << ",\"clocks\":" << s.clocks << ",\"active_clocks\":" << s.active_clocks
+                << ",\"accepted\":" << s.accepted << ",\"completed\":" << s.completed << '}';
+        }
+    out << ']';
+}
+
 void cache_stats(std::ostream& out, const hw::CachePort& cache) {
     const auto& s = cache.stats(); const auto& config = cache.config();
     out << "{\"backend\":\"" << cache.name() << "\",\"clocks\":" << cache.cycle()
@@ -176,6 +196,7 @@ void TimingMachine::dump(std::ostream& out) const {
     scoreboard_stats(out, sms_);
     register_stats(out, sms_);
     collector_stats(out, sms_);
+    integer_stats(out, sms_);
     writeback_stats(out, sms_);
     dump_memory(out);
     dump_tensor(out);

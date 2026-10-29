@@ -24,6 +24,7 @@ module writeback_unit #(
     output wire [6:0] complete_error,
     input wire [ENTRIES-1:0] acknowledge,
     output reg [ENTRIES-1:0] retire_ready,
+    output wire [ENTRIES-1:0] completed_entries,
     output wire [ENTRIES-1:0] acknowledge_error,
     output reg [4:0] retire_valid,
     output reg [5*ENTRY_BITS-1:0] retire_entries,
@@ -46,6 +47,7 @@ module writeback_unit #(
     reg [ENTRY_BITS-1:0] result_entry;
     reg [ENTRIES-1:0] arriving;
     wire [ENTRIES-1:0] ready = occupied & (finished | arriving);
+    assign completed_entries = ready;
     wire [ENTRIES-1:0] released = acknowledge & retire_ready;
     wire [ENTRIES*1024-1:0] results;
     wire groups_valid = port_groups == 1 || port_groups == 2 || port_groups == 4;

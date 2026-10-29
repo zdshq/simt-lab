@@ -61,3 +61,5 @@ Tensor RTL 的四级 FP32 FMA、77 位对齐通路、完整次正规数和最近
 操作数收集器的 32 个物理条目、三个去重源、32 lane 锁存、年龄优先读仲裁、同拍最后源旁路与释放复用均为本项目设计选择。相对年龄压缩解决有限时间戳回绕；该实现不是公开研究已确认的 NVIDIA collector 拓扑。默认四条目额度与物理 32 条目容量分开报告，具体状态位和验证见 [RTL_COLLECTOR.md](RTL_COLLECTOR.md)。
 
 七类执行端口、每条目 3 位 pipe 字段、年龄优先选择及候选/确认协议是本项目设计选择，详见 [RTL_DISPATCH.md](RTL_DISPATCH.md)。不从 NVIDIA 指令类别推断其物理端口数量，也不把本项目综合成本当作 NVIDIA 芯片数据。
+
+整数执行的 32 lane 组合 ALU、32 项结果 FIFO、逐项倒计数和 collector→整数→写回直连也是项目设计，见 [RTL_INTEGER.md](RTL_INTEGER.md)。默认四拍是模型配置，不代表乘法器内部已经划分四级，也没有根据公开微基准确认 NVIDIA 使用相同队列或数据通路。S2R/CVTA 实现的是自定义 ISA 的上下文和地址窗口，不是 NVIDIA 特殊寄存器、MMU 或 TLB 的完整实现。

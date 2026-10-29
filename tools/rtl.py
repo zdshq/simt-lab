@@ -14,7 +14,9 @@ ROOT = Path(__file__).resolve().parents[1]
 MODULES = {'cache': ('sector_cache', 'test_cache.cpp', ['sector_sram.sv', 'cache_lru.sv', 'sector_cache.sv']),
            'scoreboard': ('lane_scoreboard', 'test_scoreboard.cpp', ['lane_scoreboard.sv']),
            'operand_unit': ('register_operand_unit', 'test_operand_unit.cpp',
-                            ['register_bank.sv', 'register_file.sv', 'collector_dispatch.sv', 'collector_payload.sv', 'operand_collector.sv', 'writeback_payload.sv', 'writeback_unit.sv', 'register_operand_unit.sv']),
+                            ['register_bank.sv', 'register_file.sv', 'collector_dispatch.sv', 'collector_payload.sv', 'operand_collector.sv',
+                             'integer_lane.sv', 'integer_vector.sv', 'integer_execute.sv', 'writeback_payload.sv', 'writeback_unit.sv', 'register_operand_unit.sv']),
+           'integer': ('integer_execute', 'test_integer.cpp', ['integer_lane.sv', 'integer_vector.sv', 'integer_execute.sv']),
            'writeback': ('writeback_unit', 'test_writeback.cpp', ['writeback_payload.sv', 'writeback_unit.sv']),
            'collector': ('operand_collector', 'test_collector.cpp', ['collector_dispatch.sv', 'collector_payload.sv', 'operand_collector.sv']),
            'dispatch': ('collector_dispatch', 'test_dispatch.cpp', ['collector_dispatch.sv']),
@@ -101,7 +103,7 @@ def simulation_sources(options, name, destination):
                 str(ROOT/'tests/rtl'/test)]
     parameters = [f'-GSETS={options.sets}', f'-GWAYS={options.ways}'] if name == 'cache' else []
     if name in ('register_file', 'operand_unit'): parameters = [f'-GSLOTS={options.rf_slots}']
-    if name in ('collector', 'dispatch', 'writeback'): parameters = [f'-GENTRIES={options.collector_entries}']
+    if name in ('collector', 'dispatch', 'writeback', 'integer'): parameters = [f'-GENTRIES={options.collector_entries}']
     return parameters+[str(ROOT/'rtl'/file) for file in files]+[str(ROOT/'tests/rtl'/test)]
 
 
@@ -115,7 +117,7 @@ def simulation(options, name):
     if options.gate_sim: verify_netlist(destination, files, cache_parameters(options, name))
     label, objects = ('gate', 'gate-obj') if options.gate_sim else ('simulation', 'obj')
     flags, libraries = compiler_flags(options)
-    if name in ('collector', 'dispatch', 'writeback'): flags += f' -DCOLLECTOR_ENTRIES={options.collector_entries}'
+    if name in ('collector', 'dispatch', 'writeback', 'integer'): flags += f' -DCOLLECTOR_ENTRIES={options.collector_entries}'
     command = [tool('verilator'), '--cc', '--exe', '--build', '-j', str(options.jobs),
                '-Wall', '--unroll-count', '4096', '--top-module', top, '--Mdir', str(destination/objects),
                '-CFLAGS', flags, '-LDFLAGS', libraries]+simulation_sources(options, name, destination)
@@ -152,7 +154,7 @@ def verify_netlist(destination, files, parameters):
 
 def cache_parameters(options, name):
     if name in ('register_file', 'operand_unit'): return {'SLOTS': options.rf_slots}
-    if name in ('collector', 'dispatch', 'writeback'): return {'ENTRIES': options.collector_entries}
+    if name in ('collector', 'dispatch', 'writeback', 'integer'): return {'ENTRIES': options.collector_entries}
     return {'SETS': options.sets, 'WAYS': options.ways} if name == 'cache' else {}
 
 
@@ -163,7 +165,7 @@ def synthesis(options, name):
     destination = options.out/name
     destination.mkdir(parents=True, exist_ok=True)
     lines = ['read_verilog -sv '+' '.join(yosys_string(ROOT/'rtl'/file) for file in files)]
-    if name in ('collector', 'dispatch', 'writeback'): lines.append(f'chparam -set ENTRIES {options.collector_entries} {top}')
+    if name in ('collector', 'dispatch', 'writeback', 'integer'): lines.append(f'chparam -set ENTRIES {options.collector_entries} {top}')
     if name in ('register_file', 'operand_unit'): lines.append(f'chparam -set SLOTS {options.rf_slots} {top}')
     if name == 'cache': lines.append(f'chparam -set SETS {options.sets} -set WAYS {options.ways} {top}')
     lines += [f'synth -top {top} -run begin:fine', 'check -assert',
