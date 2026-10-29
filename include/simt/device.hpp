@@ -1,7 +1,9 @@
 #pragma once
 #include "simt/machine.hpp"
 #include "simt/monitor.hpp"
+#include "simt/hardware_context.hpp"
 #include <deque>
+#include <functional>
 #include <set>
 
 namespace simt {
@@ -29,6 +31,7 @@ struct Allocation { uint32_t size = 0; uint64_t pins = 0; };
 class DeviceArena {
 public:
     std::shared_ptr<Memory> memory = std::make_shared<Memory>();
+    std::function<void(uint64_t, uint64_t)> before_clear;
     uint32_t allocate(uint32_t size);
     void release(uint32_t address);
     uint32_t containing(uint32_t address, uint32_t size) const;
@@ -44,7 +47,7 @@ private:
 // 已取走命令与已完成任务不同，任务仍持有资源引用。
 struct Job {
     JobId id = 0, parent = 0;
-    uint32_t stream = 0, node = 0, offset = 0;
+    uint32_t stream = 0, node = 0, offset = 0, expanded = 0;
     JobState state = JobState::queued;
     Command command;
     std::vector<JobId> dependencies, children;
@@ -52,15 +55,29 @@ struct Job {
     std::unique_ptr<Machine> machine;
     std::vector<uint8_t> result;
     std::string error;
+    std::string hardware = "null";
+    bool recovering = false;
+    uint64_t started = 0, finished = 0;
     uint64_t instruction_steps = 0;
 };
 struct TraceEntry { uint64_t tick; JobId job, parent; uint32_t node; std::string action; };
+
+// The copy engine retains one bounded chunk while the link or memory hierarchy applies backpressure.
+// 链路或内存层次施加反压时，拷贝引擎保留一个有界数据块。
+struct CopyTransfer {
+    enum class Stage { prepare, link_in, read, write, link_out };
+    Stage stage = Stage::prepare;
+    uint64_t owner = 0, due = 0;
+    uint32_t offset = 0, bytes = 0, width = 1;
+    std::array<uint8_t, 128> data{};
+    std::optional<hw::Ticket> ticket;
+};
 
 // A single compute engine and a copy engine make progress through explicit host polling.
 // 一个计算引擎与一个拷贝引擎通过显式主机轮询推进。
 class Device {
 public:
-    explicit Device(uint32_t sms = 2, uint32_t capacity = 64);
+    explicit Device(uint32_t sms = 2, uint32_t capacity = 64, bool timing = false, bool hardware_trace = false);
     DeviceArena arena;
     uint64_t load_module(const std::vector<uint8_t>& bytes);
     JobId submit(uint32_t stream, Command command, std::vector<JobId> dependencies = {});
@@ -77,6 +94,8 @@ public:
     void publish_monitor();
 private:
     uint32_t sms_;
+    bool hardware_trace_;
+    std::shared_ptr<hw::HardwareContext> hardware_;
     uint64_t written_ = 0, fetched_ = 0, published_ = 0, ticks_ = 0, notifications_ = 0;
     JobId next_job_ = 1;
     uint64_t next_module_ = 1, next_graph_ = 1, dropped_trace_ = 0;
@@ -87,16 +106,26 @@ private:
     std::map<uint64_t, GraphExecutable> graphs_;
     std::deque<TraceEntry> trace_;
     std::optional<JobId> compute_, copy_;
+    CopyTransfer transfer_;
     std::unique_ptr<MonitorPublisher> monitor_;
     void validate(const Command& command) const;
     std::set<uint32_t> references(const Command& command) const;
     void fetch();
     void dispatch();
     void start(Job& job);
+    void start_kernel(Job& job);
+    void start_copy(Job& job);
     void finish(Job& job, JobState state = JobState::complete, std::string error = {});
     void service_compute();
     void service_copy();
+    void service_timed_copy(Job& job);
+    void prepare_copy(Job& job);
+    void submit_copy(Job& job);
+    void poll_copy(Job& job);
+    void complete_copy_chunk(Job& job);
     void expand_graph(Job& job);
+    void service_graphs();
+    void expand_node(Job& parent);
     void finish_graphs();
     void trace(const Job& job, const std::string& action);
     int readiness(const Job& job) const;

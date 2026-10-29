@@ -40,6 +40,9 @@ std::string Device::job_json(JobId id) const {
     std::ostringstream out;
     out << "{\"id\":" << id << ",\"state\":" << json_string(state_name(job.state))
         << ",\"error\":" << json_string(job.error) << ",\"instruction_steps\":" << job.instruction_steps;
+    out << ",\"started\":" << job.started << ",\"finished\":" << job.finished
+        << ",\"recovering\":" << (job.recovering ? "true" : "false")
+        << ",\"hardware\":" << (job.machine ? job.machine->hardware_json() : job.hardware);
     out << ",\"data\":" << json_string(job.state == JobState::complete && job.command.kind == CommandKind::d2h
                                         ? encode_hex(job.result) : "") << ",\"children\":[";
     for (size_t index = 0; index < job.children.size(); ++index) {
@@ -57,7 +60,10 @@ std::string Device::stats_json() const {
     out << "{\"sms\":" << sms_ << ",\"capacity\":" << ring_.size() << ",\"write\":" << written_
         << ",\"read\":" << fetched_ << ",\"doorbell\":" << published_ << ",\"ticks\":" << ticks_
         << ",\"completed\":" << notifications_ << ",\"compute\":" << compute_.value_or(0)
-        << ",\"copy\":" << copy_.value_or(0) << ",\"dropped_trace\":" << dropped_trace_ << '}';
+        << ",\"copy\":" << copy_.value_or(0) << ",\"dropped_trace\":" << dropped_trace_
+        << ",\"mode\":\"" << (hardware_ ? "timing" : "functional") << "\",\"hardware\":";
+    if (hardware_) hardware_->dump(out); else out << "null";
+    out << '}';
     return out.str();
 }
 

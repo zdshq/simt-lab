@@ -53,12 +53,12 @@ def feed_forward(p, addresses):
 
 # The reference computes mathematics; the executable computes every intermediate tensor.
 # 参考端计算数学结果，可执行程序计算全部中间张量。
-def tiny_transformer():
+def tiny_transformer(*, base=0):
     image,addresses,x,weights = inputs()
     input_size = len(image.data)
-    output = image.append(bytes(4*8*4))
+    output = base+image.append(bytes(4*8*4))
     p = start_kernel().emit('TMEM_ALLOC',rd=2,imm=32,guard=0)
-    stage_inputs(p,input_size)
+    stage_inputs(p,input_size,source=base)
     attention(p,addresses)
     feed_forward(p,addresses)
     publish(p,7424,output)

@@ -52,7 +52,7 @@ void TimingMachine::prepare_memory(Inflight& entry) {
             kind == 2 ? cta.local[entry.warp * lanes + lane] : machine_.constant_;
         storage.check(address, size, size);
         if (entry.footprint.store && kind == 1) check_shared_write(cta, address, size);
-        if (kind == 2) address = hw::LocalAddressSpace::translate(entry.cta * 32 + entry.warp, lane, static_cast<uint32_t>(address));
+        if (kind == 2) address = hw::LocalAddressSpace::translate(local_base_ + entry.cta * 32 + entry.warp, lane, static_cast<uint32_t>(address));
         auto& access = flight(entry.memory, kind, entry.footprint.store, size);
         access.mask |= lane_bit(lane); access.address[lane] = address;
         access.value[lane] = read_register(entry.operands, i.rb, lane);
@@ -77,7 +77,7 @@ void TimingMachine::poll_memory(Inflight& entry) {
         auto& port = flight.space == 1 ? sm.shared : sm.constant;
         auto& backing = flight.space == 1 ? machine_.ctas_[entry.cta].shared : machine_.constant_;
         if (!flight.ticket) {
-            flight.ticket = (flight.space == 0 || flight.space == 2) ? memory_->submit(entry.sm, flight.access) : port.submit(flight.access, &backing);
+            flight.ticket = (flight.space == 0 || flight.space == 2) ? submit_memory(entry.sm, flight.access) : port.submit(flight.access, &backing);
             if (flight.ticket) {
                 trace(entry, "memory_submit");
                 if (flight.access.atomic) trace(entry, "atomic_submit");

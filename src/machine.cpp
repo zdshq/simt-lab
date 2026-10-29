@@ -61,15 +61,17 @@ std::string location(const Cta& cta, uint32_t warp, uint32_t pc) {
 
 // Retain completed CTA state for architectural inspection.
 // 保留已完成 CTA 的状态，供架构结果检查使用。
-Machine::Machine(Module module, Config config, std::shared_ptr<Memory> global)
+Machine::Machine(Module module, Config config, std::shared_ptr<Memory> global, std::shared_ptr<hw::HardwareContext> hardware)
     : module_(std::move(module)), config_(config), global_(global ? global : std::make_shared<Memory>()) {
     validate_config(config_);
     resident_.resize(config_.sms);
     ctas_.resize(config_.blocks);
-    if (config_.timing) timing_ = std::make_unique<TimingMachine>(*this);
+    if (config_.timing) timing_ = std::make_unique<TimingMachine>(*this, std::move(hardware));
 }
 
 Machine::~Machine() = default;
+
+bool Machine::drain() { return !timing_ || timing_->drain(); }
 
 // Architectural CTA storage is shared by functional and timed scheduling paths.
 // 功能调度和时序调度路径共享 CTA 架构存储。

@@ -61,9 +61,7 @@ class GraphTest(HostCase):
         copy = graph.add(d.op_h2d(b,bytes([91])*4096),(root,))
         join = graph.add(d.op_d2h(a,4),(compute,copy))
         run = graph.instantiate().launch()
-        d.progress(2)
-        self.assertNotEqual(d.stats()['compute'],0)
-        self.assertNotEqual(d.stats()['copy'],0)
+        self.await_overlap(d)
         self.assertEqual(struct.unpack('<I',run.node_result(join)),(19,))
         entries = [entry for entry in d.trace() if entry['parent']==run.id]
         stamps = {(e['node'],e['action']):e['tick'] for e in entries}

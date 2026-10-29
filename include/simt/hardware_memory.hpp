@@ -99,6 +99,7 @@ public:
     std::optional<Ticket> submit(const Packet& packet) override;
     void tick() override;
     void invalidate();
+    void invalidate_range(uint64_t address, uint64_t size);
     const CacheStats& stats() const { return stats_; }
     size_t miss_count() const { return misses_.size(); }
 private:
@@ -159,6 +160,8 @@ struct WarpRequest {
     bool done = false, invalidated = false;
     std::array<uint32_t, 32> result{};
     std::optional<Ticket> atomic_ticket{};
+    uint64_t owner = 0;
+    bool bypass_l1 = false;
 };
 
 // Per-SM L1s share L2/DRAM; conservative global store ordering provides an explicit coherence rule.
@@ -167,10 +170,12 @@ class MemoryHierarchy {
 public:
     MemoryHierarchy(MemoryBacking& memory, HierarchyConfig config = {});
     ~MemoryHierarchy();
-    std::optional<Ticket> submit(uint32_t sm, const WarpAccess& access);
+    std::optional<Ticket> submit(uint32_t sm, const WarpAccess& access, uint64_t owner = 0, bool bypass_l1 = false);
     void tick();
     std::optional<std::array<uint32_t, 32>> take(Ticket ticket);
     void invalidate();
+    void invalidate_range(uint64_t address, uint64_t size);
+    bool drain_owner(uint64_t owner);
     uint64_t cycle() const { return dram_.cycle(); }
     const CacheStats& l1_stats(uint32_t sm) const;
     const CacheStats& l2_stats() const { return l2_.stats(); }

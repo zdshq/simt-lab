@@ -87,7 +87,7 @@ python3 examples/hardware_pipeline.py
 - Tensor 阵列、分拍供数和 TMEM bank 已实现；PTX 异步 MMA/commit 协议及浮点乘加电路仍未实现。
 - 编译器自动 spill、原生 PTX 指令与完整 async-group/TMA；显式 local 和自定义整数原子已接入时序通路。
 - 指令 cache、TLB/页表、跨 SM 互连网络、真实弱内存一致性协议。
-- 持久设备 CP/copy/Graph 的统一时钟与跨 kernel 缓存保留；当前 CLI 每次运行创建新的缓存，主机协议仍走功能模式。
+- 持久 CP/copy/Graph 与跨 kernel 缓存已通过 `Device(timing=True)` 接入，见 [HARDWARE_HOST.md](HARDWARE_HOST.md)；并发多 kernel、上下文切换与抢占仍未实现。
 - 可综合 RTL、FPGA 下载、面积/频率估计及真实 GPU 参数校准。
 
 完整剩余目标见 [HARDWARE_PLAN.md](HARDWARE_PLAN.md)。NVML 展示能力单独见 [NVIDIA_SMI.md](NVIDIA_SMI.md)，它不能证明上述执行硬件已完成。

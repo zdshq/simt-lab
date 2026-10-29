@@ -1,7 +1,15 @@
 #include "simt/machine.hpp"
 #include "simt/timing.hpp"
+#include <sstream>
 
 namespace simt {
+std::string Machine::hardware_json() const {
+    if (!timing_) return "null";
+    std::ostringstream out;
+    timing_->dump(out);
+    return out.str();
+}
+
 namespace {
 // Serialize arrays in index order for stable snapshots.
 // 按索引顺序序列化数组，确保快照稳定。

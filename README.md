@@ -56,4 +56,6 @@ python3 examples/host_graph.py
 
 [Local 与原子通路](docs/HARDWARE_ATOMIC_LOCAL.md) 已接入字交错物理映射、同一缓存/DRAM 层次，以及 global/shared 原子的 bank 预约、读取、ALU 延迟和写确认。`python3 examples/hardware_memory_ops.py` 可生成合并、缓存和原子竞争实验。自定义 59 个 opcode 均有时序路径，仍不表示支持 NVIDIA 的全部硬件。
 
-当前三种构建均通过 18 个 CTest 套件、220 项检查（181 项 Python、39 项 C++）。主机 CP/Graph 的统一时钟与持久缓存、RTL 和参数校准仍未完成，完整剩余目标以硬件计划为准。
+[持久设备时序](docs/HARDWARE_HOST.md) 已将主机 CP、拷贝和 Graph 接入同一时钟，L1/L2 跨 kernel 保留。使用 `Device(timing=True)` 或 `python3 examples/hardware_host.py` 可执行带上传/下载的四类完整负载及 Graph 重放，并检查缓存、链路、故障排空和逐拍轨迹。
+
+当前三种构建均通过 20 个 CTest 套件、257 项检查（214 项 Python、43 项 C++）。可综合 RTL、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。

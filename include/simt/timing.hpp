@@ -1,7 +1,7 @@
 #pragma once
 #include "simt/machine.hpp"
 #include "simt/hardware_memory.hpp"
-#include "simt/hardware_local.hpp"
+#include "simt/hardware_context.hpp"
 #include "simt/timing_tensor.hpp"
 #include "simt/timing_async.hpp"
 #include <deque>
@@ -86,19 +86,24 @@ struct HardwareEvent {
 // 时序模拟机通过有限硬件资源驱动同一套架构状态。
 class TimingMachine {
 public:
-    explicit TimingMachine(Machine& machine);
+    explicit TimingMachine(Machine& machine, std::shared_ptr<hw::HardwareContext> hardware = {});
+    ~TimingMachine();
     bool advance();
+    bool drain();
     void dump(std::ostream& out) const;
 private:
     Machine& machine_;
-    hw::LocalAddressSpace physical_;
-    std::shared_ptr<hw::MemoryHierarchy> memory_;
+    std::shared_ptr<hw::HardwareContext> hardware_;
+    hw::MemoryHierarchy* memory_ = nullptr;
+    bool external_clock_ = false;
+    uint64_t owner_ = 0, local_base_ = 0, started_ = 0;
     std::vector<std::unique_ptr<TimedSm>> sms_;
     std::vector<std::vector<TimedWarp>> warps_;
     std::map<uint64_t, std::unique_ptr<Inflight>> inflight_;
     std::deque<HardwareEvent> trace_;
     TimingStats stats_;
     uint64_t cycle_ = 0, next_ = 1, next_copy_ = 1;
+    std::optional<hw::Ticket> submit_memory(uint32_t sm, const hw::WarpAccess& access);
     bool admit();
     void place(uint32_t block, uint32_t sm, const hw::Residency& residency);
     bool cta_drained(const Cta& cta) const;

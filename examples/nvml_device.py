@@ -14,6 +14,7 @@ def options():
     parser.add_argument('--registry', type=Path, default=Path('/tmp')/f'simt-lab-{os.getuid()}')
     parser.add_argument('--seconds', type=float, default=120)
     parser.add_argument('--bytes', type=int, default=7*1024*1024)
+    parser.add_argument('--timing', action='store_true')
     return parser.parse_args()
 
 
@@ -26,7 +27,7 @@ def configure_imports(build):
 # 分配和上传均为实际设备操作，注册目录只发布它们的状态。
 def demonstrate(arguments):
     from simt_lab.host import Device
-    with Device(arguments.build/'simt-device',monitor_dir=arguments.registry) as device:
+    with Device(arguments.build/'simt-device',monitor_dir=arguments.registry,timing=arguments.timing) as device:
         buffer = device.allocate(arguments.bytes)
         device.h2d(buffer,b'SIMT').wait()
         print(f'Live simulator PID {device.connection.process.pid}; registry {arguments.registry}',flush=True)

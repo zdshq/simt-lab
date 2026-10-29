@@ -35,9 +35,9 @@ flowchart TD
     E --> H
 ```
 
-CP 是 C++ 软件功能模型；当前协议是 stdin/stdout 请求，不是 PCIe、MMIO 或真实 GPFIFO 格式。基本语义中，主机写入、doorbell 发布、CP 取走、任务完成是四个不同阶段。取走一个包会释放环形槽位，但不会释放任务使用的缓冲区。
+CP 是 C++ 软件模型，支持默认功能模式和 `Device(timing=True)` 的设备时钟模式；当前协议是 stdin/stdout 请求，不是 PCIe、MMIO 或真实 GPFIFO 格式。基本语义中，主机写入、doorbell 发布、CP 取走、任务完成是四个不同阶段。取走一个包会释放环形槽位，但不会释放任务使用的缓冲区。
 
-一个计算引擎独占当前设备的 SM 执行一个 kernel；独立拷贝引擎每次服务最多 64 字节，可以与计算交错。没有实现多个 kernel 同时分割 SM。事件循环由 `progress()` 或等待接口显式推进，不依赖后台时钟；无主机推进调用时任务不会自行完成。
+一个计算引擎独占当前设备的 SM 执行一个 kernel；独立拷贝引擎可以与计算交错。默认功能模式每次服务最多拷贝 64 字节；时序模式采用有限暂存、链路等待及真实 L2/DRAM 请求，具体结构见 [HARDWARE_HOST.md](HARDWARE_HOST.md)。没有实现多个 kernel 同时分割 SM。事件循环由 `progress()` 或等待接口显式推进，不依赖后台时钟；无主机推进调用时任务不会自行完成。
 
 ## 主机接口
 
@@ -46,6 +46,7 @@ CP 是 C++ 软件功能模型；当前协议是 stdin/stdout 请求，不是 PCI
 | 接口 | 含义 |
 |---|---|
 | `Device(executable, sms=2, capacity=64)` | 创建持久 C++ 设备进程 |
+| `Device(timing=True, hardware_trace=True)` | 启用统一设备时钟、持久缓存、真实拷贝通路及 kernel 逐拍 trace |
 | `allocate(size)` / `buffer.free()` | 分配/释放，256 字节对齐，64 MiB 分配域；待执行命令保留的缓冲区不能释放 |
 | `buffer.at(offset)` | 保留所属分配的内部指针 |
 | `load(program)` | 解码自定义机器码，返回可重复启动的 Kernel |
@@ -109,7 +110,7 @@ result = executable.launch().node_result(output.node)
 
 超时保留待执行任务，可增加预算继续等待。stream 的失败链和历史错误保留；`synchronize()` 会报告历史失败。需要新的独立 stream/图实例继续工作，结束错误会话可调用 `close(wait=False)`。正常 `with Device(...)` 退出会排空队列，异常退出中止该会话拥有的进程。
 
-`tick` 表示服务机会，`instruction_steps` 表示 SIMT 指令组数；都不是硬件周期。trace 最多保留 100,000 条，丢弃数量通过 `dropped_trace` 报告。已完成 job、模块和图实例保留到设备进程关闭，便于查询；长时间运行时内存占用会随历史增长。
+默认功能模式的 `tick` 表示服务机会，不是硬件周期；时序模式每个 tick 对应一个研究模型时钟。两种模式的 `instruction_steps` 都只是 SIMT 指令组数。trace 最多保留 100,000 条，丢弃数量通过 `dropped_trace` 报告。已完成 job、模块和图实例保留到设备进程关闭，便于查询；长时间运行时内存占用会随历史增长。时序 kernel 错误后先保持 `recovering=true`，排空已接受访存，再发布错误并释放引用。
 
 ## 源码入口
 

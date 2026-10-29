@@ -26,13 +26,29 @@ void serve(simt::Device& device) {
     }
 }
 
+// Optional timing flags preserve the original two positional configuration arguments.
+// 可选时序标志保留原来的两个位置配置参数。
+std::pair<bool, bool> timing_options(int argc, char** argv) {
+    bool timing = false, trace = false;
+    for (int index = 3; index < argc; ++index) {
+        const std::string option = argv[index];
+        if (option == "--timing") timing = true;
+        else if (option == "--hardware-trace") trace = true;
+        else throw std::runtime_error("unknown_device_option: " + option);
+    }
+    if (trace && !timing) throw std::runtime_error("hardware_trace_requires_timing");
+    return {timing, trace};
+}
+
 // Parse device configuration before starting the persistent request loop.
 // 启动持久请求循环之前解析设备配置。
 void run_server(int argc, char** argv) {
-    if (argc != 1 && argc != 3) throw std::runtime_error("usage: simt-device [SM_COUNT QUEUE_CAPACITY]");
+    if (argc != 1 && argc < 3)
+        throw std::runtime_error("usage: simt-device [SM_COUNT QUEUE_CAPACITY [--timing] [--hardware-trace]]");
     simt::RequestReader reader(argc == 1 ? "2 64" : std::string(argv[1]) + " " + argv[2]);
     const auto sms = reader.word(), capacity = reader.word(); reader.end();
-    simt::Device device(sms, capacity);
+    const auto [timing, trace] = timing_options(argc, argv);
+    simt::Device device(sms, capacity, timing, trace);
     serve(device);
 }
 

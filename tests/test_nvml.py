@@ -33,9 +33,11 @@ class NvmlTest(HostCase):
         return result.stdout
 
     def test_native_list_default_and_live_memory(self):
-        device = self.monitored()
+        device = self.monitored(timing=True)
         self.assertIn('SIMT Lab 2 SM (simulator)',self.smi('-L'))
         buffer = device.allocate(7*1024*1024)
+        device.h2d(buffer, b'SIMT').wait()
+        self.assertGreater(device.stats()['hardware']['cycles'], 0)
         query = ('--query-gpu=memory.total,memory.used,memory.free','--format=csv,noheader,nounits')
         self.assertEqual(self.smi(*query).strip(),'64, 7, 57')
         table = self.smi()

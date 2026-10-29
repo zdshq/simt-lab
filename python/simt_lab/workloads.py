@@ -24,12 +24,12 @@ class Workload:
 
 # Global indexing includes the last partially occupied vector tile.
 # 全局索引包含最后一个未占满的向量 tile。
-def vector_add(length=257):
+def vector_add(length=257, *, base=0):
     image = Image()
     a = [(i%17-8)/4 for i in range(length)]
     b = [(i%11-5)/8 for i in range(length)]
-    base_a, base_b = image.append(pack_values(a,0)), image.append(pack_values(b,0))
-    output = image.append(bytes(4*length))
+    base_a, base_b = base+image.append(pack_values(a,0)), base+image.append(pack_values(b,0))
+    output = base+image.append(bytes(4*length))
     p = start_kernel().emit('S2R',rd=2,imm=3).emit('MOVI',rd=3,imm=64)
     p.emit('IMAD',rd=4,ra=2,rb=3,rc=0).emit('MOVI',rd=5,imm=length)
     p.emit('ISETP',rd=1,ra=4,rb=5,mode=2).emit('MOVI',rd=5,imm=4)
@@ -53,15 +53,15 @@ def warp_integer_sum(p):
 
 # Cross-warp publication uses shared memory and a real CTA synchronization point.
 # 跨 warp 发布使用 shared 和真实 CTA 同步点。
-def reduction(count=137, blocks=3):
+def reduction(count=137, blocks=3, *, base=0):
     image = Image()
     values = [(i*7+3)%101 for i in range(count*blocks)]
     image.append(struct.pack('<'+'I'*len(values),*values))
-    output = image.append(bytes(4*blocks))
+    output = base+image.append(bytes(4*blocks))
     p = start_kernel().emit('S2R',rd=2,imm=3).emit('MOVI',rd=3,imm=count)
     p.emit('IMAD',rd=4,ra=2,rb=3,rc=0).emit('ISETP',rd=1,ra=0,rb=3,mode=2)
     p.emit('MOVI',rd=5,imm=4).emit('IMUL',rd=4,ra=4,rb=5)
-    p.emit('LDG',rd=7,ra=4,mode=4,guard=1)
+    p.emit('LDG',rd=7,ra=4,imm=base,mode=4,guard=1)
     warp_integer_sum(p)
     for warp in range(math.ceil(count/32)):
         p.emit('LDS',rd=11,ra=Z,imm=warp*4,mode=4,guard=0)
@@ -73,12 +73,12 @@ def reduction(count=137, blocks=3):
 
 # Produce deterministic FP16 inputs and reference the values after quantization.
 # 生成确定性 FP16 输入，并对量化后的数值求参考。
-def gemm_inputs():
+def gemm_inputs(base=0):
     image = Image()
     a_data = pack_values([((i*3)%19-9)/7 for i in range(12*16)],1)
     b_data = pack_values([((i*5)%17-8)/9 for i in range(16*8)],1)
-    a, b = image.append(a_data), image.append(b_data)
-    output = image.append(bytes(12*8*4))
+    a, b = base+image.append(a_data), base+image.append(b_data)
+    output = base+image.append(bytes(12*8*4))
     a_values = struct.unpack('<'+'e'*(12*16),a_data)
     b_values = struct.unpack('<'+'e'*(16*8),b_data)
     expected = [sum(a_values[r*16+k]*b_values[k*8+c] for k in range(16)) for r in range(12) for c in range(8)]
@@ -87,8 +87,8 @@ def gemm_inputs():
 
 # Three CTAs compute different row tiles on the two-SM device.
 # 三个 CTA 在双 SM 设备上计算不同的行 tile。
-def gemm():
-    image,a,b,output,expected = gemm_inputs()
+def gemm(*, base=0):
+    image,a,b,output,expected = gemm_inputs(base)
     p = start_kernel().emit('TMEM_ALLOC',rd=2,imm=8,guard=0)
     store_words(p,0,MatrixDescriptor(1,4,8,16,a,b).words())
     p.emit('S2R',rd=4,imm=3).emit('MOVI',rd=5,imm=128)

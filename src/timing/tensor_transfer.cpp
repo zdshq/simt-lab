@@ -39,7 +39,7 @@ bool TimingMachine::service_tensor_transfer(Inflight& entry, TensorTransfer& par
     auto& port = part.space == 1 ? sm.shared : sm.tmem;
     auto& backing = part.space == 1 ? cta.shared : cta.tmem;
     if (!part.ticket) {
-        part.ticket = part.space == 0 ? memory_->submit(entry.sm, part.access) : port.submit(part.access, &backing);
+        part.ticket = part.space == 0 ? submit_memory(entry.sm, part.access) : port.submit(part.access, &backing);
         if (part.ticket) trace(entry, "tensor_memory_submit");
     }
     const auto result = !part.ticket ? std::optional<std::array<uint32_t, 32>>{} :

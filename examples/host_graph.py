@@ -103,7 +103,7 @@ def run_demo(options):
     options.out.mkdir(parents=True,exist_ok=True)
     program.save(options.out/'kernel.bin')
     (options.out/'kernel.asm').write_text(listing(program))
-    with Device(options.build/'simt-device') as device:
+    with Device(options.build/'simt-device',timing=options.timing,hardware_trace=options.hardware_trace) as device:
         kernel = device.load(program)
         a,b = [(i%17-8)/4 for i in range(65)],[(i%11-5)/8 for i in range(65)]
         buffers = [device.allocate(4*len(a)) for _ in range(3)]
@@ -122,6 +122,8 @@ def parse_options():
     parser = argparse.ArgumentParser()
     parser.add_argument('--build',type=Path,default=ROOT/'build')
     parser.add_argument('--out',type=Path,default=ROOT/'artifacts'/'host-graph')
+    parser.add_argument('--timing',action='store_true')
+    parser.add_argument('--hardware-trace',action='store_true')
     return parser.parse_args()
 
 

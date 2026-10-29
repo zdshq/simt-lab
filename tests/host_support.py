@@ -29,3 +29,12 @@ class HostCase(unittest.TestCase):
         device = Device(runner,**options)
         self.addCleanup(lambda: device.close(wait=False))
         return device
+
+    # Wait for actual engine overlap without assuming that a copy completes in one service tick.
+    # 等待实际引擎重叠，不假定拷贝在一个服务 tick 内完成。
+    def await_overlap(self, device):
+        for _ in range(10000):
+            stats = device.progress()
+            if stats['compute'] and stats['copy']:
+                return stats
+        self.fail('compute and copy never overlapped')

@@ -29,7 +29,7 @@ void TimingMachine::trace_copy(const DmaCommand& copy, const std::string& action
 bool TimingMachine::service_copy_fragment(DmaCommand& copy, DmaFragment& fragment) {
     auto& sm = *sms_[copy.sm]; const bool read = fragment.stage == FragmentStage::read;
     if (!fragment.ticket) {
-        fragment.ticket = read ? memory_->submit(copy.sm, fragment.access) :
+        fragment.ticket = read ? submit_memory(copy.sm, fragment.access) :
             sm.shared.submit(fragment.access, &machine_.ctas_[copy.cta].shared);
         if (!fragment.ticket) { ++sm.async_stats.memory_stalls; return false; }
         trace_copy(copy, read ? "copy_read_submit" : "copy_write_submit");

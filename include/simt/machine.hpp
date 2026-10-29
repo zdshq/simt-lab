@@ -16,6 +16,7 @@
 #include <vector>
 
 namespace simt {
+namespace hw { class HardwareContext; }
 constexpr uint32_t lanes = 32;
 constexpr uint32_t registers = 64;
 constexpr uint32_t zero_register = 63;
@@ -100,10 +101,13 @@ class TimingMachine;
 
 class Machine {
 public:
-    Machine(Module module, Config config, std::shared_ptr<Memory> global = {});
+    Machine(Module module, Config config, std::shared_ptr<Memory> global = {},
+            std::shared_ptr<hw::HardwareContext> hardware = {});
     ~Machine();
     void run();
     bool advance();
+    bool drain();
+    std::string hardware_json() const;
     void set_arguments(const std::vector<uint32_t>& arguments);
     uint64_t instruction_steps() const { return steps_; }
     void dump(std::ostream& out, bool full_state, bool memory = false) const;

@@ -13,6 +13,7 @@ uint32_t DeviceArena::allocate(uint32_t size) {
         address = (uint64_t{base} + allocation.size + 255) & ~uint64_t{255};
     }
     if (address + size > end) throw std::runtime_error("device_out_of_memory");
+    if (before_clear) before_clear(address, size);
     memory->clear(address, size);
     allocations_.emplace(static_cast<uint32_t>(address), Allocation{size, 0});
     return static_cast<uint32_t>(address);
@@ -24,6 +25,7 @@ void DeviceArena::release(uint32_t address) {
     validate(address);
     const auto allocation = allocations_.at(address);
     if (allocation.pins) throw std::runtime_error("buffer_in_use");
+    if (before_clear) before_clear(address, allocation.size);
     memory->clear(address, allocation.size);
     allocations_.erase(address);
 }

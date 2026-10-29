@@ -1,6 +1,6 @@
 # Local memory 与整数原子的时序实现
 
-`--timing` 已接入 LDL/STL、通用 local 地址、ATOM/RED。至此自定义 ISA 的 59 个 opcode 都有时序执行路径；这不代表支持 NVIDIA 的全部指令或完整 GPU 硬件。主机 CP/Graph 仍待接入同一套时钟和持久缓存。
+`--timing` 已接入 LDL/STL、通用 local 地址、ATOM/RED。至此自定义 ISA 的 59 个 opcode 都有时序执行路径；这不代表支持 NVIDIA 的全部指令或完整 GPU 硬件。后续的主机 CP/Graph 统一时钟和持久缓存接入见 [HARDWARE_HOST.md](HARDWARE_HOST.md)。
 
 ## Local 的地址与真实字节
 
@@ -18,11 +18,11 @@ flowchart LR
 每线程逻辑窗口仍为项目原有的 16 KiB。令 `a` 为线程内字节偏移，物理地址为：
 
 ```text
-4 GiB + (CTA_ID * 32 + warp_ID) * 512 KiB
+4 GiB + (launch_local_base + CTA_ID * 32 + warp_ID) * 512 KiB
       + floor(a / 4) * 128 + lane_ID * 4 + a % 4
 ```
 
-这让 32 lane 的同偏移 32 位字连续排列，形成四个 sector；不同偏移可能形成更多 sector。CTA_ID×32 为每个 CTA 预留最大 32 warp 的地址范围，是项目地址布局选择，不是 NVIDIA 地址散列。ISA 仍使用 32 位 global 地址，新物理 local 范围与整个 global 窗口隔离，不能由普通 LDG/STG 访问。
+这让 32 lane 的同偏移 32 位字连续排列，形成四个 sector；不同偏移可能形成更多 sector。CTA_ID×32 为每个 CTA 预留最大 32 warp 的地址范围，是项目地址布局选择，不是 NVIDIA 地址散列。`launch_local_base` 在独立 CLI 中为零，在持久设备中为每次启动预约不重复的物理 warp 范围，防止旧缓存行与新线程别名。ISA 仍使用 32 位 global 地址，新物理 local 范围与整个 global 窗口隔离，不能由普通 LDG/STG 访问。
 
 `LocalAddressSpace` 在 CTA 准入时登记其实际 `Cta.local` 存储指针。DRAM 完成才解码并读写这些字节，没有单独的影子副本，也不会在指令退休时绕过缓存补写。读取命中返回 cache 中的字节。未使用 lane 的整 sector 取数返回零，但拒绝向这些 lane 写入。
 

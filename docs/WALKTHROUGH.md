@@ -77,6 +77,6 @@ python3 examples/run_workloads.py --workload gemm --policy max
 git log --oneline --reverse
 ```
 
-示例的 `launch.json` 保存参数数组，包含精确输入路径；`kernel.asm` 可按指令索引定位错误。修改 kernel 后先比较正确性，再观察分歧、原子旧值分配或工作量变化。这里没有 cache/timing 模型，不能把步数下降直接解释为真实 GPU 加速。
+示例的 `launch.json` 保存参数数组，包含精确输入路径；`kernel.asm` 可按指令索引定位错误。修改 kernel 后先比较正确性，再观察分歧、原子旧值分配或工作量变化。本文原功能路径不启用 cache/timing；后续 `--timing` 及 `Device(timing=True)` 已接入硬件模型，仍不能把步数下降直接解释为真实 GPU 加速。
 
-下一步若继续做深度项目，可以在此功能参考之上实现一个模块的 RTL，逐指令比较 RTL 的提交状态与此 ISS，而不必一开始搭建完整 GPU。Tensor Core 延迟、bank conflict、scoreboard 或资源竞争也应作为独立 timing 层添加，并保留当前功能参考作为验证基准。
+已有独立时序层覆盖阵列、bank 冲突、scoreboard、资源竞争和持久主机链路，入口见 [HARDWARE_SM.md](HARDWARE_SM.md) 与 [HARDWARE_HOST.md](HARDWARE_HOST.md)。下一阶段需要实现关键模块 RTL，并与软件模型对照；当前功能参考继续作为数值和语义验证基准。

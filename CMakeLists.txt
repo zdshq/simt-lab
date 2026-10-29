@@ -29,7 +29,7 @@ target_compile_options(simt_core PRIVATE -Wall -Wextra -Wpedantic -Werror -ffp-c
 add_executable(simt-run src/main.cpp)
 target_link_libraries(simt-run PRIVATE simt_core)
 target_compile_options(simt-run PRIVATE -Wall -Wextra -Wpedantic -Werror)
-add_library(simt_host src/device.cpp src/device_memory.cpp src/device_engines.cpp src/device_graph.cpp
+add_library(simt_host src/device.cpp src/device_memory.cpp src/device_engines.cpp src/device_copy.cpp src/device_graph.cpp
     src/device_report.cpp src/protocol.cpp src/protocol_codec.cpp src/protocol_commands.cpp)
 add_library(simt_monitor src/monitor.cpp)
 target_include_directories(simt_monitor PUBLIC include)
@@ -43,7 +43,8 @@ target_compile_options(simt-device PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_library(simt_hardware src/hardware/port.cpp src/hardware/dram.cpp src/hardware/cache_tags.cpp
     src/hardware/cache_request.cpp src/hardware/cache_fill.cpp src/hardware/coalescer.cpp src/hardware/shared.cpp
     src/hardware/hierarchy.cpp src/hardware/scoreboard.cpp src/hardware/resources.cpp src/hardware/local.cpp
-    src/hardware/atomic_queue.cpp src/hardware/atomic_execute.cpp src/hardware/shared_atomic.cpp)
+    src/hardware/atomic_queue.cpp src/hardware/atomic_execute.cpp src/hardware/shared_atomic.cpp
+    src/hardware/lifetime.cpp src/hardware/context.cpp)
 target_link_libraries(simt_hardware PUBLIC simt_storage)
 target_link_libraries(simt_core PUBLIC simt_hardware)
 target_compile_options(simt_hardware PRIVATE -Wall -Wextra -Wpedantic -Werror)
@@ -100,6 +101,11 @@ target_link_libraries(test-hardware-atomic PRIVATE simt_hardware)
 target_compile_options(test-hardware-atomic PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME hardware_atomic_local COMMAND test-hardware-atomic)
 set_tests_properties(hardware_atomic_local PROPERTIES TIMEOUT 90)
+add_executable(test-hardware-context tests/test_hardware_context.cpp)
+target_link_libraries(test-hardware-context PRIVATE simt_hardware)
+target_compile_options(test-hardware-context PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME hardware_context_lifetime COMMAND test-hardware-context)
+set_tests_properties(hardware_context_lifetime PROPERTIES TIMEOUT 90)
 function(add_simt_test name script)
     add_test(NAME ${name} COMMAND ${CMAKE_COMMAND} -E env
         "PYTHONPATH=${GENERATED_DIR}:${CMAKE_CURRENT_SOURCE_DIR}/python"
@@ -120,6 +126,7 @@ add_simt_test(compositional_workloads test_workloads.py)
 add_simt_test(native_host_protocol test_protocol.py)
 add_simt_test(host_command_processor test_host.py)
 add_simt_test(graph_submission_and_capture test_graph.py)
+add_simt_test(timed_host_and_graph test_timed_host.py)
 if(TARGET simt_nvml)
     add_executable(test-nvml-api tests/test_nvml_api.cpp)
     target_include_directories(test-nvml-api PRIVATE ${SIMT_NVML_INCLUDE})

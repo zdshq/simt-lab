@@ -19,7 +19,8 @@ TimedSm::TimedSm(const hw::PipelineConfig& config, const hw::TensorConfig& tenso
     for (uint32_t part = 0; part < config.partitions; ++part) partitions.emplace_back(config.register_banks);
 }
 
-TimingMachine::TimingMachine(Machine& machine) : machine_(machine), physical_(*machine.global_) {
+TimingMachine::TimingMachine(Machine& machine, std::shared_ptr<hw::HardwareContext> hardware)
+    : machine_(machine), hardware_(std::move(hardware)), external_clock_(bool(hardware_)) {
     const auto& config = machine_.config_;
     if (!config.max_cycles) throw std::runtime_error("invalid_cycle_limit");
     validate_async_config(config.async);
@@ -27,9 +28,27 @@ TimingMachine::TimingMachine(Machine& machine) : machine_(machine), physical_(*m
     if (!probe.acquire(0, config.threads, config.cta_shared_bytes))
         throw std::runtime_error("kernel_exceeds_sm_resources");
     hw::HierarchyConfig memory_config; memory_config.sms = config.sms; memory_config.atomic = config.atomic;
-    memory_ = std::make_shared<hw::MemoryHierarchy>(physical_, memory_config);
+    if (!hardware_) hardware_ = std::make_shared<hw::HardwareContext>(*machine.global_, memory_config);
+    if (hardware_->sms() != config.sms) throw std::runtime_error("hardware_sm_count_mismatch");
+    memory_ = &hardware_->memory;
+    owner_ = hardware_->new_owner(); local_base_ = hardware_->reserve_local(uint64_t{config.blocks} * 32);
+    started_ = cycle_ = hardware_->cycle();
     for (uint32_t sm = 0; sm < config.sms; ++sm) sms_.push_back(std::make_unique<TimedSm>(config.pipeline, config.tensor, config.atomic));
     warps_.resize(config.blocks);
+}
+
+TimingMachine::~TimingMachine() { hardware_->physical.detach(local_base_, uint64_t{machine_.config_.blocks} * 32); }
+
+std::optional<hw::Ticket> TimingMachine::submit_memory(uint32_t sm, const hw::WarpAccess& access) {
+    return memory_->submit(sm, access, owner_);
+}
+
+// A stopped kernel retains local storage until every accepted global/local/atomic request acknowledges.
+// 已停止 kernel 保留 local 存储，直到全部已接受 global/local/原子请求确认。
+bool TimingMachine::drain() {
+    if (!external_clock_) hardware_->tick();
+    cycle_ = hardware_->cycle();
+    return memory_->drain_owner(owner_);
 }
 
 // Admission rotates across SMs before filling additional CTA slots on any one SM.
@@ -55,7 +74,7 @@ void TimingMachine::place(uint32_t block, uint32_t sm, const hw::Residency& resi
     warps_[block].resize(residency.slots.size());
     for (uint32_t warp = 0; warp < residency.slots.size(); ++warp) {
         auto threads = std::span<Memory>(machine_.ctas_[block].local).subspan(warp * lanes);
-        physical_.attach(block * 32 + warp, threads.first(std::min<size_t>(threads.size(), lanes)));
+        hardware_->physical.attach(local_base_ + block * 32 + warp, threads.first(std::min<size_t>(threads.size(), lanes)));
         const auto slot = residency.slots[warp];
         warps_[block][warp].slot = slot;
         sms_[sm]->owners[slot] = WarpOwner{block, warp};
@@ -117,9 +136,13 @@ bool TimingMachine::issue_partition(uint32_t sm_id, uint32_t part) {
 // 待完成执行或内存事务用于区分延迟等待与真正死锁。
 bool TimingMachine::advance() {
     if (machine_.completed_ == machine_.config_.blocks) return true;
-    if (cycle_ >= machine_.config_.max_cycles) throw std::runtime_error("cycle_limit_exceeded");
-    admit(); ++cycle_;
-    memory_->tick();
+    if (cycle_ - started_ >= machine_.config_.max_cycles) throw std::runtime_error("cycle_limit_exceeded");
+    if (external_clock_) {
+        if (hardware_->cycle() <= cycle_) throw std::runtime_error("hardware_clock_not_advanced");
+        cycle_ = hardware_->cycle();
+    }
+    admit();
+    if (!external_clock_) { hardware_->tick(); cycle_ = hardware_->cycle(); }
     for (auto& sm : sms_) { sm->shared.tick(); sm->constant.tick(); sm->tmem.tick(); sm->array.tick(); }
     progress_async_units();
     retire_results(); collect_operands(); launch_ready();

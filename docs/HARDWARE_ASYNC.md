@@ -94,4 +94,4 @@ DMA 示例保存输入镜像、机器码、完整命令、状态/trace 和逐字
 
 `hardware.async_config` 保存实际参数，`hardware.async` 按 SM 报告提交/完成数、实际读写字节、片段数、容量拒绝与阶段推进。`fragment_stalls` 计数片段池处于满状态的周期；它不等于关键路径上的损失周期。trace 新增 `barrier_publish`、`barrier_wait_checked` 和 `copy_submitted/read_submit/read_complete/write_submit/write_complete/complete`，沿用原始动态指令编号和 PC。
 
-源码分为 `async_launch.cpp`（准入/保护）、`async_barrier.cpp`（事务状态机）、`async_dma.cpp`（分片数据流）、`async_report.cpp`（报告）。原子/local 的后续接入见 [相应文档](HARDWARE_ATOMIC_LOCAL.md)，剩余持久 CP/Graph 时钟、RTL 和校准见 [总计划](HARDWARE_PLAN.md)。
+源码分为 `async_launch.cpp`（准入/保护）、`async_barrier.cpp`（事务状态机）、`async_dma.cpp`（分片数据流）、`async_report.cpp`（报告）。原子/local 的后续接入见 [相应文档](HARDWARE_ATOMIC_LOCAL.md)，持久 CP/copy/Graph 已接入并完成 DMA/Tensor 图重放，见 [HARDWARE_HOST.md](HARDWARE_HOST.md)。剩余 RTL 和校准见 [总计划](HARDWARE_PLAN.md)。

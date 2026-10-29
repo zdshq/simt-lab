@@ -8,9 +8,12 @@ from .host_types import Buffer, Event, Kernel, Operation, resolve_pointer
 class Device:
     # Start one persistent device process, keeping queue publication configurable for tests.
     # 启动一个持久设备进程，允许测试控制队列发布。
-    def __init__(self, executable=None, *, sms=2, capacity=64, auto_doorbell=True, monitor_dir=None):
+    def __init__(self, executable=None, *, sms=2, capacity=64, auto_doorbell=True, monitor_dir=None,
+                 timing=False, hardware_trace=False):
+        if hardware_trace and not timing:
+            raise ValueError('hardware_trace_requires_timing')
         executable = executable or Path(__file__).resolve().parents[2]/'build'/'simt-device'
-        self.connection = Connection(executable,sms,capacity,monitor_dir)
+        self.connection = Connection(executable,sms,capacity,monitor_dir,timing=timing,hardware_trace=hardware_trace)
         self.auto_doorbell = auto_doorbell
         self.closed = False
         self._capture = None

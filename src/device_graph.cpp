@@ -58,16 +58,38 @@ void Device::update_graph(uint64_t id, uint32_t node, Command command) {
 // 一个队列包展开为内部节点，其依赖边等待实际完成。
 void Device::expand_graph(Job& parent) {
     const auto& nodes = graphs_.at(parent.command.graph).nodes;
-    for (size_t index = 0; index < nodes.size(); ++index) parent.children.push_back(next_job_++);
     for (uint32_t index = 0; index < nodes.size(); ++index) {
         Job job;
-        job.id = parent.children[index]; job.parent = parent.id; job.node = index;
-        job.stream = parent.stream; job.state = JobState::waiting;
-        job.command = nodes[index].command; job.dependencies = parent.dependencies;
-        for (auto dependency : nodes[index].dependencies) job.dependencies.push_back(parent.children[dependency]);
+        job.id = next_job_++; job.parent = parent.id; job.node = index;
+        parent.children.push_back(job.id);
         const auto id = job.id;
         jobs_.emplace(id, std::move(job));
-        trace(jobs_.at(id), "graph_node");
+    }
+    if (!hardware_) while (parent.expanded < nodes.size()) expand_node(parent);
+}
+
+// Reserving all handles first permits dependencies on nodes decoded in later clocks.
+// 先预约全部句柄，允许依赖在后续时钟才解码的节点。
+void Device::expand_node(Job& parent) {
+    const auto index = parent.expanded++;
+    const auto& node = graphs_.at(parent.command.graph).nodes[index];
+    auto& job = jobs_.at(parent.children[index]);
+    job.stream = parent.stream; job.state = JobState::waiting;
+    job.command = node.command; job.dependencies = parent.dependencies;
+    for (auto dependency : node.dependencies) job.dependencies.push_back(parent.children[dependency]);
+    trace(job, "graph_node");
+}
+
+// One shared graph decoder materializes at most one node per device clock.
+// 一个共享图解码器每个设备时钟最多展开一个节点。
+void Device::service_graphs() {
+    if (!hardware_) return;
+    for (auto& [id, job] : jobs_) {
+        static_cast<void>(id);
+        if (job.command.kind != CommandKind::graph || job.state != JobState::running) continue;
+        if (job.expanded == job.children.size()) continue;
+        expand_node(job);
+        return;
     }
 }
 
@@ -77,6 +99,7 @@ void Device::finish_graphs() {
     for (auto& [id, job] : jobs_) {
         static_cast<void>(id);
         if (job.command.kind != CommandKind::graph || job.state != JobState::running) continue;
+        if (job.expanded != job.children.size()) continue;
         bool complete = true;
         std::string error;
         for (auto child : job.children) {

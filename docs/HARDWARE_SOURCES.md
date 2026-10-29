@@ -41,4 +41,6 @@ Tensor 模式的 4×4 输出驻留阵列、相邻 PE 每拍转发、4 拍乘加�
 
 local 的具体字交错物理布局、global 原子 8 banks/8 请求/4 拍 ALU、bank 锁直到写穿确认、连续原子批次前后排空普通请求，以及 shared 原子独占 bank 等待 ALU 均为模型选择。没有将写穿导致的 DRAM 反复访问当成 NVIDIA 原子延迟；证据及限制见 [HARDWARE_ATOMIC_LOCAL.md](HARDWARE_ATOMIC_LOCAL.md)。
 
+持久主机模式的 16 个 CP 解码槽、每拍一次取包/图解码/任务启动、128 B 拷贝暂存、每块 8 拍建立加 16 B/clock 链路服务，全部是模型设计选择。主机 DMA 绕过 L1、写入失效全部 L1、按所有者故障排空及不重复 local tag 是本项目一致性与生命周期协议；没有据此声称 NVIDIA 的 PCIe、GPFIFO、copy engine 或 fault/replay 微架构。对应证据见 [HARDWARE_HOST.md](HARDWARE_HOST.md)。
+
 实现 CUDA pointer-chase、合并和 shared bank 微基准，记录原始结果、GPU/驱动/编译器信息、样本分布和计时开销。结果用于判断模型能否解释趋势，不通过调参强行宣称结构唯一可识别。

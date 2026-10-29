@@ -1,6 +1,6 @@
 # 逐周期存储单元：当前实现与剩余接入
 
-这些单元已经实现真实数据流和逐拍资源约束，位于 `src/hardware/`。现已接入 `simt-run --timing` 的 load/store、Tensor 操作数、异步搬运及 local/整数原子路径，详细范围见 [SM 时序执行](HARDWARE_SM.md)、[Tensor 通路](HARDWARE_TENSOR.md)、[DMA 通路](HARDWARE_ASYNC.md) 和 [local/原子通路](HARDWARE_ATOMIC_LOCAL.md)。默认功能模式以及主机 CP/Graph 仍使用原功能内存，不能描述为整个 GPU 已经完成微架构模拟。
+这些单元已经实现真实数据流和逐拍资源约束，位于 `src/hardware/`。现已接入 `simt-run --timing` 的 load/store、Tensor 操作数、异步搬运及 local/整数原子路径，详细范围见 [SM 时序执行](HARDWARE_SM.md)、[Tensor 通路](HARDWARE_TENSOR.md)、[DMA 通路](HARDWARE_ASYNC.md) 和 [local/原子通路](HARDWARE_ATOMIC_LOCAL.md)。`Device(timing=True)` 的主机 CP/copy/Graph 已接入同一层次，并跨 kernel 保留缓存，见 [持久设备时序](HARDWARE_HOST.md)。默认功能模式仍使用原功能内存，整个硬件目标尚未完成。
 
 ## 数据通路
 
@@ -65,4 +65,4 @@ ctest --test-dir build --output-on-failure
 
 随机差分另外包含在一个检查中：320 个混合大小、掩码、两 SM 读写请求，独立参考为普通字节向量；比较每次读回及最终全部 2048 字节。Debug、Release、ASan+UBSan 都通过，原 75 项功能检查也保持通过。
 
-剩余工作仍以 [总计划](HARDWARE_PLAN.md) 为准。SM/Tensor/异步/local/原子流水线和 NVML 已有各自的增量验收，不能由存储单元测试替代；持久 CP/Graph 时钟、RTL 和参数校准仍未完成。
+剩余工作仍以 [总计划](HARDWARE_PLAN.md) 为准。SM/Tensor/异步/local/原子流水线、持久 CP/copy/Graph 和 NVML 已有各自的增量验收，不能由存储单元测试替代；RTL 和参数校准仍未完成。

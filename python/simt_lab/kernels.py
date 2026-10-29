@@ -123,10 +123,12 @@ def relu(p, address, rows=4, columns=16):
 
 # Initialize one bulk transaction and wait before any shared operand is consumed.
 # 初始化一个批量事务，并在使用任何 shared 操作数之前等待完成。
-def stage_inputs(p, size, destination=256):
+def stage_inputs(p, size, destination=256, source=0):
     p.emit('MOVI',rd=4,imm=128).emit('MOVI',rd=5,imm=destination)
     p.emit('MB_INIT',ra=4,imm=1,guard=0).emit('MB_EXPECT',ra=4,imm=size,guard=0)
-    p.emit('MB_ARRIVE',rd=6,ra=4,guard=0).emit('CP_ASYNC',ra=Z,rb=5,rc=4,imm=size,guard=0)
+    p.emit('MB_ARRIVE',rd=6,ra=4,guard=0)
+    if source: p.emit('MOVI',rd=62,imm=source)
+    p.emit('CP_ASYNC',ra=62 if source else Z,rb=5,rc=4,imm=size,guard=0)
     p.emit('BAR_SYNC',rd=0).emit('MB_WAIT',ra=4,rb=6)
 
 

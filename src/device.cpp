@@ -10,8 +10,16 @@ bool terminal(JobState state) {
 
 // Bound the software queue independently of compute and copy engine occupancy.
 // 独立于计算和拷贝引擎占用情况，限制软件队列容量。
-Device::Device(uint32_t sms, uint32_t capacity) : sms_(sms), ring_(capacity) {
+Device::Device(uint32_t sms, uint32_t capacity, bool timing, bool hardware_trace)
+    : sms_(sms), hardware_trace_(hardware_trace), ring_(capacity) {
     if (!sms || sms > 64 || !capacity || capacity > 4096) throw std::runtime_error("invalid_device_config");
+    if (timing) {
+        hw::HierarchyConfig config; config.sms = sms;
+        hardware_ = std::make_shared<hw::HardwareContext>(*arena.memory, config);
+        arena.before_clear = [context = hardware_](uint64_t address, uint64_t size) {
+            context->memory.invalidate_range(address, size);
+        };
+    }
     if (std::getenv("SIMT_MONITOR_DIR")) monitor_ = std::make_unique<MonitorPublisher>(monitor_directory().string());
     publish_monitor();
 }
@@ -86,10 +94,11 @@ JobId Device::submit(uint32_t stream, Command command, std::vector<JobId> depend
 // 发布写指针，使此前的队列项对 CP 可见。
 void Device::doorbell() { published_ = written_; }
 
-// Fetch at most one published packet per functional service opportunity.
-// 每次功能服务机会最多取走一个已发布包。
+// The timed CP has sixteen decoded packet slots, retained through public completion.
+// 时序 CP 有十六个已解码包槽位，保留至公开任务完成。
 void Device::fetch() {
     if (fetched_ == published_) return;
+    if (hardware_ && fetched_ - notifications_ >= 16) return;
     auto& job = jobs_.at(ring_[fetched_++ % ring_.size()]);
     job.state = JobState::waiting;
     trace(job, "fetch");
@@ -107,7 +116,11 @@ const Job& Device::query(JobId id) const {
 // 工作停止后才发布完成或错误，并释放资源归属。
 void Device::finish(Job& job, JobState state, std::string error) {
     job.state = state; job.error = std::move(error);
-    if (job.machine) job.instruction_steps = job.machine->instruction_steps();
+    job.finished = ticks_; job.recovering = false;
+    if (job.machine) {
+        job.instruction_steps = job.machine->instruction_steps();
+        job.hardware = job.machine->hardware_json();
+    }
     job.machine.reset();
     arena.unpin(job.pinned); job.pinned.clear();
     if (job.command.kind == CommandKind::graph) --graphs_.at(job.command.graph).in_flight;

@@ -16,15 +16,18 @@ class DeviceError(RuntimeError):
 class Connection:
     # Keep stderr out of the response pipe and retain it for process-failure diagnostics.
     # 将 stderr 与响应管道分开保存，供进程失败诊断使用。
-    def __init__(self, executable, sms, capacity, monitor_dir=None):
+    def __init__(self, executable, sms, capacity, monitor_dir=None, *, timing=False, hardware_trace=False):
         self.errors = tempfile.TemporaryFile(mode='w+t')
         self.lock = threading.Lock()
         self.closed = False
         environment = dict(os.environ)
         if monitor_dir is not None:
             environment['SIMT_MONITOR_DIR'] = str(monitor_dir)
+        command = [str(Path(executable).resolve()),str(sms),str(capacity)]
+        if timing: command.append('--timing')
+        if hardware_trace: command.append('--hardware-trace')
         try:
-            self.process = subprocess.Popen([str(Path(executable).resolve()),str(sms),str(capacity)],
+            self.process = subprocess.Popen(command,
                                             stdin=subprocess.PIPE,stdout=subprocess.PIPE,
                                             stderr=self.errors,text=True,bufsize=1,env=environment)
         except Exception:

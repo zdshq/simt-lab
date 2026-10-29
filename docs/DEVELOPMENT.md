@@ -159,3 +159,17 @@
 - `python3 examples/hardware_memory_ops.py` 保存机器码/命令/完整状态与验证：同偏移/分散 local 两次读取为 133/606 模型周期、4/32 个 DRAM sector；global 原子同址/分 bank 为 2815/1081，shared 为 179/24。计时只描述当前设计，写穿策略的 DRAM 开销不是 NVIDIA 实测参数。
 - 新增 HARDWARE_ATOMIC_LOCAL.md，更新整体范围与来源台账。核对官方 local 和 atomic 语义；具体物理映射、bank 锁与延迟均保持设计假设标注。按职责保留短函数，入口仅调流程函数，英中解释性注释相邻，没有添加样式测试。
 - 持久设备 CP/copy/Graph 的统一时钟与跨 kernel 缓存、可综合 RTL、实卡校准和最终审计仍待完成。专用启动器可见模拟设备，系统默认 nvidia-smi 合并仍未实现；目标保持 active。
+
+## 阶段 15 第五部分：持久设备统一时钟与实际主机拷贝（2026-10-29）
+
+- `HardwareContext` 提升到设备生命周期，持有实际 L1/L2、DRAM、local 地址映射和单一时钟。kernel 使用外部时钟，独立 CLI 保留私有上下文。跨 kernel 保留缓存及开行状态，local 为每次启动预约不重复的物理 tag，并在退出后解除底层指针映射。
+- `Device(timing=True)` 和原生 `--timing` 接入已有自定义 59 opcode 的全部时序执行路径；功能默认模式保持兼容。CP 增加 16 个活包槽、每拍一次取包/调度与共享 Graph 解码端口。所有节点先预约句柄，再逐拍解码，保留非拓扑编号和完成依赖。
+- 新增单槽 128 B 主机拷贝引擎：H2D/D2H 经明确的链路等待，所有设备端访问经实际 L2/DRAM、写确认与 L1 失效；D2D 使用正向/反向有限块提供无竞争时的 memmove 结果。没有直接读取底层 Memory 作为数据返回的旁路。
+- 分配/释放清零前只失效相交 sector，保留无关在途 fill。给层次请求增加所有者，kernel 出错后停止发射、保留存储/资源 pin，排空已接受 global/local/atomic 请求后才发布错误，不消费另一引擎的完成响应，不回滚已接受写入。
+- 增加 per-job 硬件快照、绝对时钟/相对周期及累计统计范围。完成快照不随后续任务变化；CP/copy 和 kernel trace 均有上限。主机查询不推进时钟，两个引擎并行时设备时钟仍每 tick 仅增加一次。
+- 新增 4 项 C++ 生命周期检查和 33 项 Python 检查（复用 20 项主机/Graph 契约，新增 13 项持久硬件场景）。覆盖相邻 sector、在途 fill、owner 排空、local 代际、冷热缓存、上传失效、重分配、链路/暂存、有限 CP/图展开、随机重叠搬运、原子/local 错误恢复、三次 DMA/Tensor 图重放和原四类完整负载。
+- 实际验收：`cmake --build build -j6`、`cmake --build build-release -j6`、`cmake --build build-sanitize -j6`；三套 `ctest --test-dir <build> --output-on-failure -j6` 全部通过 20 套件、257 项检查（214 Python、43 C++），sanitizer 无错误。更新时序 NVML 用例后补跑 Debug 的 `native_nvidia_smi` 通过；`git diff --check` 通过。
+- `python3 examples/hardware_host.py` 保存四类原负载各两次主机 Graph 重放的镜像、机器码、下载字节和硬件轨迹；仅增加 global 基址参数，没有替代算法。冷/热只读 kernel 为 62/17 模型周期，第二次不增加 DRAM 读。GEMM 96 输出误差约 2.98e-7，Transformer 32 输出约 1.07e-7，后者每次实际 DMA 2176 B、乘加 2304 次。
+- `python3 examples/host_graph.py --timing --hardware-trace --out artifacts/timed-host-graph` 通过普通提交、三次图更新/重放和跨 stream capture，8 个公开任务全部完成，65 个输出逐项一致。原版 nvidia-smi 对实际时序设备重新实测，返回模拟器名称和 64/7/57 MiB；记录保存在 artifacts/hardware-host/nvidia-smi.txt，系统默认仍只显示真实 4070 SUPER。
+- 新增 HARDWARE_HOST.md，更新整体计划、来源假设和结构边界。所有 CP 容量、链路参数、拷贝暂存与故障协议均标为研究设计；不能解释为已逆向 NVIDIA 内部实现。保持短函数和相邻中英文注释，未添加样式测试。
+- 阶段 15 的自定义 ISA/CP/copy/Graph 接入已验收；完整目标仍 active。可综合 RTL、实机参数校准、PTX 异步矩阵协议、最终逐项硬件审计和系统默认 nvidia-smi 视图合并仍未完成。

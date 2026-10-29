@@ -1,6 +1,6 @@
 # 验证记录
 
-本页原表记录阶段 0–10 的 75 项功能验收。后续硬件目标仍在进行中：目前额外通过 17 项存储硬件检查、6 项 NVML 端到端检查、7 项流水线单元检查、35 项基础时序执行检查、6 项 Tensor 阵列检查、19 项 Tensor 时序执行检查、29 项异步/组合时序检查，以及 9 项 C++/17 项 Python local 与原子检查。三种构建均通过 18 套件、220 项检查（181 项 Python、39 项 C++）。具体证据见 [存储单元](HARDWARE_MEMORY.md)、[SM 时序执行](HARDWARE_SM.md)、[Tensor 时序执行](HARDWARE_TENSOR.md)、[DMA/事务屏障](HARDWARE_ASYNC.md)、[local/原子通路](HARDWARE_ATOMIC_LOCAL.md) 和 [原版 nvidia-smi](NVIDIA_SMI.md)。这些增量不证明整个微架构已经接入。
+本页原表记录阶段 0–10 的 75 项功能验收。后续增量包括 17 项存储硬件检查、6 项 NVML 端到端检查、7 项流水线单元检查、35 项基础时序执行检查、6 项 Tensor 阵列检查、19 项 Tensor 时序执行检查、29 项异步/组合时序检查、9 项 C++/17 项 Python local 与原子检查，以及 4 项 C++/33 项 Python 持久上下文、CP/copy/Graph 检查。三种构建均通过 20 套件、257 项检查（214 项 Python、43 项 C++）。具体证据见 [存储单元](HARDWARE_MEMORY.md)、[SM](HARDWARE_SM.md)、[Tensor](HARDWARE_TENSOR.md)、[DMA/事务屏障](HARDWARE_ASYNC.md)、[local/原子](HARDWARE_ATOMIC_LOCAL.md)、[持久设备](HARDWARE_HOST.md) 和 [原版 nvidia-smi](NVIDIA_SMI.md)。这些增量仍不等于完整 NVIDIA 硬件复刻，RTL 和实机校准待完成。
 
 验收日期：2026-10-29。环境：Linux、GCC 11.4、CMake 3.22、Python 3.13.5。构建要求 C++20、CMake 3.20+ 和 Python 3.10+，无第三方运行时依赖。
 
@@ -31,6 +31,8 @@ python3 examples/run_workloads.py
 python3 examples/host_graph.py
 python3 examples/hardware_async.py
 python3 examples/hardware_memory_ops.py
+python3 examples/hardware_host.py
+python3 examples/host_graph.py --timing --hardware-trace --out artifacts/timed-host-graph
 python3 examples/run_workloads.py --timing --out artifacts/timed
 ```
 
@@ -59,6 +61,8 @@ python3 examples/run_workloads.py --timing --out artifacts/timed
 | Graph 生命周期 | `test_graph.py`：模板快照、三次单包重放、参数更新、运行中更新拒绝、同实例跨 stream 串行化、非拓扑编号、空图和环路拒绝 |
 | 捕获与错误 | 单/多 stream capture 不执行，事件边及重新汇合、捕获错误恢复；失败节点取消后继而独立分支完成，资源最终释放 |
 | 主机组合示例 | `examples/host_graph.py`：普通提交、三次更新/重放、跨 stream capture，逐元素验证 65 个值并保存指令及 trace |
+| 持久时钟与缓存 | `test_hardware_context.cpp`：相邻 sector、在途 fill、所有者排空、local 生命周期；`test_timed_host.py`：跨 kernel 冷热、上传失效、地址复用、双引擎单时钟、有限链路/暂存、CP/Graph 带宽、原子/local 故障排空 |
+| 时序主机完整负载 | `test_timed_host.py`：原 20 项主机/Graph 契约、三次 DMA→Tensor 图重放及四类完整负载；`hardware_host.py` 保存四类负载各两次图重放的实际下载字节与硬件报告 |
 | 用户代码规范 | 入口只调用流程函数；源码、模板注释相邻英文/中文；函数保持简短，按含声明与结束行统计最长 C++ 函数 25 行、Python 22 行；没有添加样式计数测试 |
 | 开发过程 | 独立 Git 仓库按阶段提交，未改写此前历史；构建与示例产物不跟踪 |
 
@@ -68,7 +72,7 @@ python3 examples/run_workloads.py --timing --out artifacts/timed
 
 ## 明确边界
 
-- 这是 CPU 上执行的功能模拟器；不会利用 RTX 4070 SUPER 来获得模拟 GPU 的实际吞吐。
+- 功能模式和时序模式都在 CPU 上执行；不会利用 RTX 4070 SUPER 来获得模拟 GPU 的实际吞吐。
 - 两个 SM 已有基础时序资源模型，但还不是两份 RTL，也不代表已经估算逻辑门、频率、面积或功耗。
 - 自定义编码不兼容 CUDA/PTX/SASS/curryGPU 私有二进制；Python Program 是指令构造接口，不是 CUDA 编译器。
 - 主机接口及 CUDA Graph 风格功能通过 Python/C++ 进程协议运行，不实现 NVIDIA `cudaGraph*` API/ABI、驱动、PCIe/MMIO 或系统可枚举的 CUDA 设备。
@@ -80,4 +84,4 @@ python3 examples/run_workloads.py --timing --out artifacts/timed
 - 顺序敏感原子和无同步竞争程序不能要求跨所有调度顺序逐线程结果一致；没有实现自动 race checker。
 - 测试覆盖所声明的功能案例和负例，并非形式验证或所有输入穷举。
 
-阶段 0–10 的功能 ISS、持久主机链路与任务图已完成其原有验收。新的完整硬件目标仍未完成，剩余 PTX 异步矩阵提交、CP/Graph 集成、RTL 和参数校准以 HARDWARE_PLAN.md 为准。
+阶段 0–10 的功能 ISS、持久主机链路与任务图已完成其原有验收。后续 CP/copy/Graph 时序与持久缓存也已接入。完整硬件目标仍未完成，剩余 PTX 异步矩阵提交、RTL、参数校准和最终审计以 HARDWARE_PLAN.md 为准。

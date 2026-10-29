@@ -8,10 +8,10 @@
 
 ```sh
 cmake --build build
-python3 examples/nvml_device.py --seconds 120
+python3 examples/nvml_device.py --timing --seconds 120
 ```
 
-它启动实际 `simt-device`，分配 7 MiB 并完成一次真实上传，在 120 秒内保持会话存活。终端二运行：
+它启动实际时序模式 `simt-device`，分配 7 MiB 并完成一次经 L2/DRAM 的真实上传，在 120 秒内保持会话存活。不传 `--timing` 则运行默认功能模式。终端二运行：
 
 ```sh
 python3 tools/simt_smi.py -L

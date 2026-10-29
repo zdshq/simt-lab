@@ -17,13 +17,15 @@ const AtomicStats& MemoryHierarchy::atomic_stats() const { return atomics_->stat
 
 // Warp requests retain capacity even when responses are ready but not yet consumed.
 // warp 请求即使响应已就绪，也保留容量直到消费者取走结果。
-std::optional<Ticket> MemoryHierarchy::submit(uint32_t sm, const WarpAccess& access) {
+std::optional<Ticket> MemoryHierarchy::submit(uint32_t sm, const WarpAccess& access, uint64_t owner, bool bypass_l1) {
     if (sm >= config_.sms) throw std::runtime_error("invalid_sm_index");
     validate_access(access, memory_);
     if (requests_.size() == config_.capacity) return {};
     const auto ticket = next_++;
     auto packets = access.atomic ? std::vector<Coalesced>{} : coalesce(access);
-    requests_.emplace(ticket, WarpRequest{sm, access, std::move(packets), {}, 0, false, false, {}});
+    WarpRequest request{sm, access, std::move(packets), {}, 0, false, false, {}};
+    request.owner = owner; request.bypass_l1 = bypass_l1;
+    requests_.emplace(ticket, std::move(request));
     return ticket;
 }
 
@@ -59,7 +61,7 @@ void MemoryHierarchy::service(WarpRequest& request) {
         invalidate_l1();
         request.invalidated = true;
     }
-    auto& port = request.access.write ? static_cast<SectorPort&>(l2_) : *l1_[request.sm];
+    auto& port = (request.access.write || request.bypass_l1) ? static_cast<SectorPort&>(l2_) : *l1_[request.sm];
     collect(request, port);
     while (request.issued < request.packets.size()) {
         const auto ticket = port.submit(request.packets[request.issued].packet);

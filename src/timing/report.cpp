@@ -25,7 +25,9 @@ void TimingMachine::trace(const Inflight& entry, const std::string& action) {
 }
 
 void TimingMachine::dump_statistics(std::ostream& out) const {
-    out << "{\"model\":\"simt-research-v1\",\"cycles\":" << cycle_
+    out << "{\"model\":\"simt-research-v1\",\"cycles\":" << cycle_ - started_
+        << ",\"clock_start\":" << started_ << ",\"clock_end\":" << cycle_
+        << ",\"memory_counters_scope\":\"device_cumulative\""
         << ",\"issued\":" << stats_.issued << ",\"retired\":" << stats_.retired
         << ",\"scoreboard_stalls\":" << stats_.scoreboard_stalls << ",\"boundary_stalls\":" << stats_.boundary_stalls
         << ",\"collector_stalls\":" << stats_.collector_stalls << ",\"register_bank_stalls\":" << stats_.register_stalls
