@@ -1,4 +1,5 @@
 #include "simt/machine.hpp"
+#include "simt/timing.hpp"
 
 namespace simt {
 namespace {
@@ -92,6 +93,7 @@ void Machine::dump(std::ostream& out, bool full_state, bool memory) const {
         out << ",\"constant\":";
         constant_.dump(out);
     }
+    if (timing_) { out << ",\"hardware\":"; timing_->dump(out); }
     out << "}\n";
 }
 }

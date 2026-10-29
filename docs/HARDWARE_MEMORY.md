@@ -1,6 +1,6 @@
 # 逐周期存储单元：当前实现与剩余接入
 
-这些单元已经实现真实数据流和逐拍资源约束，位于 `src/hardware/`。目前由独立硬件测试驱动，**尚未替换原 Machine 的访存路径**。因此当前 `simt-run` 或 Graph 示例仍使用原功能内存；不能将单元测试通过描述为整个 GPU 已经完成微架构模拟。
+这些单元已经实现真实数据流和逐拍资源约束，位于 `src/hardware/`。现已接入 `simt-run --timing` 的基础 load/store 指令，详细范围见 [SM 时序执行](HARDWARE_SM.md)。默认功能模式以及主机 CP/Graph 仍使用原功能内存；原子、local、异步和 Tensor 尚未接入时序通路，不能描述为整个 GPU 已经完成微架构模拟。
 
 ## 数据通路
 
@@ -51,6 +51,8 @@ DRAM 控制器具有有限请求/响应容量、独立 bank 当前打开行、ba
 
 `BankedShared` 保存真实 shared 字节，默认 32 banks、每 bank 每拍一个 32 位字。同字读取（包括子字）广播；不同字但同 bank 的请求分拍执行。不同 lane 写同字采用确定的逐 lane 顺序，不把数据竞争定义成真实 CUDA 的确定行为。队列与返回延迟有上限。
 
+时序执行时，同一 SM 的多个 CTA 使用各自的实际 shared 存储，全部请求经过同一个 `BankedShared` 仲裁器；底层存储指针随请求保留到响应消费，CTA 退休必须等待这些请求完成。constant 使用单 bank 同字广播模型，未实现独立 constant cache。
+
 ## 验证与运行
 
 ```sh
@@ -63,4 +65,4 @@ ctest --test-dir build --output-on-failure
 
 随机差分另外包含在一个检查中：320 个混合大小、掩码、两 SM 读写请求，独立参考为普通字节向量；比较每次读回及最终全部 2048 字节。Debug、Release、ASan+UBSan 都通过，原 75 项功能检查也保持通过。
 
-剩余工作仍以 [总计划](HARDWARE_PLAN.md) 为准：ISA/CP 接入、原子和异步搬运、SM 流水线、Tensor 数据通路、RTL、参数校准及 NVML 均未由这些存储单元测试证明完成。
+剩余工作仍以 [总计划](HARDWARE_PLAN.md) 为准。SM 基础流水线和 NVML 已有各自的增量验收，不能由存储单元测试替代；CP、原子/异步/Tensor、RTL 和参数校准仍未完成。

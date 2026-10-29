@@ -109,3 +109,14 @@
 - 新增六项端到端检查及 C++ ABI 辅助程序，覆盖多会话、退出、SIGKILL、坏快照、结构体版本和精确字节数。Debug/Release/ASan+UBSan 的 11 套件全部通过；当前共 98 项检查。
 - sanitizer 对项目 monitor/NVML 插桩，外部原版程序预加载 libasan 并关闭其泄漏报告，地址/UB 检查仍启用。未修改系统 `nvidia-smi -L` 仍只返回 RTX 4070 SUPER。
 - 文档和双终端运行方法见 NVIDIA_SMI.md。系统默认视图合并、CUDA 执行兼容、SM/Tensor 流水线与 RTL 尚未完成，完整目标保持进行中。
+
+## 阶段 13 与 15 第一部分：基础 ISA 的 SM 时序通路（2026-10-29）
+
+- 新增 `simt-run --timing`，基础算术/控制/集合/屏障及 global/shared/constant 访存经过真实寄存器 bank、逐 lane scoreboard、有限收集器、INT/FP/SFU 执行与写回资源；指令结果到写回时才更新架构寄存器。
+- 分别处理 RAW/WAW 与操作数实际收集前的 WAR；相同源只占一次读端口，读写端口独立，多条流水线的完成可竞争写回 bank。每 warp 一个在途访存，但独立 ALU 可以与 load 重叠。
+- CTA 按 warp/固定寄存器/shared 预算准入，分配真实槽位，完成后复用。每个 SM 的 shared bank 仲裁器服务多个 CTA 的隔离存储；global 路径直接使用此前 sector cache/MSHR/DRAM 单元，返回值不绕过缓存。
+- 复用控制、集合、屏障和标量数值语义，保留错误位置；新增周期限制、可调参数、有限逐拍 trace 和硬件统计。明确拒绝尚未接入的 local/原子/异步/Tensor 指令，不自动回退瞬时功能执行。
+- 验证：新增 7 项 C++ 单元和 35 项 Python 时序检查，包含原 80 个整数独立参考程序及 12 个新增 120 指令随机依赖程序；Debug、Release、ASan+UBSan 的 13 套件全部通过，共 140 项检查。`git diff --check` 通过。
+- 复用屏障负例时发现旧例依赖顺序执行：时序发射延迟允许另一 warp 在两次到达之间前进，因而输入可以合法完成。新负例显式延迟另一 warp，验证同代重复到达被拒绝，未修改屏障语义迎合旧调度假设。
+- `python3 examples/hardware_pipeline.py` 生成机器码、完整状态、命令和轨迹。依赖/独立 13 指令实验分别为 63/19 模型周期；shared 连续/冲突/广播为 19/50/19。冷 load 等待期间独立 MOV 在 cycle 7 写回，而 load 在 cycle 65 写回。均未宣称真实 GPU 周期。
+- 文档见 HARDWARE_SM.md，参数来源新增明确假设条目。主机 CP/Graph 仍走功能模式，缓存尚未跨 kernel 保留；Tensor 数据通路、RTL 和参数校准仍待完成，完整目标保持 active。

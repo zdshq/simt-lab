@@ -12,10 +12,14 @@ add_custom_command(OUTPUT ${GENERATED_DIR}/isa.hpp ${GENERATED_DIR}/simt_isa.py
     DEPENDS tools/gen_isa.py tools/templates/isa.hpp.in tools/templates/isa.py.in isa/isa.json VERBATIM)
 add_custom_target(generate_isa DEPENDS ${GENERATED_DIR}/isa.hpp ${GENERATED_DIR}/simt_isa.py)
 
+add_library(simt_storage src/memory.cpp)
+target_include_directories(simt_storage PUBLIC include)
+target_compile_options(simt_storage PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_library(simt_core src/machine.cpp src/execution.cpp src/control.cpp src/collective.cpp
-    src/dump.cpp src/module.cpp src/memory.cpp src/memory_execution.cpp src/barrier.cpp
+    src/dump.cpp src/module.cpp src/memory_execution.cpp src/barrier.cpp
     src/diagnostics.cpp src/tensor.cpp src/tensor_numeric.cpp src/matrix.cpp src/matrix_descriptor.cpp
-    src/async.cpp src/async_copy.cpp ${GENERATED_DIR}/isa.hpp)
+    src/async.cpp src/async_copy.cpp src/timing/footprint.cpp src/timing/scheduler.cpp src/timing/issue.cpp
+    src/timing/execute.cpp src/timing/memory.cpp src/timing/retire.cpp src/timing/report.cpp ${GENERATED_DIR}/isa.hpp)
 add_dependencies(simt_core generate_isa)
 target_include_directories(simt_core PUBLIC include ${GENERATED_DIR})
 target_compile_options(simt_core PRIVATE -Wall -Wextra -Wpedantic -Werror -ffp-contract=off)
@@ -35,8 +39,9 @@ target_link_libraries(simt-device PRIVATE simt_host)
 target_compile_options(simt-device PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_library(simt_hardware src/hardware/port.cpp src/hardware/dram.cpp src/hardware/cache_tags.cpp
     src/hardware/cache_request.cpp src/hardware/cache_fill.cpp src/hardware/coalescer.cpp src/hardware/shared.cpp
-    src/hardware/hierarchy.cpp)
-target_link_libraries(simt_hardware PUBLIC simt_core)
+    src/hardware/hierarchy.cpp src/hardware/scoreboard.cpp src/hardware/resources.cpp)
+target_link_libraries(simt_hardware PUBLIC simt_storage)
+target_link_libraries(simt_core PUBLIC simt_hardware)
 target_compile_options(simt_hardware PRIVATE -Wall -Wextra -Wpedantic -Werror)
 find_path(SIMT_NVML_INCLUDE nvml.h HINTS /usr/local/cuda/include)
 find_library(SIMT_NATIVE_NVML NAMES libnvidia-ml.so.1 HINTS /usr/lib/x86_64-linux-gnu)
@@ -57,6 +62,8 @@ if(SIMT_NVML_INCLUDE AND SIMT_NATIVE_NVML)
 endif()
 option(SIMT_SANITIZE "Enable address and undefined behavior sanitizers" OFF)
 if(SIMT_SANITIZE)
+    target_compile_options(simt_storage PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
+    target_link_options(simt_storage PUBLIC -fsanitize=address,undefined)
     target_compile_options(simt_core PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
     target_link_options(simt_core PUBLIC -fsanitize=address,undefined)
     target_compile_options(simt_monitor PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
@@ -74,6 +81,11 @@ target_link_libraries(test-hardware-memory PRIVATE simt_hardware)
 target_compile_options(test-hardware-memory PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME hardware_memory_units COMMAND test-hardware-memory)
 set_tests_properties(hardware_memory_units PROPERTIES TIMEOUT 90)
+add_executable(test-hardware-pipeline tests/test_hardware_pipeline.cpp)
+target_link_libraries(test-hardware-pipeline PRIVATE simt_hardware)
+target_compile_options(test-hardware-pipeline PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME hardware_pipeline_units COMMAND test-hardware-pipeline)
+set_tests_properties(hardware_pipeline_units PROPERTIES TIMEOUT 90)
 function(add_simt_test name script)
     add_test(NAME ${name} COMMAND ${CMAKE_COMMAND} -E env
         "PYTHONPATH=${GENERATED_DIR}:${CMAKE_CURRENT_SOURCE_DIR}/python"
@@ -82,6 +94,7 @@ function(add_simt_test name script)
     set_tests_properties(${name} PROPERTIES TIMEOUT 90)
 endfunction()
 add_simt_test(isa_and_execution test_simulator.py)
+add_simt_test(timed_sm_execution test_timing.py)
 add_simt_test(control_and_collectives test_control.py)
 add_simt_test(memory_and_barriers test_memory.py)
 add_simt_test(tensor_numeric test_tensor.py)

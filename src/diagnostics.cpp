@@ -7,9 +7,8 @@ namespace simt {
 std::string Machine::deadlock_message() const {
     std::ostringstream out;
     out << "deadlock_no_runnable_group";
-    for (const auto& slot : resident_) {
-        if (!slot) continue;
-        const auto& cta = ctas_[*slot];
+    for (const auto& cta : ctas_) {
+        if (cta.completed || cta.warps.empty()) continue;
         for (uint32_t wi = 0; wi < cta.warps.size(); ++wi) {
             const auto& warp = cta.warps[wi];
             for (uint32_t lane = 0; lane < lanes; ++lane) {

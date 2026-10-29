@@ -187,6 +187,7 @@ struct SharedRequest {
     uint32_t remaining;
     uint64_t due = UINT64_MAX;
     std::array<uint32_t, 32> result{};
+    Memory* backing = nullptr;
 };
 
 // Shared memory serves one word per bank per clock and broadcasts same-word reads.
@@ -195,7 +196,7 @@ class BankedShared {
 public:
     explicit BankedShared(SharedConfig config = {});
     Memory memory;
-    std::optional<Ticket> submit(const WarpAccess& access);
+    std::optional<Ticket> submit(const WarpAccess& access, Memory* backing = nullptr);
     void tick();
     std::optional<std::array<uint32_t, 32>> take(Ticket ticket);
     uint64_t cycle() const { return cycle_; }

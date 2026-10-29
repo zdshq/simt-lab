@@ -43,6 +43,24 @@ simt::Policy policy(std::string_view value) {
 
 // Apply value-bearing options independently of argument traversal.
 // 独立处理带值选项，不与参数遍历逻辑混合。
+bool hardware_option(simt::Config& config, const std::string& key, uint32_t value) {
+    if (key == "--shared-bytes") config.cta_shared_bytes = value;
+    else if (key == "--partitions") config.pipeline.partitions = value;
+    else if (key == "--register-banks") config.pipeline.register_banks = value;
+    else if (key == "--collectors") config.pipeline.collectors = value;
+    else if (key == "--max-ctas") config.pipeline.max_ctas = value;
+    else if (key == "--max-warps") config.pipeline.max_warps = value;
+    else if (key == "--sm-registers") config.pipeline.register_words = value;
+    else if (key == "--int-latency") config.pipeline.integer_latency = value;
+    else if (key == "--fp-latency") config.pipeline.float_latency = value;
+    else if (key == "--sfu-latency") config.pipeline.special_latency = value;
+    else if (key == "--sfu-interval") config.pipeline.special_interval = value;
+    else return false;
+    return true;
+}
+
+// Keep ordinary launch options independent from research hardware parameters.
+// 将普通启动选项与研究型硬件参数分开。
 void set_option(Options& options, const std::string& key, const std::string& value) {
     auto& config = options.config;
     if (key == "--policy") { config.policy = policy(value); return; }
@@ -50,10 +68,12 @@ void set_option(Options& options, const std::string& key, const std::string& val
     if (key == "--global") { options.global = value; return; }
     if (key == "--constant") { options.constant = value; return; }
     if (key == "--max-steps") { config.max_steps = number(value); return; }
-    if (key != "--sms" && key != "--blocks" && key != "--threads")
-        throw std::runtime_error("unknown_option: " + key);
+    if (key == "--max-cycles") { config.max_cycles = number(value); return; }
     const auto numeric = number(value);
     if (numeric > UINT32_MAX) throw std::runtime_error("argument_out_of_range");
+    if (hardware_option(config, key, static_cast<uint32_t>(numeric))) return;
+    if (key != "--sms" && key != "--blocks" && key != "--threads")
+        throw std::runtime_error("unknown_option: " + key);
     if (key == "--sms") config.sms = static_cast<uint32_t>(numeric);
     if (key == "--blocks") config.blocks = static_cast<uint32_t>(numeric);
     if (key == "--threads") config.threads = static_cast<uint32_t>(numeric);
@@ -68,6 +88,8 @@ Options parse_options(int argc, char** argv) {
         if (key == "--help") { options.help = true; continue; }
         if (key == "--dump-state") { options.dump = true; continue; }
         if (key == "--dump-memory") { options.memory = true; continue; }
+        if (key == "--timing") { options.config.timing = true; continue; }
+        if (key == "--hardware-trace") { options.config.timing = true; options.config.hardware_trace = true; continue; }
         if (key.starts_with("--")) {
             if (++at >= argc) throw std::runtime_error("missing_option_value");
             set_option(options, key, argv[at]);
@@ -80,13 +102,17 @@ Options parse_options(int argc, char** argv) {
     return options;
 }
 
-// Describe the functional CLI without implying hardware timing support.
-// 说明功能模拟器接口，不暗示支持硬件时序预测。
+// Research model clocks are distinct from functional steps and measured NVIDIA clocks.
+// 研究模型时钟与功能步数、实测 NVIDIA 时钟不同。
 void print_help() {
     std::cout << "simt-run PROGRAM [--sms N] [--blocks N] [--threads N]\n"
                  "         [--policy rr|min|max] [--warp-policy rr|min|max] [--max-steps N]\n"
                  "         [--global FILE] [--constant FILE] [--dump-state] [--dump-memory]\n"
-                 "CPU functional simulator; instruction steps are not GPU cycles.\n";
+                 "         [--timing] [--hardware-trace] [--max-cycles N] [--shared-bytes N]\n"
+                 "         [--partitions N] [--register-banks N] [--collectors N] [--max-ctas N]\n"
+                 "         [--max-warps N] [--sm-registers N] [--int-latency N] [--fp-latency N]\n"
+                 "         [--sfu-latency N] [--sfu-interval N]\n"
+                 "CPU simulator; --timing enables a partial research model, not NVIDIA timing prediction.\n";
 }
 
 // Coordinate loading, execution, and result reporting.

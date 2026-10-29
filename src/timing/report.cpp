@@ -1,0 +1,75 @@
+#include "simt/timing.hpp"
+
+namespace simt {
+// All timing stages report the instruction's original issue location.
+// 所有时序阶段均报告指令原始发射位置。
+std::string timing_location(uint32_t cta, uint32_t sm, uint32_t warp, uint32_t pc) {
+    return " block=" + std::to_string(cta) + " sm=" + std::to_string(sm) +
+           " warp=" + std::to_string(warp) + " pc=" + std::to_string(pc);
+}
+
+namespace {
+void cache_stats(std::ostream& out, const hw::CacheStats& s) {
+    out << "{\"hits\":" << s.hits << ",\"sector_misses\":" << s.sector_misses
+        << ",\"line_misses\":" << s.line_misses << ",\"merges\":" << s.merges
+        << ",\"evictions\":" << s.evictions << ",\"mshr_stalls\":" << s.mshr_stalls
+        << ",\"bank_stalls\":" << s.port_stalls << ",\"fill_stalls\":" << s.fill_stalls
+        << ",\"fill_bytes\":" << s.fill_bytes << '}';
+}
+}
+
+void TimingMachine::trace(const Inflight& entry, const std::string& action) {
+    if (!machine_.config_.hardware_trace) return;
+    if (trace_.size() == 100000) { trace_.pop_front(); ++stats_.dropped_trace; }
+    trace_.push_back({cycle_, entry.id, entry.sm, entry.cta, entry.warp, entry.group.pc, action});
+}
+
+void TimingMachine::dump_statistics(std::ostream& out) const {
+    out << "{\"model\":\"simt-research-v1\",\"cycles\":" << cycle_
+        << ",\"issued\":" << stats_.issued << ",\"retired\":" << stats_.retired
+        << ",\"scoreboard_stalls\":" << stats_.scoreboard_stalls << ",\"boundary_stalls\":" << stats_.boundary_stalls
+        << ",\"collector_stalls\":" << stats_.collector_stalls << ",\"register_bank_stalls\":" << stats_.register_stalls
+        << ",\"unit_stalls\":" << stats_.unit_stalls << ",\"writeback_stalls\":" << stats_.writeback_stalls
+        << ",\"memory_order_stalls\":" << stats_.memory_order_stalls << ",\"peak_ctas_per_sm\":" << stats_.peak_ctas
+        << ",\"dropped_trace\":" << stats_.dropped_trace;
+}
+
+void TimingMachine::dump_memory(std::ostream& out) const {
+    out << ",\"l1\":[";
+    for (uint32_t sm = 0; sm < sms_.size(); ++sm) {
+        if (sm) out << ',';
+        cache_stats(out, memory_->l1_stats(sm));
+    }
+    out << "],\"l2\":"; cache_stats(out, memory_->l2_stats());
+    const auto& dram = memory_->dram_stats();
+    out << ",\"dram\":{\"reads\":" << dram.reads << ",\"writes\":" << dram.writes
+        << ",\"row_hits\":" << dram.row_hits << ",\"row_misses\":" << dram.row_misses << "},\"shared\":[";
+    for (uint32_t sm = 0; sm < sms_.size(); ++sm) {
+        if (sm) out << ',';
+        const auto& shared = sms_[sm]->shared.stats();
+        out << "{\"bank_services\":" << shared.bank_services << ",\"broadcasts\":" << shared.broadcasts
+            << ",\"bank_stalls\":" << shared.bank_stalls << '}';
+    }
+    out << ']';
+}
+
+void TimingMachine::dump_trace(std::ostream& out) const {
+    out << ",\"trace\":[";
+    bool first = true;
+    for (const auto& event : trace_) {
+        if (!first) out << ',';
+        first = false;
+        out << "{\"cycle\":" << event.cycle << ",\"instruction\":" << event.instruction
+            << ",\"sm\":" << event.sm << ",\"block\":" << event.cta << ",\"warp\":" << event.warp
+            << ",\"pc\":" << event.pc << ",\"action\":\"" << event.action << "\"}";
+    }
+    out << ']';
+}
+
+void TimingMachine::dump(std::ostream& out) const {
+    dump_statistics(out);
+    dump_memory(out);
+    if (machine_.config_.hardware_trace) dump_trace(out);
+    out << '}';
+}
+}

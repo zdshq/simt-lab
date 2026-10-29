@@ -48,7 +48,7 @@ python3 examples/host_graph.py
 
 用户要求进一步实现内部硬件结构和原版 nvidia-smi 集成，完整目标与剩余验收见 [硬件计划](docs/HARDWARE_PLAN.md)。已新增 [逐周期存储单元](docs/HARDWARE_MEMORY.md)：真实 sector cache 数据、MSHR/反压、shared banks、DRAM bank/row 时序及双 SM 存储层次，三种构建下 17 项新增检查通过。
 
-这些单元目前由独立测试驱动，尚未接入上面的功能执行器；SM/Tensor 流水线和 RTL 仍在后续工作中。这里的阶段进展不等于已经完成硬件复刻。
+新增 [SM 时序执行](docs/HARDWARE_SM.md)：`simt-run --timing` 已将基础算术、控制、屏障和 load/store 接入寄存器 banks、scoreboard、有限 operand collectors、执行/写回流水线以及真实缓存；支持按资源限制多 CTA 同驻留。`python3 examples/hardware_pipeline.py` 可生成依赖链、缓存及 shared bank 实验和逐拍轨迹。原子/local/异步/Tensor、主机 CP/Graph 的时序接入、RTL 和参数校准仍未完成。
 
 已验证 [原版 nvidia-smi 接入](docs/NVIDIA_SMI.md)：终端一运行 `python3 examples/nvml_device.py`，终端二运行 `python3 tools/simt_smi.py`，可查看实际模拟设备及其分配内存。专用 NVML 后端只作用于该子进程，系统默认命令仍查询真实显卡；没有 CUDA 或 PCIe 兼容。
 

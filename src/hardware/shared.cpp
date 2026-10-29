@@ -7,11 +7,11 @@ BankedShared::BankedShared(SharedConfig config) : memory(config.bytes), config_(
         !config.latency || !config.capacity) throw std::runtime_error("invalid_shared_config");
 }
 
-std::optional<Ticket> BankedShared::submit(const WarpAccess& access) {
-    validate_access(access, memory);
+std::optional<Ticket> BankedShared::submit(const WarpAccess& access, Memory* backing) {
+    validate_access(access, backing ? *backing : memory);
     if (requests_.size() == config_.capacity) { ++stats_.queue_stalls; return {}; }
     const auto ticket = next_++;
-    requests_.push_back({ticket, access, access.mask, access.mask ? UINT64_MAX : cycle_ + config_.latency, {}});
+    requests_.push_back({ticket, access, access.mask, access.mask ? UINT64_MAX : cycle_ + config_.latency, {}, backing});
     return ticket;
 }
 
@@ -19,13 +19,14 @@ std::optional<Ticket> BankedShared::submit(const WarpAccess& access) {
 // 广播包含同字的子字读取，有冲突的写入按 lane 逐个串行化。
 void BankedShared::serve_word(SharedRequest& request, uint32_t first) {
     const auto& access = request.access;
+    auto& storage = request.backing ? *request.backing : memory;
     const auto word = access.address[first] / 4;
     uint32_t served = 0;
     for (uint32_t lane = first; lane < 32; ++lane) {
         if (!(request.remaining & (uint32_t{1} << lane)) || access.address[lane] / 4 != word) continue;
         if (access.write && lane != first) continue;
-        if (access.write) memory.write(access.address[lane], access.width, access.value[lane]);
-        else request.result[lane] = memory.read(access.address[lane], access.width);
+        if (access.write) storage.write(access.address[lane], access.width, access.value[lane]);
+        else request.result[lane] = storage.read(access.address[lane], access.width);
         request.remaining &= ~(uint32_t{1} << lane);
         ++served;
     }

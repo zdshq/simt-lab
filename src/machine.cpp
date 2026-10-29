@@ -4,6 +4,7 @@
 #include "simt/memsync.hpp"
 #include "simt/tensor.hpp"
 #include "simt/async.hpp"
+#include "simt/timing.hpp"
 #include <bit>
 #include <cfenv>
 #include <limits>
@@ -65,6 +66,20 @@ Machine::Machine(Module module, Config config, std::shared_ptr<Memory> global)
     validate_config(config_);
     resident_.resize(config_.sms);
     ctas_.resize(config_.blocks);
+    if (config_.timing) timing_ = std::make_unique<TimingMachine>(*this);
+}
+
+Machine::~Machine() = default;
+
+// Architectural CTA storage is shared by functional and timed scheduling paths.
+// 功能调度和时序调度路径共享 CTA 架构存储。
+void Machine::initialize_cta(uint32_t block, uint32_t sm) {
+    auto& cta = ctas_[block];
+    cta.block_id = block; cta.sm_id = sm;
+    cta.shared = Memory{config_.timing ? config_.cta_shared_bytes : 65536};
+    cta.local.assign(config_.threads, Memory{16384});
+    for (uint32_t wi = 0; wi < (config_.threads + lanes - 1) / lanes; ++wi)
+        cta.warps.push_back(make_warp(wi, config_.threads));
 }
 
 // Dispatch blocks into free SM slots, with one resident CTA per SM.
@@ -73,12 +88,7 @@ void Machine::admit() {
     for (uint32_t sm = 0; sm < config_.sms && next_block_ < config_.blocks; ++sm) {
         if (resident_[sm]) continue;
         const uint32_t id = next_block_++;
-        auto& cta = ctas_[id];
-        cta.block_id = id;
-        cta.sm_id = sm;
-        cta.local.assign(config_.threads, Memory{16384});
-        for (uint32_t wi = 0; wi < (config_.threads + lanes - 1) / lanes; ++wi)
-            cta.warps.push_back(make_warp(wi, config_.threads));
+        initialize_cta(id, sm);
         resident_[sm] = id;
     }
 }
@@ -160,6 +170,7 @@ void Machine::run() {
 // Yield after one scheduling opportunity so a command processor can service other engines.
 // 一个调度机会后交还控制权，让命令处理器服务其他引擎。
 bool Machine::advance() {
+    if (timing_) return timing_->advance();
     if (completed_ == config_.blocks) return true;
     admit();
     bool progress = false;

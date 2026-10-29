@@ -1,6 +1,7 @@
 #pragma once
 #include "simt/module.hpp"
 #include "simt/memory.hpp"
+#include "simt/hardware_pipeline.hpp"
 #include <array>
 #include <bitset>
 #include <cstdint>
@@ -34,6 +35,10 @@ struct Config {
     uint64_t max_steps = 1000000;
     Policy policy = Policy::round_robin;
     Policy warp_policy = Policy::round_robin;
+    bool timing = false, hardware_trace = false;
+    uint64_t max_cycles = 100000000;
+    uint32_t cta_shared_bytes = 65536;
+    hw::PipelineConfig pipeline;
 };
 // Store logical lane state independently from the host's CPU threads.
 // 将逻辑线程状态与宿主 CPU 线程分开保存。
@@ -84,10 +89,12 @@ struct Cta {
     bool completed = false;
 };
 struct Group { uint32_t pc; uint32_t mask; };
+class TimingMachine;
 
 class Machine {
 public:
     Machine(Module module, Config config, std::shared_ptr<Memory> global = {});
+    ~Machine();
     void run();
     bool advance();
     void set_arguments(const std::vector<uint32_t>& arguments);
@@ -95,6 +102,7 @@ public:
     void dump(std::ostream& out, bool full_state, bool memory = false) const;
     void load_images(const std::string& global, const std::string& constant);
 private:
+    friend class TimingMachine;
     Module module_;
     Config config_;
     std::shared_ptr<Memory> global_;
@@ -107,8 +115,10 @@ private:
     uint64_t steps_ = 0;
     uint64_t lane_instructions_ = 0;
     std::array<uint64_t, 256> op_counts_{};
+    std::unique_ptr<TimingMachine> timing_;
     std::optional<Group> select_group(const Warp& warp) const;
     void admit();
+    void initialize_cta(uint32_t block, uint32_t sm);
     bool step(Cta& cta);
     bool schedule_one();
     uint32_t retire_completed();
