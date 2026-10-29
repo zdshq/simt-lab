@@ -26,6 +26,8 @@ void validate_config(const Config& config) {
     if (config.cache_rtl && !hw::cache_rtl_available()) throw std::runtime_error("cache_rtl_backend_unavailable");
     if (config.pipeline.scoreboard_rtl && !config.timing) throw std::runtime_error("scoreboard_rtl_requires_timing");
     if (config.pipeline.scoreboard_rtl && !hw::scoreboard_rtl_available()) throw std::runtime_error("scoreboard_rtl_backend_unavailable");
+    if (config.pipeline.register_rtl && !config.timing) throw std::runtime_error("register_rtl_requires_timing");
+    if (config.pipeline.register_rtl && !hw::register_rtl_available()) throw std::runtime_error("register_rtl_backend_unavailable");
     if (config.sms == 0 || config.sms > 64 || config.blocks == 0 || config.blocks > 4096 ||
         config.threads == 0 || config.threads > 1024 || config.max_steps == 0)
         throw std::runtime_error("invalid_launch_config");

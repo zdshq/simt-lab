@@ -276,3 +276,17 @@
 - 最终 `hardware_host.py --build build-cache-rtl --tensor-rtl --cache-rtl --scoreboard-rtl --out artifacts/rtl-scoreboard-gated-host` 同时启用三类电路，四类负载各两次 Graph 重放通过。除新增后端身份外，完整输出、周期和缓存/DRAM 统计与 `rtl-banked-host` 相同，设备最终 64,500 拍。阶段文档详述源码、状态位、同拍协议、成本、复现和未完成部分。
 - 最终进一步逐份比较 8 个 kernel 报告，删除新增 scoreboard 观测字段后，完整状态和逐拍 trace 与旧后端全量相等。另启动联合 RTL GEMM 会话，由普通 nvidia-smi 验证实卡/模拟器共存、7 MiB 分配、释放和退出；10 份 kernel 报告的后端与门控时钟关系核对通过。当前 RTL 与 gate 哈希匹配四份最终工具清单，分别保存在 `backend-audit.json`、`nvidia-smi-status.txt` 和 `evidence-audit.json`。
 - 完整目标保持 active。依赖控制电路已经接入，但寄存器数据阵列、bank 仲裁、operand collector、其余 RTL 整机连接、实卡参数校准、PTX 异步矩阵协议及最终审计仍需继续。
+
+## 阶段 16 第七部分：寄存器数据阵列接入（2026-10-29）
+
+- 从干净的 `f09b110` 继续；上一阶段完成了 scoreboard 电路接入与阶段提交，属于实际进展。当前补齐仍由 C++ 提供的源操作数数据，完整硬件目标保持 active。
+- 新增 `register_bank.sv`、`register_file.sv`、统一 `RegisterFile` 接口和 Verilator 适配器。每 SM 固定 65,536 字，按 1/2/4/8 partition 分配 32/16/8/4 个物理 warp 槽；每分区四个数据 bank。逐 lane 有效位实现初始零值和槽复用清零，数据位无复位，masked write 与同拍旁路均由实际电路产生。
+- CLI、持久 C++ 设备、Python、主机启动、两个示例及硬件快照加入显式选择和能力检查。实际普通源读取不再访问架构镜像；全部产生普通寄存器结果的标量、访存、原子、Tensor/async 返回与集合指令走同一个 RTL 写端口。无后端、非 timing 或不支持几何明确失败。
+- 端口引脚在时钟低电平保持；方法调用不增加时钟，读写分别每 bank 每拍一次。适配器拒绝读取后再追加写回，以保持流水线阶段契约。报告物理容量、端口组数、输入/有效时钟、读写和槽清除事件。collector 和请求排序仍为 C++，未将独立循环仲裁模块冒充已接入。
+- 首次复跑 96 项指令时，原单端口 CAS/WAR 用例被四端口限定拒绝。新增真实 RTL 的 1/2/4 端口共享冲突判断，保留原测试重新通过；没有跳过旧替换值验证。失败记录保存在 `rtl-register-file-history/first-integration.log`。
+- 新增 4 项独立电路场景、3 项适配器检查和 2 项后端/槽复用检查。独立差分包含 2,400 次随机掩码写、清槽、读旁路；适配器覆盖四种分区几何和跨 32 位的行地址、物理端口容量、错误与查询时钟隔离。
+- 默认 Debug 全量 25 套件、272 项运行，271 通过、1 项未构建 RTL 而跳过；四后端可用的联合 Release 全量 37 套件、699 项通过，5.35 秒；寄存器 RTL 的 Debug ASan/UBSan 全量 28 套件、405 项通过，74.28 秒。寄存器单后端 Release 最终重建后另复跑受影响的四套件、135 项，1.74 秒。命令、计数与范围见 VALIDATION。
+- 最终相同 4 项独立 RTL、sanitizer、综合网表均通过。完整 8 槽 partition 保留存储综合识别 128 个一读一写数组，合计 524,288 数据位；2 槽、16 KiB 小配置完整综合 427,025 generic cells / 135,168 FF 位，`check -assert` 通过。没有完整容量通用门展开、工艺宏映射或频率结论。
+- 最终四后端同时运行向量、规约、GEMM、Transformer，每种两次 Graph 重放。除新增寄存器观测项外，8 个完整 kernel 状态、trace、周期、缓存与 DRAM 统计和上一阶段全量相等，设备最终 64,500 拍。另一次联合 GEMM 会话由普通 nvidia-smi 查询，真实卡/模拟器共存、7 MiB 分配、释放到零、退出移除均正确。
+- 当前 RTL 哈希与五份最终工具清单及实际 gate 文件核对一致；10 个实际 kernel 报告核对电路后端和时钟关系。记录位于 `rtl-register-file-final/evidence-audit.json` 与 `rtl-register-host-final/{backend-audit.json,nvidia-smi-status.txt}`。
+- 寄存器数据接入属于新增进展，不能据此完成总目标。operand collector、请求仲裁电路、其余 RTL 整机连接、实卡参数校准、PTX 异步矩阵协议与最终硬件审计仍待完成。

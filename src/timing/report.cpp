@@ -9,6 +9,26 @@ std::string timing_location(uint32_t cta, uint32_t sm, uint32_t warp, uint32_t p
 }
 
 namespace {
+// Report each physical file and actual accepted port events, including partitions that remain idle.
+// 报告每份物理寄存器堆与实际接受的端口事件，包括始终空闲的分区。
+void register_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedSm>>& sms) {
+    out << ",\"register_files\":[";
+    bool first = true;
+    for (uint32_t sm = 0; sm < sms.size(); ++sm)
+        for (uint32_t part = 0; part < sms[sm]->partitions.size(); ++part) {
+            const auto& file = sms[sm]->partitions[part].registers;
+            if (!file) continue;
+            if (!first) out << ',';
+            first = false;
+            const auto& s = file->stats();
+            out << "{\"sm\":" << sm << ",\"partition\":" << part << ",\"backend\":\"rtl\",\"slots\":" << file->slots()
+                << ",\"port_groups\":" << file->port_groups() << ",\"bytes\":" << file->slots()*8192 << ",\"banks\":4,\"clocks\":" << s.clocks
+                << ",\"active_clocks\":" << s.active_clocks << ",\"reads\":" << s.reads
+                << ",\"writes\":" << s.writes << ",\"cleared_slots\":" << s.cleared_slots << '}';
+        }
+    out << ']';
+}
+
 void scoreboard_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedSm>>& sms) {
     out << ",\"scoreboards\":[";
     bool first = true;
@@ -111,6 +131,7 @@ void TimingMachine::dump_tensor(std::ostream& out) const {
 void TimingMachine::dump(std::ostream& out) const {
     dump_statistics(out);
     scoreboard_stats(out, sms_);
+    register_stats(out, sms_);
     dump_memory(out);
     dump_tensor(out);
     dump_async(out);

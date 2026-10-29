@@ -38,7 +38,7 @@ scoreboard 按寄存器和 lane 掩码记录尚未完成的写者，阻塞 RAW/W
 
 这些映射、端口和延迟都是可检查的模型选择，不是已经逆向证明的 NVIDIA 寄存器电路。标量算术沿用项目数值规则，在收集好的操作数上计算，再等待写回；没有实现标量流水线的门级浮点加法器或 SFU 多项式电路。
 
-可选 [scoreboard RTL 后端](RTL_SCOREBOARD.md) 已将这些逐 lane 依赖接入实际电路，包括写者位、读者计数、谓词状态、同拍旁路和有限更新端口。用 `--timing --scoreboard-rtl` 或 `Device(timing=True, scoreboard_rtl=True)` 启用；寄存器数据及 bank 仲裁仍为 C++，不能将该选项称为完整 SM RTL。
+可选 [scoreboard RTL 后端](RTL_SCOREBOARD.md) 已将这些逐 lane 依赖接入实际电路，包括写者位、读者计数、谓词状态、同拍旁路和有限更新端口。用 `--timing --scoreboard-rtl` 或 `Device(timing=True, scoreboard_rtl=True)` 启用；寄存器数据另可启用 [寄存器 RTL](RTL_REGISTERS.md)，其逐 lane 写入、旁路、端口分组和槽复用已接入。collector、请求排序与完整 SM 控制仍有 C++，不能将这些选项称为完整 SM RTL。
 
 ## 多 CTA 驻留与参数
 
@@ -90,6 +90,6 @@ python3 examples/hardware_pipeline.py
 - 编译器自动 spill、原生 PTX 指令与完整 async-group/TMA；显式 local 和自定义整数原子已接入时序通路。
 - 指令 cache、TLB/页表、跨 SM 互连网络、真实弱内存一致性协议。
 - 持久 CP/copy/Graph 与跨 kernel 缓存已通过 `Device(timing=True)` 接入，见 [HARDWARE_HOST.md](HARDWARE_HOST.md)；并发多 kernel、上下文切换与抢占仍未实现。
-- 完整 SM 的 RTL 连接、寄存器数据阵列/operand collector 电路、FPGA 下载、工艺面积/频率估计及真实 GPU 参数校准。scoreboard 的多事件电路已接入实际执行，见 [RTL_SCOREBOARD.md](RTL_SCOREBOARD.md)；bank 仲裁仍为独立 RTL，见 [RTL.md](RTL.md)。
+- 完整 SM 的 RTL 连接、operand collector 电路、FPGA 下载、工艺面积/频率估计及真实 GPU 参数校准。scoreboard 的多事件电路已接入实际执行，见 [RTL_SCOREBOARD.md](RTL_SCOREBOARD.md)；bank 仲裁仍为独立 RTL，见 [RTL.md](RTL.md)。
 
 完整剩余目标见 [HARDWARE_PLAN.md](HARDWARE_PLAN.md)。NVML 展示能力单独见 [NVIDIA_SMI.md](NVIDIA_SMI.md)，它不能证明上述执行硬件已完成。

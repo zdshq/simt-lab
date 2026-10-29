@@ -121,6 +121,7 @@ Options parse_options(int argc, char** argv) {
         if (key == "--dump-memory") { options.memory = true; continue; }
         if (key == "--timing") { options.config.timing = true; continue; }
         if (key == "--tensor-rtl") { options.config.tensor.rtl = true; continue; }
+        if (key == "--register-rtl") { options.config.pipeline.register_rtl = true; continue; }
         if (key == "--scoreboard-rtl") { options.config.pipeline.scoreboard_rtl = true; continue; }
         if (key == "--cache-rtl") { options.config.cache_rtl = true; continue; }
         if (key == "--hardware-trace") { options.config.timing = true; options.config.hardware_trace = true; continue; }
@@ -142,7 +143,7 @@ void print_help() {
     std::cout << "simt-run PROGRAM [--sms N] [--blocks N] [--threads N]\n"
                  "         [--policy rr|min|max] [--warp-policy rr|min|max] [--max-steps N]\n"
                  "         [--global FILE] [--constant FILE] [--dump-state] [--dump-memory]\n"
-                 "         [--timing] [--tensor-rtl] [--cache-rtl] [--scoreboard-rtl] [--hardware-trace] [--max-cycles N] [--shared-bytes N]\n"
+                 "         [--timing] [--tensor-rtl] [--cache-rtl] [--scoreboard-rtl] [--register-rtl] [--hardware-trace] [--max-cycles N] [--shared-bytes N]\n"
                  "         [--partitions N] [--register-banks N] [--collectors N] [--max-ctas N]\n"
                  "         [--max-warps N] [--sm-registers N] [--int-latency N] [--fp-latency N]\n"
                  "         [--sfu-latency N] [--sfu-interval N]\n"

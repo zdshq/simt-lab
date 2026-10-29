@@ -18,6 +18,7 @@ def options():
     parser.add_argument('--tensor-rtl', action='store_true')
     parser.add_argument('--cache-rtl', action='store_true')
     parser.add_argument('--scoreboard-rtl', action='store_true')
+    parser.add_argument('--register-rtl', action='store_true')
     return parser.parse_args()
 
 
@@ -32,7 +33,7 @@ def demonstrate(arguments):
     from simt_lab.host import Device
     with Device(arguments.build/'simt-device',monitor_dir=arguments.registry,
                 timing=arguments.timing,tensor_rtl=arguments.tensor_rtl,cache_rtl=arguments.cache_rtl,
-                scoreboard_rtl=arguments.scoreboard_rtl) as device:
+                scoreboard_rtl=arguments.scoreboard_rtl, register_rtl=arguments.register_rtl) as device:
         buffer = device.allocate(arguments.bytes)
         device.h2d(buffer,b'SIMT').wait()
         print(f'Live simulator PID {device.connection.process.pid}; registry {arguments.registry}',flush=True)

@@ -18,7 +18,7 @@ class Connection:
     # Keep stderr out of the response pipe and retain it for process-failure diagnostics.
     # 将 stderr 与响应管道分开保存，供进程失败诊断使用。
     def __init__(self, executable, sms, capacity, monitor_dir=None, *, timing=False, hardware_trace=False,
-                 tensor_rtl=False, cache_rtl=False, scoreboard_rtl=False, request_timeout=30):
+                 tensor_rtl=False, cache_rtl=False, scoreboard_rtl=False, register_rtl=False, request_timeout=30):
         self.request_timeout = float(request_timeout)
         if not math.isfinite(self.request_timeout) or self.request_timeout <= 0:
             raise ValueError('invalid_device_transport_timeout')
@@ -34,6 +34,7 @@ class Connection:
         if tensor_rtl: command.append('--tensor-rtl')
         if cache_rtl: command.append('--cache-rtl')
         if scoreboard_rtl: command.append('--scoreboard-rtl')
+        if register_rtl: command.append('--register-rtl')
         try:
             self.process = subprocess.Popen(command,
                                             stdin=subprocess.PIPE,stdout=subprocess.PIPE,

@@ -10,13 +10,9 @@ void TimingMachine::collect_operands() {
     for (auto& [id, pointer] : inflight_) {
         static_cast<void>(id); auto& entry = *pointer;
         if (entry.stage != Stage::collect) continue;
-        auto& ports = sms_[entry.sm]->partitions[entry.partition].ports;
         auto use = entry.unread.begin();
         while (use != entry.unread.end()) {
-            if (!ports.read(use->reg, cycle_)) { ++stats_.register_stalls; ++use; continue; }
-            const auto& source = machine_.ctas_[entry.cta].warps[entry.warp].r[use->reg];
-            for (uint32_t lane = 0; lane < lanes; ++lane)
-                if (use->mask & lane_bit(lane)) entry.operands.r[use->reg][lane] = source[lane];
+            if (!collect_operand(entry, *use)) { ++stats_.register_stalls; ++use; continue; }
             warps_[entry.cta][entry.warp].scoreboard->collect_read(use->reg, use->mask);
             use = entry.unread.erase(use);
             trace(entry, "operand_read");

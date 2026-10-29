@@ -2,7 +2,7 @@
 
 本阶段把三个关键结构写成 SystemVerilog，并完成 RTL 仿真、Yosys 综合和综合后网表的同一套行为验证。源码在 `rtl/`，C++ 对照平台在 `tests/rtl/`。这是真正的触发器、存储阵列、组合选择和握手状态描述，不是在 C++ 模拟器外套一层延迟。
 
-本页记录阶段 16 的首批三个结构。后续 [Tensor RTL](RTL_TENSOR.md) 已补充数值电路和 4×4 乘加阵列，并作为可选 [执行后端](RTL_BACKEND.md) 接入 ISA/TMEM 和主机 Graph。缓存还通过 [L1/L2 后端](RTL_CACHE_BACKEND.md) 接入实际访存与主机链路；scoreboard 与 bank 仲裁仍为独立验证模块。当前没有完整 RTL SM 或 FPGA bitstream，阶段 16 和整个硬件目标保持进行中。
+本页记录阶段 16 的首批三个结构。后续 [Tensor RTL](RTL_TENSOR.md) 已补充数值电路和 4×4 乘加阵列，并作为可选 [执行后端](RTL_BACKEND.md) 接入 ISA/TMEM 和主机 Graph。缓存还通过 [L1/L2 后端](RTL_CACHE_BACKEND.md) 接入实际访存与主机链路；后续 [多事件 scoreboard](RTL_SCOREBOARD.md) 和 [寄存器数据阵列](RTL_REGISTERS.md) 已接入实际执行，循环 bank 仲裁器仍为独立验证模块。当前没有完整 RTL SM 或 FPGA bitstream，阶段 16 和整个硬件目标保持进行中。
 
 ## 已实现的电路
 
@@ -81,7 +81,7 @@ scoreboard 每个 register/lane 有 writer 位和 3 位 reader 数量。writer �
 
 该 RTL 目前是单 warp、单命令端口的 scoreboard 原语。调度器需要先检查 writable，再预约 RMW 的读写归属。尚未包含多源同拍预约、整个 SM 的 warp 表或发射器，因此不能把本模块的时钟直接当作完整 SM 的 IPC。
 
-bank 仲裁器支持 4 个请求者、4 个 bank，bank 映射为寄存器编号 modulo 4。每个 bank 每拍最多一次物理读、一次物理写，两种方向独立。同 bank 持续竞争时循环授权；常零寄存器请求直接满足，不占 bank。当前没有寄存器数据阵列、operand collector 或跨 warp 地址译码，这个模块证明的是端口授权和公平前进。
+bank 仲裁器支持 4 个请求者、4 个 bank，bank 映射为寄存器编号 modulo 4。每个 bank 每拍最多一次物理读、一次物理写，两种方向独立。同 bank 持续竞争时循环授权；常零寄存器请求直接满足，不占 bank。该独立模块没有寄存器数据阵列、operand collector 或跨 warp 地址译码，它证明端口授权和公平前进。后续寄存器数据与槽地址已有 [实际执行后端](RTL_REGISTERS.md)，请求优先级仍采用 C++ 的指令年龄顺序，未接入这个循环仲裁器。
 
 ## 实际综合结果及其含义
 
@@ -120,9 +120,9 @@ python3 tools/rtl.py --synth --infer-only --module cache --sets 128 --out artifa
 python3 tools/rtl.py --module cache --sets 256 --ways 8 --out artifacts/rtl-l2-banked
 python3 tools/rtl.py --module cache --sets 256 --ways 8 --synth --infer-only --out artifacts/rtl-l2-banked-inference
 
-# 当前全部模块的完整综合与门级行为检查，缓存使用小配置。
-python3 tools/rtl.py --synth --out artifacts/rtl-synth-final
-python3 tools/rtl.py --gate-sim --out artifacts/rtl-synth-final
+# 当前全部模块的完整综合与门级行为检查，缓存与寄存器使用小配置。
+python3 tools/rtl.py --synth --rf-slots 2 --out artifacts/rtl-synth-final
+python3 tools/rtl.py --gate-sim --rf-slots 2 --out artifacts/rtl-synth-final
 
 # 同一 RTL 与 C++ 对照平台的 sanitizer 检查。
 python3 tools/rtl.py --build build-sanitize --out artifacts/rtl-sanitize-final
@@ -130,7 +130,7 @@ python3 tools/rtl.py --build build-sanitize --out artifacts/rtl-sanitize-final
 
 `bootstrap_rtl.py` 从系统已配置的 APT 源获取固定版本包，解包到项目内，再构建固定 commit 的 Yosys；manifest 保留 deb 的 SHA-256。其他系统可自行安装相应工具，或设置 `SIMT_VERILATOR`、`SIMT_YOSYS`、`SIMT_BERKELEY_ABC`。外部 Yosys 的门级检查还需用 `--simcells` 指向相应发行版的 `simcells.v`。
 
-当前未指定 `--module` 时包含后续 Tensor 和多事件 scoreboard，共 36 项场景（缓存 11、单命令 scoreboard 3、仲裁 2、Tensor 16、多事件 scoreboard 4）；新模块的当前验证见 [RTL_SCOREBOARD.md](RTL_SCOREBOARD.md)。本页以下 14 项及 `rtl-*-final` 数值记录首批三个结构，Tensor 的独立产物和计数见 RTL_TENSOR.md。
+当前未指定 `--module` 时包含后续 Tensor 和多事件 scoreboard，共 40 项场景（缓存 11、单命令 scoreboard 3、仲裁 2、Tensor 16、多事件 scoreboard 4、寄存器数据 4）；新模块的当前验证见 [RTL_SCOREBOARD.md](RTL_SCOREBOARD.md) 和 [RTL_REGISTERS.md](RTL_REGISTERS.md)。本页以下 14 项及 `rtl-*-final` 数值记录首批三个结构，Tensor 的独立产物和计数见 RTL_TENSOR.md。
 
 三组共 **14 项 RTL 检查**：cache 9 项、scoreboard 3 项、bank 仲裁 2 项。覆盖实际缓存字节、独立 sector、MSHR/merge/response 容量、锁定 way、LRU、byte mask、写确认、反压字段稳定、高地址、精确 hit 流水线、乱序 fill，以及 360 个混合事务与 C++ 差分。scoreboard 包含 5,000 条随机命令，bank 仲裁包含 4,000 拍随机端口对照。64 KiB 配置另外复跑同样的 9 项 cache 检查，不能把重复运行当作新增场景。
 

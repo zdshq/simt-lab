@@ -13,6 +13,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = {'cache': ('sector_cache', 'test_cache.cpp', ['sector_sram.sv', 'cache_lru.sv', 'sector_cache.sv']),
            'scoreboard': ('lane_scoreboard', 'test_scoreboard.cpp', ['lane_scoreboard.sv']),
+           'register_file': ('register_file', 'test_register_file.cpp', ['register_bank.sv', 'register_file.sv']),
            'warp_scoreboard': ('warp_scoreboard', 'test_warp_scoreboard.cpp', ['scoreboard_cell.sv', 'warp_scoreboard.sv']),
            'arbiter': ('register_arbiter', 'test_arbiter.cpp', ['register_arbiter.sv']),
            'fma': ('fp32_fma', 'test_fma.cpp', ['fp32_fma.sv']),
@@ -69,6 +70,8 @@ def compiler_flags(options):
         libraries += ' '+str(options.build/'libsimt_cache_circuit.a')
     if 'SIMT_SCOREBOARD_RTL:BOOL=ON' in (options.build/'CMakeCache.txt').read_text():
         libraries += ' '+str(options.build/'libsimt_scoreboard_circuit.a')
+    if 'SIMT_REGISTER_RTL:BOOL=ON' in (options.build/'CMakeCache.txt').read_text():
+        libraries += ' '+str(options.build/'libsimt_register_circuit.a')
     if sanitized(options):
         includes += ' -fsanitize=address,undefined -fno-omit-frame-pointer'
         libraries += ' -fsanitize=address,undefined'
@@ -92,6 +95,7 @@ def simulation_sources(options, name, destination):
         return ['-Wno-DECLFILENAME', '-Wno-UNUSED', str(destination/'gates.v'), str(options.simcells),
                 str(ROOT/'tests/rtl'/test)]
     parameters = [f'-GSETS={options.sets}', f'-GWAYS={options.ways}'] if name == 'cache' else []
+    if name == 'register_file': parameters = [f'-GSLOTS={options.rf_slots}']
     return parameters+[str(ROOT/'rtl'/file) for file in files]+[str(ROOT/'tests/rtl'/test)]
 
 
@@ -137,6 +141,7 @@ def verify_netlist(destination, files, parameters):
 
 
 def cache_parameters(options, name):
+    if name == 'register_file': return {'SLOTS': options.rf_slots}
     return {'SETS': options.sets, 'WAYS': options.ways} if name == 'cache' else {}
 
 
@@ -147,6 +152,7 @@ def synthesis(options, name):
     destination = options.out/name
     destination.mkdir(parents=True, exist_ok=True)
     lines = ['read_verilog -sv '+' '.join(yosys_string(ROOT/'rtl'/file) for file in files)]
+    if name == 'register_file': lines.append(f'chparam -set SLOTS {options.rf_slots} {top}')
     if name == 'cache': lines.append(f'chparam -set SETS {options.sets} -set WAYS {options.ways} {top}')
     lines += [f'synth -top {top} -run begin:fine', 'check -assert',
               'write_json inferred.json', 'tee -o inferred-stat.json stat -json']
@@ -198,6 +204,7 @@ def parse_options():
     parser.add_argument('--module', choices=tuple(MODULES)+('all',), default='all')
     parser.add_argument('--sets', type=int, default=4)
     parser.add_argument('--ways', type=int, choices=(4, 8), default=4)
+    parser.add_argument('--rf-slots', type=int, choices=(2, 4, 8, 16, 32), default=8)
     parser.add_argument('--jobs', type=int, default=4)
     parser.add_argument('--synth', action='store_true')
     parser.add_argument('--infer-only', action='store_true')

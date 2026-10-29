@@ -12,7 +12,10 @@ SmResources::SmResources(PipelineConfig config) : config_(config) {
         throw std::runtime_error("invalid_pipeline_config");
     if (config.scoreboard_rtl && config.register_banks > 4)
         throw std::runtime_error("scoreboard_rtl_requires_at_most_4_banks");
-    slots_.resize(config.max_warps);
+    if (config.register_rtl && ((config.register_banks != 1 && config.register_banks != 2 && config.register_banks != 4) || config.register_words > 65536 ||
+                               (config.partitions & (config.partitions-1))))
+        throw std::runtime_error("register_rtl_geometry_requires_1_2_4_port_groups_power_of_two_partitions_at_most_65536_words");
+    slots_.resize(config.register_rtl ? std::min(config.max_warps, config.register_words/2048) : config.max_warps);
 }
 
 std::optional<Residency> SmResources::acquire(uint32_t cta, uint32_t threads, uint32_t shared_bytes) {

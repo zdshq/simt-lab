@@ -225,10 +225,34 @@ PCI 选择在原程序私有路径中假定所有设备都有 PCI 状态，模�
 
 当前只是 scoreboard 依赖控制的电路接入；寄存器数据、bank 仲裁与 operand collector 尚未形成完整 RTL SM。完整目标继续按硬件计划推进。
 
+## 阶段 16：寄存器数据 RTL 接入实际执行
+
+增加 `SIMT_REGISTER_RTL`、`--register-rtl` 和 Python `register_rtl=True`。每 SM 的 65,536 字数据阵列按 1/2/4/8 个分区划分，每分区四个物理 bank；读取返回 RTL 存储或同拍写回旁路的实际值。逐 lane 有效位保证首次使用和 CTA 槽复用时返回零；C++ 历史架构副本不参与操作数读取。结构、端口共享、时钟和剩余边界见 [RTL_REGISTERS.md](RTL_REGISTERS.md)。
+
+| 最终命令或场景 | 实际结果 |
+|---|---|
+| `ctest --test-dir build --output-on-failure -j4` | 25 套件、272 项运行，229 Python / 43 C++；271 通过，1 项寄存器 RTL 专项因未构建后端而跳过 |
+| `ctest --test-dir build-cache-rtl --output-on-failure -j4` | 四种 RTL 后端可用的 Release 构建全部 37 套件、699 项通过（639 Python / 60 C++），5.35 秒；各套件分别选择后端 |
+| `UBSAN_OPTIONS=halt_on_error=1 ctest --test-dir build-register-sanitize --output-on-failure -j4` | 寄存器 RTL + Debug ASan/UBSan 全部 28 套件、405 项通过（359 Python / 46 C++），74.28 秒；Tensor/cache/scoreboard 为 C++ |
+| `ctest --test-dir build-register -R 'register' --output-on-failure -j4` | 寄存器单后端 Release 最终重建后，4 套件、135 项通过：选择 2、适配器 3、执行 96、主机/Graph 34；1.74 秒 |
+| 独立 RTL 与 sanitizer | `tools/rtl.py --module register_file` 默认 8 槽、64 KiB partition 的相同 4 项通过；含 2,400 次随机 masked write 和独立数组对照 |
+| 保留存储综合 | `--synth --infer-only` 默认 8 槽，经层次实例展开共有 128 个一读一写存储数组，合计 524,288 数据位；`check -assert` 通过 |
+| 小配置完整综合与网表 | `--rf-slots 2 --synth` 为 427,025 generic cells、135,168 触发器位；`--rf-slots 2 --gate-sim` 同 4 项全部通过。2 槽数据容量为 16 KiB，不能当成完整 SM 面积 |
+| 四后端同时运行完整负载 | `hardware_host.py --build build-cache-rtl --register-rtl --scoreboard-rtl --cache-rtl --tensor-rtl --out artifacts/rtl-register-host-final`；四负载各两次重放通过，最终设备 64,500 拍 |
+| 完整状态与监控 | 8 份 kernel 报告删除新增寄存器观测项后与 `rtl-scoreboard-gated-host` 完全相等，含状态和 trace；另 2 份监控 GEMM 验证四个 RTL 后端及原版 nvidia-smi 共存、分配/释放/退出 |
+
+全量 CTest 原始日志与实际计数在 `artifacts/rtl-register-file-final/{debug,joint-release,register-sanitize}.log` 和 `tests.json`。独立工具产物在 `rtl-register-file-final`、`rtl-register-file-final-sanitize`、`rtl-register-file-final-full`、`rtl-register-file-final-gates`；五份清单及实际 gate 文件与当前 RTL 哈希匹配，保存为 `evidence-audit.json`。主机报告、状态对比和原版程序输出在 `rtl-register-host-final`。
+
+此前 36 项独立电路场景未改动，没有宣称全部重新执行；新增寄存器 4 项使工具默认集合变为 40 项。普通 RTL、sanitizer 和网表复跑使用同一组场景，不算 12 项新测试。
+
+首轮集成的 96 项指令检查中，1 项 CAS 替换值/WAR 检查因固定四端口几何拒绝 `--register-banks 1`。失败日志保存在 `rtl-register-file-history/first-integration.log`。实现 1/2/4 端口组的 RTL 冲突逻辑后，保留原算例、数值断言与 sanitizer，最终全部通过。没有将不支持的配置悄悄回退到 C++。
+
+当前寄存器数据、有效位和旁路已经电路化；collector、请求优先级、调度和谓词值仍是 C++。不宣称循环 bank 仲裁器、整个 SM、FPGA 存储/时钟宏映射或真实 NVIDIA 数据通路已经完成。
+
 ## 明确边界
 
 - 功能模式和时序模式都在 CPU 上执行；不会利用 RTX 4070 SUPER 来获得模拟 GPU 的实际吞吐。
-- 两个 SM 已有基础时序资源模型；缓存、Tensor、scoreboard RTL 已接入实际执行，bank 仲裁 RTL 仍独立，尚未连接成两份完整 RTL SM。仅报告实际模块的 generic-cell 统计，没有整卡门数、工艺频率、面积或功耗结论。
+- 两个 SM 已有基础时序资源模型；缓存、Tensor、scoreboard 和寄存器数据 RTL 已接入实际执行，循环 bank 仲裁 RTL 仍独立，尚未连接成两份完整 RTL SM。仅报告实际模块的 generic-cell 统计，没有整卡门数、工艺频率、面积或功耗结论。
 - 自定义编码不兼容 CUDA/PTX/SASS/curryGPU 私有二进制；Python Program 是指令构造接口，不是 CUDA 编译器。
 - 主机接口及 CUDA Graph 风格功能通过 Python/C++ 进程协议运行，不实现 NVIDIA `cudaGraph*` API/ABI、驱动、PCIe/MMIO 或系统可枚举的 CUDA 设备。
 - Graph 支持范围见 [主机接口规范](HOST.md)：无 child graph、host callback、条件/内存分配节点、device-side launch 或完整 capture mode；单计算引擎不支持并发 kernel。

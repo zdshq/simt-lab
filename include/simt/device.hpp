@@ -78,7 +78,7 @@ struct CopyTransfer {
 class Device {
 public:
     explicit Device(uint32_t sms = 2, uint32_t capacity = 64, bool timing = false,
-                    bool hardware_trace = false, bool tensor_rtl = false, bool cache_rtl = false, bool scoreboard_rtl = false);
+                    bool hardware_trace = false, bool tensor_rtl = false, bool cache_rtl = false, bool scoreboard_rtl = false, bool register_rtl = false);
     DeviceArena arena;
     uint64_t load_module(const std::vector<uint8_t>& bytes);
     JobId submit(uint32_t stream, Command command, std::vector<JobId> dependencies = {});
@@ -95,7 +95,7 @@ public:
     void publish_monitor();
 private:
     uint32_t sms_;
-    bool hardware_trace_, tensor_rtl_, cache_rtl_, scoreboard_rtl_;
+    bool hardware_trace_, tensor_rtl_, cache_rtl_, scoreboard_rtl_, register_rtl_;
     std::shared_ptr<hw::HardwareContext> hardware_;
     uint64_t written_ = 0, fetched_ = 0, published_ = 0, ticks_ = 0, notifications_ = 0;
     JobId next_job_ = 1;

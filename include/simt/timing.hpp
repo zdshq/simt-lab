@@ -5,6 +5,7 @@
 #include "simt/timing_tensor.hpp"
 #include "simt/timing_async.hpp"
 #include "simt/scoreboard_engine.hpp"
+#include "simt/register_file.hpp"
 #include <deque>
 
 namespace simt {
@@ -29,6 +30,7 @@ struct TimedWarp {
 struct WarpOwner { uint32_t cta, warp; };
 struct Partition {
     hw::RegisterPorts ports;
+    std::unique_ptr<hw::RegisterFile> registers;
     uint32_t cursor = 0;
     std::array<uint64_t, 7> available{};
     std::optional<uint64_t> predicate_write;
@@ -118,6 +120,8 @@ private:
     void enqueue(uint32_t cta, uint32_t warp, Group group, uint32_t mask, Footprint footprint);
     void reserve(Inflight& entry);
     void collect_operands();
+    bool collect_operand(Inflight& entry, const hw::RegisterUse& use);
+    void commit_register_data(Inflight& entry);
     void launch_ready();
     void launch(Inflight& entry);
     void evaluate_scalar(Inflight& entry);

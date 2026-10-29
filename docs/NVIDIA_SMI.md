@@ -34,7 +34,7 @@ GPU 1: SIMT Lab 2 SM (simulator) (UUID: GPU-...)
 已构建联合 RTL 时，终端一可以改用：
 
 ```sh
-python3 examples/nvml_device.py --build build-cache-rtl --timing --tensor-rtl --cache-rtl --seconds 120
+python3 examples/nvml_device.py --build build-cache-rtl --timing --tensor-rtl --cache-rtl --scoreboard-rtl --register-rtl --seconds 120
 ```
 
 监控协议允许已安装入口使用 `build-release/nvml` 查询这个 RTL 会话，无须给查询命令另选 RTL 构建。示例只负责分配和上传；实际 Tensor/L1/L2 RTL Graph GEMM 的联合验证另见下方证据。

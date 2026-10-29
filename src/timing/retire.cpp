@@ -9,8 +9,10 @@ bool TimingMachine::writeback_available(Inflight& entry) {
     auto& partition = sms_[entry.sm]->partitions[entry.partition];
     const auto& f = entry.footprint;
     if (!f.write_mask) return true;
-    if (f.destination && !partition.ports.write(*f.destination, cycle_)) {
-        ++stats_.writeback_stalls; return false;
+    if (f.destination) {
+        const bool available = partition.registers ? partition.registers->writable(*f.destination) :
+            partition.ports.write(*f.destination, cycle_);
+        if (!available) { ++stats_.writeback_stalls; return false; }
     }
     if (!f.predicate) return true;
     if (partition.predicate_write == cycle_) { ++stats_.writeback_stalls; return false; }
@@ -28,6 +30,7 @@ void TimingMachine::commit(Inflight& entry) {
         if (f.destination) write_register(warp, *f.destination, lane, entry.result.r[*f.destination][lane]);
         if (f.predicate) write_predicate(warp, *f.predicate, lane, entry.result.predicates[*f.predicate] & lane_bit(lane));
     }
+    commit_register_data(entry);
     if (f.destination) timed.scoreboard->retire_write(*f.destination, f.write_mask);
     if (f.predicate) timed.scoreboard->retire_predicate(*f.predicate, f.write_mask);
     if (f.pipe == Pipe::async) commit_async_instruction(entry);

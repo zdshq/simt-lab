@@ -4,7 +4,7 @@
 
 项目使用 C++20 实现执行核心，Python 生成 ISA 编码接口、构造 kernel 和独立参考结果。默认设备含两个 SM，每个 warp 有 32 个逻辑线程。它运行在 CPU 上，模拟的是自定义机器的行为，不预测真实 GPU 周期、面积或功耗。
 
-这里使用自己的指令编码与数值规范，借鉴作者公开的设计方法，不宣称兼容 curryGPU 的私有二进制、NVIDIA SASS 或完整 CUDA。ISS 和时序模型已运行；缓存、scoreboard、寄存器 bank 仲裁及 Tensor 数值/乘加阵列已有验证的 RTL。L1/L2 与 Tensor RTL 已可选接入 ISA 和主机 Graph；完整 RTL GPU、PTX 编译器和 FPGA 实现仍未完成。
+这里使用自己的指令编码与数值规范，借鉴作者公开的设计方法，不宣称兼容 curryGPU 的私有二进制、NVIDIA SASS 或完整 CUDA。ISS 和时序模型已运行；缓存、scoreboard、寄存器 bank 仲裁及 Tensor 数值/乘加阵列已有验证的 RTL。L1/L2、Tensor、scoreboard 和寄存器数据 RTL 已可选接入 ISA 和主机 Graph；完整 RTL GPU、PTX 编译器和 FPGA 实现仍未完成。
 
 开发阶段、验收条件和当前进展见 [实施计划](docs/PLAN.md)、[主机与 Graph 扩展计划](docs/HOST_PLAN.md) 和 [开发记录](docs/DEVELOPMENT.md)。每个通过验收的阶段单独 Git 提交。
 
@@ -60,7 +60,7 @@ python3 examples/host_graph.py
 
 [关键模块 RTL](docs/RTL.md) 已实现 64 KiB sector 缓存的数据阵列和控制器、逐 lane scoreboard、4 bank 读写仲裁。原 14 项检查通过 RTL、sanitizer 和网表验证；缓存新增范围失效扫描后，11 项缓存检查在上述三种模式和 64 KiB 配置下通过。
 
-[Tensor RTL](docs/RTL_TENSOR.md) 新增四级 FP32 融合乘加、INT8 乘加、FP16/BF16/FP4 转换及完整 4×4 PE 网格，包含实际规格化/舍入电路、两项 FIFO、稀疏跳过和三阶段块缩放。新增 16 项 RTL、sanitizer 和综合后网表检查，加上缓存扫描增量，该阶段共 32 项；后续 scoreboard 接入另增 4 项独立电路检查。
+[Tensor RTL](docs/RTL_TENSOR.md) 新增四级 FP32 融合乘加、INT8 乘加、FP16/BF16/FP4 转换及完整 4×4 PE 网格，包含实际规格化/舍入电路、两项 FIFO、稀疏跳过和三阶段块缩放。新增 16 项 RTL、sanitizer 和综合后网表检查，加上缓存扫描增量，该阶段共 32 项；后续 scoreboard 接入另增 4 项、寄存器数据再增 4 项独立电路检查。
 
 [RTL 执行后端](docs/RTL_BACKEND.md) 已将该阵列接入实际 ISA/TMEM 与主机 Graph。以 `-DSIMT_TENSOR_RTL=ON` 构建后，运行 `python3 examples/hardware_host.py --build build-rtl --tensor-rtl`；每个 SM 拥有独立 RTL 实例，格式转换和乘加结果由电路产生，其余系统仍由 C++ 模拟。没有构建 RTL 却请求它会明确报错。
 
@@ -68,6 +68,8 @@ python3 examples/host_graph.py
 
 缓存 LRU 已按组实现为排名寄存器和局部比较电路，完整 256 KiB、8 路 L2 的保留存储综合、RTL 和 sanitizer 检查均通过。2/4 KiB 小配置另通过完整综合及相同网表行为检查；这些结果不等于具体 FPGA/ASIC 的存储宏映射或整 GPU 面积。
 
-[Scoreboard RTL 后端](docs/RTL_SCOREBOARD.md) 已将逐 lane 写者、读者计数和谓词依赖接入实际指令与主机 Graph。用 `-DSIMT_SCOREBOARD_RTL=ON` 构建、`--scoreboard-rtl` 运行；可与 Tensor/L1/L2 RTL 同时启用。包含有限同拍事件、阶段旁路和事件时钟门控，报告输入时钟与有效更新边沿。寄存器数据和 bank 仲裁仍为 C++。
+[Scoreboard RTL 后端](docs/RTL_SCOREBOARD.md) 已将逐 lane 写者、读者计数和谓词依赖接入实际指令与主机 Graph。用 `-DSIMT_SCOREBOARD_RTL=ON` 构建、`--scoreboard-rtl` 运行；可与 Tensor/L1/L2 RTL 同时启用。包含有限同拍事件、阶段旁路和事件时钟门控，报告输入时钟与有效更新边沿。寄存器数据还可选择下述 RTL 后端，collector 与请求优先级仍由 C++ 实现。
 
-当前默认 Debug 通过 24 套件、270 项；三种 RTL 后端可用的联合 Release 构建通过 33 套件、564 项；scoreboard RTL 的 Debug ASan/UBSan 构建通过 27 套件、404 项。不同构建包含既有场景复跑，独立 RTL 检查另计，完整范围与早期失败记录见验证文档。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。
+[寄存器数据 RTL 后端](docs/RTL_REGISTERS.md) 用 `-DSIMT_REGISTER_RTL=ON` 构建、`--register-rtl` 或 Python `register_rtl=True` 启用。每 SM 256 KiB 数据按 partition 与四个物理 bank 划分，包含逐 lane 有效位、masked write、写回旁路和槽复用清零；源操作数来自实际电路输出，可与其他三个 RTL 后端联合运行。
+
+当前默认 Debug 运行 25 套件、272 项（271 通过，1 项未构建 RTL 而跳过）；四种 RTL 后端可用的联合 Release 构建通过 37 套件、699 项；寄存器 RTL 的 Debug ASan/UBSan 构建通过 28 套件、405 项。不同构建包含既有场景复跑，独立 RTL 检查另计，完整范围与早期失败记录见验证文档。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。
