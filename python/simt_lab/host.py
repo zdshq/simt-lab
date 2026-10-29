@@ -116,6 +116,14 @@ class Device:
     def trace(self):
         return self._request('TRACE')
 
+    def graph(self):
+        from .graph import Graph
+        return Graph(self)
+
+    def capture(self, streams=(0,)):
+        from .graph import Capture
+        return Capture(self,streams)
+
     # Normal context exit drains work; exception exit explicitly aborts the owned process.
     # 正常退出上下文时排空工作，异常退出时明确中止所持有进程。
     def close(self, *, wait=True):
