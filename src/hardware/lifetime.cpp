@@ -2,9 +2,14 @@
 #include <stdexcept>
 
 namespace simt::hw {
+void SectorCache::check_invalidation(uint64_t address, uint64_t size) const {
+    if (size && address > UINT64_MAX - size) throw std::runtime_error("invalid_invalidation_range");
+}
+
 // Range invalidation clears only matching sectors and preserves unrelated tags and outstanding fills.
 // 范围失效仅清除匹配 sector，保留无关 tag 和在途 fill。
 void SectorCache::invalidate_range(uint64_t address, uint64_t size) {
+    check_invalidation(address, size);
     if (!size) return;
     for (auto& line : lines_) {
         if (!line.tag) continue;
@@ -31,8 +36,12 @@ void MemoryHierarchy::invalidate_range(uint64_t address, uint64_t size) {
                 throw std::runtime_error("invalidate_busy_range");
         }
     }
+    // Validate every finite control queue before changing any cache or host allocation.
+    // 修改任何缓存或主机分配前，先验证全部有限控制队列。
+    for (auto& cache : l1_) cache->check_invalidation(address, size);
+    l2_->check_invalidation(address, size);
     for (auto& cache : l1_) cache->invalidate_range(address, size);
-    l2_.invalidate_range(address, size);
+    l2_->invalidate_range(address, size);
 }
 
 // Fault recovery consumes only the stopped owner's responses; accepted operations still finish normally.

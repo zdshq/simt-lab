@@ -1,14 +1,16 @@
 #include "simt/hardware_memory.hpp"
 #include "simt/hardware_atomic.hpp"
+#include "simt/cache_engine.hpp"
 #include <stdexcept>
 
 namespace simt::hw {
 MemoryHierarchy::MemoryHierarchy(MemoryBacking& memory, HierarchyConfig config)
-    : memory_(memory), config_(config), dram_(memory, config.dram), l2_(dram_, config.l2) {
+    : memory_(memory), config_(config), dram_(memory, config.dram),
+      l2_(make_cache(dram_, config.l2, config.cache_rtl, CacheLevel::l2)) {
     if (!config.sms || config.sms > 64 || !config.capacity) throw std::runtime_error("invalid_hierarchy_config");
     for (uint32_t sm = 0; sm < config.sms; ++sm)
-        l1_.push_back(std::make_unique<SectorCache>(l2_, config.l1));
-    atomics_ = std::make_unique<GlobalAtomics>(l2_, config.atomic);
+        l1_.push_back(make_cache(*l2_, config.l1, config.cache_rtl, CacheLevel::l1));
+    atomics_ = std::make_unique<GlobalAtomics>(*l2_, config.atomic);
 }
 
 MemoryHierarchy::~MemoryHierarchy() = default;
@@ -61,7 +63,7 @@ void MemoryHierarchy::service(WarpRequest& request) {
         invalidate_l1();
         request.invalidated = true;
     }
-    auto& port = (request.access.write || request.bypass_l1) ? static_cast<SectorPort&>(l2_) : *l1_[request.sm];
+    auto& port = (request.access.write || request.bypass_l1) ? *l2_ : *l1_[request.sm];
     collect(request, port);
     while (request.issued < request.packets.size()) {
         const auto ticket = port.submit(request.packets[request.issued].packet);
@@ -92,7 +94,7 @@ void MemoryHierarchy::service_requests() {
 // 所有单元自底向上各推进一次，新转发请求等待后续时钟处理。
 void MemoryHierarchy::tick() {
     dram_.tick();
-    l2_.tick();
+    l2_->tick();
     for (auto& cache : l1_) cache->tick();
     atomics_->tick();
     service_requests();
@@ -129,11 +131,15 @@ void MemoryHierarchy::invalidate() {
         if (!request.done) throw std::runtime_error("invalidate_busy_hierarchy");
     }
     invalidate_l1();
-    l2_.invalidate();
+    l2_->invalidate();
 }
 
 const CacheStats& MemoryHierarchy::l1_stats(uint32_t sm) const {
+    return l1_cache(sm).stats();
+}
+
+const CachePort& MemoryHierarchy::l1_cache(uint32_t sm) const {
     if (sm >= l1_.size()) throw std::runtime_error("invalid_sm_index");
-    return l1_[sm]->stats();
+    return *l1_[sm];
 }
 }

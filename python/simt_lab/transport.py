@@ -16,7 +16,8 @@ class DeviceError(RuntimeError):
 class Connection:
     # Keep stderr out of the response pipe and retain it for process-failure diagnostics.
     # 将 stderr 与响应管道分开保存，供进程失败诊断使用。
-    def __init__(self, executable, sms, capacity, monitor_dir=None, *, timing=False, hardware_trace=False, tensor_rtl=False):
+    def __init__(self, executable, sms, capacity, monitor_dir=None, *, timing=False, hardware_trace=False,
+                 tensor_rtl=False, cache_rtl=False):
         self.errors = tempfile.TemporaryFile(mode='w+t')
         self.lock = threading.Lock()
         self.closed = False
@@ -27,6 +28,7 @@ class Connection:
         if timing: command.append('--timing')
         if hardware_trace: command.append('--hardware-trace')
         if tensor_rtl: command.append('--tensor-rtl')
+        if cache_rtl: command.append('--cache-rtl')
         try:
             self.process = subprocess.Popen(command,
                                             stdin=subprocess.PIPE,stdout=subprocess.PIPE,

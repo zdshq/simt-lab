@@ -5,6 +5,7 @@
 #include "simt/tensor.hpp"
 #include "simt/async.hpp"
 #include "simt/timing.hpp"
+#include "simt/cache_engine.hpp"
 #include <bit>
 #include <cfenv>
 #include <limits>
@@ -21,6 +22,8 @@ void validate_config(const Config& config) {
         throw std::runtime_error("unsupported_rounding_environment");
     if (config.tensor.rtl && !config.timing) throw std::runtime_error("tensor_rtl_requires_timing");
     if (config.tensor.rtl && !hw::tensor_rtl_available()) throw std::runtime_error("tensor_rtl_backend_unavailable");
+    if (config.cache_rtl && !config.timing) throw std::runtime_error("cache_rtl_requires_timing");
+    if (config.cache_rtl && !hw::cache_rtl_available()) throw std::runtime_error("cache_rtl_backend_unavailable");
     if (config.sms == 0 || config.sms > 64 || config.blocks == 0 || config.blocks > 4096 ||
         config.threads == 0 || config.threads > 1024 || config.max_steps == 0)
         throw std::runtime_error("invalid_launch_config");

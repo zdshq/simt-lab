@@ -7,11 +7,11 @@
 | 阶段 | 实现内容 | 必须提供的证据 | 当前状态 |
 |---|---|---|---|
 | 11 | 官方资料、逆向论文、参数来源与不确定性台账 | 每个结构/参数区分公开事实、实测结论和设计假设；架构代际不得混用 | 进行中 |
-| 12 | 真实数据缓存、访存合并、L1/L2 tag/sector、MSHR、反压、shared banks、DRAM bank/row/总线 | 冷热、冲突、合并、容量、队列满、跨 SM、数据一致性与独立参考测试 | 进行中 |
+| 12 | 真实数据缓存、访存合并、L1/L2 tag/sector、MSHR、反压、shared banks、DRAM bank/row/总线 | 冷热、冲突、合并、容量、队列满、跨 SM、数据一致性与独立参考测试 | C++ 时序层次和可选 L1/L2 RTL 已接入实际访存及主机，见 RTL_CACHE_BACKEND.md；参数校准与更完整 DRAM/一致性硬件仍待完成 |
 | 13 | SM 分区、warp 发射、寄存器 bank/operand collector、scoreboard、执行流水线、多 CTA 资源准入 | 依赖链/独立链、RAW/WAW、结构冲突、occupancy 和退休顺序；逐周期轨迹 | 基础时序通路已实现，7 项 C++/35 项 Python 检查；见 HARDWARE_SM.md，尚非完整 GPU |
 | 14 | 分拍 Tensor 数据通路、乘法/累加单元、操作数供给、TMEM bank、异步完成 | 不再一条宿主循环完成 MMA；数值差分、带宽和流水线反压测试 | 分拍阵列/供数/TMEM 已接入并验证，另可选择实际 RTL 数值/阵列后端，见 HARDWARE_TENSOR.md / RTL_BACKEND.md；当前发起 warp 阻塞到完成，PTX 异步提交协议未实现 |
 | 15 | 将上述单元接入实际 ISA 执行、CP、拷贝与 Graph，缓存跨 kernel 保留 | 原功能负载在微架构执行模式中运行；同步与失败行为保持正确；无绕过模型的快路径 | 自定义 59 个 opcode 与持久 CP/copy/Graph 已接入；四类完整负载通过主机上传/Graph/下载执行，跨 kernel 缓存与故障排空通过 4 项 C++/33 项 Python 增量检查；见 HARDWARE_HOST.md，完整 NVIDIA 协议不在此阶段完成范围 |
-| 16 | 可综合的关键硬件模块与 RTL 对照 | cache tag/controller、bank arbiter、scoreboard、乘加阵列的仿真和综合结果；面积只报告实际工具结果 | 进行中：前三类模块 14 项及 Tensor 数值/4×4 阵列 16 项均有 RTL、sanitizer 和综合后网表验证；64 KiB 缓存另有实际仿真与存储推断。Tensor RTL 已接入 ISA/TMEM/主机 Graph，RTL 构建通过 24 套件、318 项检查，见 RTL_BACKEND.md；其余模块接入及整体 RTL 连接尚未完成 |
+| 16 | 可综合的关键硬件模块与 RTL 对照 | cache tag/controller、bank arbiter、scoreboard、乘加阵列的仿真和综合结果；面积只报告实际工具结果 | 进行中：独立 RTL 共 32 项检查；L1/L2 及 Tensor RTL 已接入 ISA/TMEM/主机 Graph，联合构建通过 28 套件、421 项检查，见 RTL_CACHE_BACKEND.md。scoreboard/寄存器数据和仲裁的整机接入，以及其余 RTL 连接尚未完成 |
 | 17 | 活设备状态服务与 NVML 接入 | 原版 `/usr/bin/nvidia-smi` 实际枚举活模拟设备，内存/状态跟随执行变化，关闭后不留虚假设备；明确启动方式与真实设备共存范围 | 专用启动方式已验证，见 NVIDIA_SMI.md；系统默认视图合并未实现 |
 | 18 | 整体数值/时序/RTL/NVML 验收及结构说明 | 可复现实验命令、波形/trace、来源表、限制和阶段 Git 历史；逐项审计本表 | 待完成 |
 

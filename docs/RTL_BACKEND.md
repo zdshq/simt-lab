@@ -2,7 +2,7 @@
 
 `simt-run` 和 `simt-device` 现在可以选择真正执行 SystemVerilog 的 Tensor 后端。每个模拟 SM 持有一份独立的 Verilator 阵列实例；MMA 的格式转换、乘积、累加、缩放和稀疏跳过由该实例产生结果。默认后端仍为 C++ 时序模型，必须显式构建并启用 RTL。
 
-这是一套在 CPU 上运行的混合仿真：Tensor 数值与阵列是 RTL，其余单元仍由 C++ 模拟。它不是完整 RTL GPU，也不是 NVIDIA 内部电路的精确复刻；没有获得 RTX 4070 SUPER 的实际算力。电路细节见 [RTL_TENSOR.md](RTL_TENSOR.md)。
+这是一套在 CPU 上运行的混合仿真：Tensor 数值与阵列是 RTL，其余单元默认由 C++ 模拟；后续还可同时选择 [L1/L2 RTL 后端](RTL_CACHE_BACKEND.md)。它不是完整 RTL GPU，也不是 NVIDIA 内部电路的精确复刻；没有获得 RTX 4070 SUPER 的实际算力。电路细节见 [RTL_TENSOR.md](RTL_TENSOR.md)。
 
 ## 如何运行
 
@@ -46,8 +46,9 @@ flowchart LR
 | FP32 融合乘加、INT8 乘加 | RTL 整数位运算、乘法器和流水寄存器 | `rtl/fp32_fma.sv`、`rtl/int8_mac.sv` |
 | FIFO、PE 反馈、逐跳传输、缩放和结果保持 | RTL | `rtl/tensor_pe.sv`、`rtl/tensor_array.sv` |
 | 时钟与 valid/ready 适配 | C++ 驱动电路引脚，不计算矩阵结果 | `src/rtl/tensor_engine.cpp` |
-| TMEM、L1/L2、DRAM、DMA、warp 调度与 CP | C++ 功能/时序模型 | `src/hardware/`、`src/timing/`、`src/device_*.cpp` |
-| 缓存、scoreboard、bank 仲裁的其他 RTL | 已独立验证，尚未接入整机执行 | [RTL.md](RTL.md) |
+| TMEM、DRAM、DMA、warp 调度与 CP | C++ 功能/时序模型 | `src/hardware/`、`src/timing/`、`src/device_*.cpp` |
+| L1/L2 | 默认 C++，可同时启用缓存 RTL | [RTL_CACHE_BACKEND.md](RTL_CACHE_BACKEND.md) |
+| scoreboard、bank 仲裁的其他 RTL | 已独立验证，尚未接入整机执行 | [RTL.md](RTL.md) |
 
 原始数据不会先由宿主转换成 FP32 再冒充 RTL 转换。前端仍负责描述符和 scale 合法性检查；scale 是本项目的 binary32 约定。阵列的结果经原有 TMEM 端口逐次写入，最后写确认到达后 MMA 才退休。
 

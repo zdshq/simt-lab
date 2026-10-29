@@ -145,7 +145,8 @@ inline void CacheBench::drain() {
 }
 
 inline void CacheBench::clear() {
-    drain(); dut.invalidate_valid = 1; dut.eval();
+    drain(); dut.invalidate_valid = 1; dut.invalidate_all = 1; dut.eval();
     require(dut.invalidate_ready, "idle cache refused invalidation");
     step(); dut.invalidate_valid = 0; dut.eval();
+    drain();
 }

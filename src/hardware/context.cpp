@@ -24,11 +24,14 @@ uint64_t HardwareContext::reserve_local(uint64_t warps) {
 void HardwareContext::dump(std::ostream& out) const {
     const auto& dram = memory.dram_stats(); const auto& l2 = memory.l2_stats();
     out << "{\"cycles\":" << cycle() << ",\"dram_reads\":" << dram.reads << ",\"dram_writes\":" << dram.writes
-        << ",\"l2_hits\":" << l2.hits << ",\"l2_misses\":" << l2.sector_misses << ",\"l1\":[";
+        << ",\"l2_hits\":" << l2.hits << ",\"l2_misses\":" << l2.sector_misses
+        << ",\"cache_backend\":\"" << memory.l2_cache().name() << "\",\"l2_clocks\":" << memory.l2_cache().cycle()
+        << ",\"l1\":[";
     for (uint32_t sm = 0; sm < sms_; ++sm) {
         if (sm) out << ',';
         const auto& stats = memory.l1_stats(sm);
-        out << "{\"hits\":" << stats.hits << ",\"misses\":" << stats.sector_misses << '}';
+        out << "{\"hits\":" << stats.hits << ",\"misses\":" << stats.sector_misses
+            << ",\"backend\":\"" << memory.l1_cache(sm).name() << "\",\"clocks\":" << memory.l1_cache(sm).cycle() << '}';
     }
     out << "]}";
 }

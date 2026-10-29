@@ -2,7 +2,7 @@
 
 本阶段把三个关键结构写成 SystemVerilog，并完成 RTL 仿真、Yosys 综合和综合后网表的同一套行为验证。源码在 `rtl/`，C++ 对照平台在 `tests/rtl/`。这是真正的触发器、存储阵列、组合选择和握手状态描述，不是在 C++ 模拟器外套一层延迟。
 
-本页记录阶段 16 的首批三个结构。后续 [Tensor RTL](RTL_TENSOR.md) 已补充数值电路和 4×4 乘加阵列，并作为可选 [执行后端](RTL_BACKEND.md) 接入 ISA/TMEM 和主机 Graph。本页的缓存、scoreboard 与 bank 仲裁仍为独立验证模块，尚未替换整机对应的 C++ 单元。当前没有完整 RTL SM 或 FPGA bitstream，阶段 16 和整个硬件目标保持进行中。
+本页记录阶段 16 的首批三个结构。后续 [Tensor RTL](RTL_TENSOR.md) 已补充数值电路和 4×4 乘加阵列，并作为可选 [执行后端](RTL_BACKEND.md) 接入 ISA/TMEM 和主机 Graph。缓存还通过 [L1/L2 后端](RTL_CACHE_BACKEND.md) 接入实际访存与主机链路；scoreboard 与 bank 仲裁仍为独立验证模块。当前没有完整 RTL SM 或 FPGA bitstream，阶段 16 和整个硬件目标保持进行中。
 
 ## 已实现的电路
 
@@ -39,7 +39,7 @@ flowchart LR
 
 Yosys 对默认容量实际识别出 **2,048×256 = 524,288 存储位、一个读端口和一个写端口**。这是可进一步映射的存储描述，尚不是某家工艺的 SRAM macro，也没有映射到具体 FPGA 的 BRAM。
 
-控制元数据使用寄存器或后续映射为寄存器的数组。LRU rank 显式标记为触发器数组：一次命中/预约要比较并更新同组多个 way，不适合伪装成简单单端口 SRAM。完整 tag 不必每次清零才可使用，当前实现为了确定控制状态仍对元数据复位，综合面积包含这些逻辑。
+控制元数据使用寄存器或后续映射为寄存器的数组。LRU rank 显式标记为触发器数组：一次命中/预约要比较并更新同组多个 way，不适合伪装成简单单端口 SRAM。复位清除 line present、队列归属和 LRU rank；tag 与 sector valid 不复位，由 present 屏蔽旧内容，首次分配新行时设置 tag 并清除 sector valid。这样避免为每个 tag/valid 项增加独立复位写端口。
 
 ## 缺失、替换和端口时序
 
@@ -55,7 +55,7 @@ Yosys 对默认容量实际识别出 **2,048×256 = 524,288 存储位、一个�
 
 本 RTL 是一个请求入口和一个返回出口的 cache controller。fill 与新请求发生冲突时优先 fill，hit 经过同步 SRAM 的读取/返回状态后再进入响应仲裁。定向测试验证：请求在上升沿 N 接受，在 N+3 上升沿后首次拉高响应 valid，即测试平台的时钟计数增加 4；若 ready 为高，再下一个上升沿完成响应握手。
 
-**这个接口不是 C++ 默认四个 cache bank 请求端口的逐拍等价替换。** 当前对照证明数据、sector/tag、LRU、缺失合并和有界完成语义；RTL 有自己明确的端口时序。默认 RTL MSHR/响应容量也小于 C++ 默认配置，差分测试显式使用一致的容量参数。复制/分 bank 仲裁、完整层次连线和端到端 RTL SM 时序仍须后续实现。
+**这个接口不是 C++ 默认四个 cache bank 请求端口的逐拍等价替换。** 当前对照证明数据、sector/tag、LRU、缺失合并和有界完成语义；RTL 有自己明确的端口时序。默认 RTL MSHR/响应容量也小于 C++ 默认配置，差分测试显式使用一致的容量参数。单端口 L1/L2 已接入混合仿真；更多物理 bank、完整 RTL 层次连线和端到端 RTL SM 时序仍须后续实现。
 
 ## 写入、一致性和协议契约
 
@@ -67,10 +67,10 @@ Yosys 对默认容量实际识别出 **2,048×256 = 524,288 存储位、一个�
 - 调用方在 req_valid 为高但 req_ready 为低时保留请求，或者撤销尚未接受的请求；只有握手才产生副作用。
 - 每个在途请求使用独立 req_id；RTL 原样返回，不负责检测重复 ID。
 - 下游只返回已握手请求的有效 MSHR ID。写确认必须在字节确实提交后返回；测试中的下层内存在完成时才修改 backing bytes。
-- `invalidate_valid/ready` 只在全部 MSHR、响应槽和 hit 流水线排空后握手。等待失效期间暂停新请求，但旧事务仍可完成。
+- `invalidate_valid/ready` 增加整体/范围模式与首尾 sector 地址。整体要求完全排空，范围要求命中流水线空闲且无目标 MSHR。接受后每拍扫描一行；新请求暂停，旧事务继续，详见 [失效控制器](RTL_CACHE_BACKEND.md)。
 - reset 需要与外部内存端协调；当前测试验证已排空复位，不提供“复位后接受旧事务响应”的恢复协议。
 
-不同 sector 或不同 line 之间没有在这个模块内实现全 GPU 的内存排序。C++ `MemoryHierarchy` 的跨 SM 排空/失效协议不因这个 RTL 存在就自动成为 RTL 硬件，仍需在层次集成时实现。
+不同 sector 或不同 line 之间没有在这个模块内实现全 GPU 的内存排序。当前层次集成由 C++ `MemoryHierarchy` 协调跨 SM 排空/失效，缓存扫描由 RTL 执行；一致性协调器尚未成为 RTL。
 
 ## Scoreboard 与寄存器端口
 
@@ -86,7 +86,9 @@ bank 仲裁器支持 4 个请求者、4 个 bank，bank 映射为寄存器编号
 
 工具为 Verilator 4.038、Yosys 0.40（`a1bb0255d654ffd0d8503577274f24b349a42995`）及 Ubuntu 的 Berkeley ABC。工具位于项目忽略目录 `.tools/rtl`，没有使用 sudo 或修改系统库。
 
-2026-10-29，`artifacts/rtl-synth-final/` 的实际 generic-cell 统计：
+下表保留 2026-10-29 首次综合的历史结果。新增范围扫描和观测端口后，当前 2 KiB 缓存为 55,212 个 generic cells / 22,083 个触发器位，综合及 11 项网表检查位于 `artifacts/rtl-cache-integrated`。
+
+原 `artifacts/rtl-synth-final/` 的实际 generic-cell 统计：
 
 | 模块/配置 | 通用单元合计 | 其中触发器位 | 组合单元 |
 |---|---:|---:|---:|
@@ -123,7 +125,7 @@ python3 tools/rtl.py --build build-sanitize --out artifacts/rtl-sanitize-final
 
 `bootstrap_rtl.py` 从系统已配置的 APT 源获取固定版本包，解包到项目内，再构建固定 commit 的 Yosys；manifest 保留 deb 的 SHA-256。其他系统可自行安装相应工具，或设置 `SIMT_VERILATOR`、`SIMT_YOSYS`、`SIMT_BERKELEY_ABC`。外部 Yosys 的门级检查还需用 `--simcells` 指向相应发行版的 `simcells.v`。
 
-当前未指定 `--module` 时也执行后续 Tensor 增量，共 30 项检查；本页以下 14 项及 `rtl-*-final` 数值记录首批三个结构，Tensor 的独立产物和计数见 RTL_TENSOR.md。
+当前未指定 `--module` 时也执行后续 Tensor 增量，共 32 项检查（缓存 11、scoreboard 3、仲裁 2、Tensor 16）；本页以下 14 项及 `rtl-*-final` 数值记录首批三个结构，Tensor 的独立产物和计数见 RTL_TENSOR.md。
 
 三组共 **14 项 RTL 检查**：cache 9 项、scoreboard 3 项、bank 仲裁 2 项。覆盖实际缓存字节、独立 sector、MSHR/merge/response 容量、锁定 way、LRU、byte mask、写确认、反压字段稳定、高地址、精确 hit 流水线、乱序 fill，以及 360 个混合事务与 C++ 差分。scoreboard 包含 5,000 条随机命令，bank 仲裁包含 4,000 拍随机端口对照。64 KiB 配置另外复跑同样的 9 项 cache 检查，不能把重复运行当作新增场景。
 
@@ -131,6 +133,6 @@ python3 tools/rtl.py --build build-sanitize --out artifacts/rtl-sanitize-final
 
 普通运行生成 VCD 波形、完整构建/仿真日志及工具版本。源码 hash、参数化命令、存储 inventory、generic netlist、统计 JSON 和综合脚本都在产物目录。旧 Verilator 4.038 的 VCD runtime 使用会触发 UBSan 的非对齐访问；sanitizer 模式因此执行同一设计和对照平台但关闭波形，保留 ASan/UBSan 检测并启用 `halt_on_error`。最终该模式 14 项检查全部通过，无 sanitizer 报告。普通 RTL/门级运行仍生成波形，不通过关闭 alignment sanitizer 掩盖问题。
 
-本页原阶段软件回归为 20 套件、257 项检查，RTL 检查单独统计。后续 Tensor 数值电路/乘加阵列另增 16 项检查，当前 `rtl-check` 共 30 项，见 [RTL_TENSOR.md](RTL_TENSOR.md)。Tensor 与 ISA/TMEM 接入已另行验证；仍须完成其余 RTL 单元连接、真实显卡参数校准和最终审计，见 [HARDWARE_PLAN.md](HARDWARE_PLAN.md)。
+本页原阶段软件回归为 20 套件、257 项检查，RTL 检查单独统计。后续 Tensor 数值电路/乘加阵列另增 16 项检查，加上缓存新增两项后，当前 `rtl-check` 共 32 项，见 [RTL_TENSOR.md](RTL_TENSOR.md)。L1/L2 与 Tensor 的 ISA/主机接入已另行验证；仍须完成其余 RTL 单元连接、真实显卡参数校准和最终审计，见 [HARDWARE_PLAN.md](HARDWARE_PLAN.md)。
 
 工具机制参考 [Verilator 波形说明](https://veripool.org/guide/latest/faq.html) 与 [Yosys 综合与存储统计示例](https://yosyshq.readthedocs.io/projects/yosys/en/latest/getting_started/example_synth.html)；具体实现、版本差异和上述数值以本地命令及产物为证据。

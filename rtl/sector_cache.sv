@@ -38,8 +38,16 @@ module sector_cache #(
     input wire [MSHR_BITS-1:0] fill_id,
     input wire [255:0] fill_data,
     input wire invalidate_valid,
+    input wire invalidate_all,
+    input wire [ADDRESS_BITS-1:5] invalidate_first,
+    input wire [ADDRESS_BITS-1:5] invalidate_last,
     output wire invalidate_ready,
+    output reg invalidate_busy,
+    output reg invalidate_done,
     output wire idle,
+    output wire event_line_miss, event_read_fill,
+    output wire [MSHRS-1:0] active_misses,
+    output wire reject_response, reject_mshr, reject_reservation,
     output reg [63:0] hits,
     output reg [63:0] misses,
     output reg [63:0] merges,
@@ -77,7 +85,10 @@ module sector_cache #(
     integer ready_response, next_memory, merge_count, locked, best_rank;
     integer lookup_way, lookup_miss, lookup_response, lookup_offset, lookup_candidate;
     integer lookup_index, select_response, select_memory;
-    integer update_line, update_miss, update_response, update_way;
+    integer update_line, update_miss, update_response, invalidate_sector, invalidate_miss;
+    reg [LINE_BITS-1:0] invalidate_cursor;
+    reg [ADDRESS_BITS-1:5] first_sector, last_sector;
+    reg clear_all, invalidate_conflict;
     wire [TAG_BITS-1:0] tag = req_address[ADDRESS_BITS-1:5+SECTOR_BITS];
     wire [SECTOR_BITS-1:0] sector = req_address[5+:SECTOR_BITS];
     wire cache_hit = match_line >= 0 && valid[match_line][sector];
@@ -129,15 +140,55 @@ module sector_cache #(
         end
     end
 
-    assign req_ready = !reset && !invalidate_valid && !fill_valid && state == LOOKUP && free_response >= 0 &&
+    assign req_ready = !reset && !invalidate_valid && !invalidate_busy && !fill_valid && state == LOOKUP && free_response >= 0 &&
         (same_miss >= 0 ? (!req_write && !store[same_miss] && merge_count < MERGE_LIMIT) :
          ((!req_write && cache_hit) || (free_miss >= 0 && (req_write || match_line >= 0 || chosen_line >= 0))));
     assign fill_ready = !reset && occupied[fill_id] && sent[fill_id];
-    assign idle = occupied == 0 && response_used == 0 && state == LOOKUP && !mem_valid;
-    assign invalidate_ready = !reset && idle;
+    assign idle = occupied == 0 && response_used == 0 && state == LOOKUP && !mem_valid && !invalidate_busy;
+    assign invalidate_ready = !reset && !invalidate_busy && state == LOOKUP &&
+                              (invalidate_all ? idle : !invalidate_conflict);
     assign rsp_valid = response_present;
     assign rsp_id = response_id[response_head];
     assign rsp_data = response_data[response_head];
+    assign event_line_miss = accept && !req_write && same_miss < 0 && match_line < 0;
+    assign event_read_fill = fill_accept && !store[fill_id];
+    assign active_misses = occupied;
+    wire lookup_available = !reset && !invalidate_valid && !invalidate_busy && !fill_valid && state == LOOKUP;
+    assign reject_response = lookup_available && free_response < 0;
+    assign reject_mshr = lookup_available && free_response >= 0 && (same_miss >= 0 || free_miss < 0);
+    assign reject_reservation = lookup_available && free_response >= 0 && same_miss < 0 && free_miss >= 0;
+
+    // Range commands may coexist with unrelated fills but cannot race the sectors they invalidate.
+    // 范围命令可与无关填充并行，但不能与目标 sector 的填充竞争。
+    always @* begin
+        invalidate_conflict = 0;
+        for (invalidate_miss = 0; invalidate_miss < MSHRS; invalidate_miss = invalidate_miss+1)
+            if (occupied[invalidate_miss] && address[invalidate_miss][ADDRESS_BITS-1:5] >= invalidate_first &&
+                address[invalidate_miss][ADDRESS_BITS-1:5] <= invalidate_last) invalidate_conflict = 1;
+    end
+
+    // A single metadata scan visits one line each clock; data SRAM is never cleared or bypassed.
+    // 单个元数据扫描器每拍访问一行，不清零或绕过数据 SRAM。
+    task service_invalidation;
+        begin
+            invalidate_done <= 0;
+            if (invalidate_valid && invalidate_ready) begin
+                invalidate_busy <= 1; invalidate_cursor <= 0;
+                clear_all <= invalidate_all; first_sector <= invalidate_first; last_sector <= invalidate_last;
+            end
+            if (invalidate_busy) begin
+                if (clear_all) present[invalidate_cursor] <= 0;
+                for (invalidate_sector = 0; invalidate_sector < SECTORS; invalidate_sector = invalidate_sector+1)
+                    if (clear_all || (present[invalidate_cursor] &&
+                        {tags[invalidate_cursor], SECTOR_BITS'(invalidate_sector)} >= first_sector &&
+                        {tags[invalidate_cursor], SECTOR_BITS'(invalidate_sector)} <= last_sector))
+                        valid[invalidate_cursor][invalidate_sector] <= 0;
+                if (invalidate_cursor == LINE_BITS'(LINES-1)) begin
+                    invalidate_busy <= 0; invalidate_done <= 1;
+                end else invalidate_cursor <= invalidate_cursor+1'b1;
+            end
+        end
+    endtask
 
     // Registered selections hold all response and downstream fields stable under backpressure.
     // 寄存选择在反压期间保持所有响应和下游字段稳定。
@@ -210,17 +261,19 @@ module sector_cache #(
         end
     endtask
 
-    // Reset clears ownership and validity, while data SRAM remains unreset.
-    // 复位清除归属和有效状态，数据 SRAM 不复位。
+    // Present bits hide old metadata; allocating a new line initializes its tag and sector validity.
+    // present 位屏蔽旧元数据；分配新行时初始化其 tag 和 sector 有效位。
     always @(posedge clk) begin
         if (reset) begin
+            invalidate_busy <= 0; invalidate_done <= 0; invalidate_cursor <= 0;
+            clear_all <= 0; first_sector <= 0; last_sector <= 0;
             present <= 0; occupied <= 0; sent <= 0; store <= 0; has_line <= 0;
             response_used <= 0; response_done <= 0; response_present <= 0; response_head <= 0; response_cursor <= 0;
             state <= LOOKUP; read_slot <= 0; mem_valid <= 0; memory_cursor <= 0;
             mem_address <= 0; mem_write <= 0; mem_data <= 0; mem_mask <= 0; mem_id <= 0;
             hits <= 0; misses <= 0; merges <= 0; evictions <= 0;
             for (update_line = 0; update_line < LINES; update_line = update_line+1) begin
-                tags[update_line] <= 0; valid[update_line] <= 0; rank[update_line] <= RANK_BITS'(update_line%WAYS);
+                rank[update_line] <= RANK_BITS'(update_line%WAYS);
             end
             for (update_miss = 0; update_miss < MSHRS; update_miss = update_miss+1) begin
                 address[update_miss] <= 0; payload[update_miss] <= 0; byte_mask[update_miss] <= 0;
@@ -230,10 +283,7 @@ module sector_cache #(
                 response_id[update_response] <= 0; response_data[update_response] <= 0;
             end
         end else begin
-            if (invalidate_valid && invalidate_ready) begin
-                present <= 0;
-                for (update_way = 0; update_way < LINES; update_way = update_way+1) valid[update_way] <= 0;
-            end
+            service_invalidation();
             if (accept) accept_request();
             if (fill_accept) accept_fill();
             if (state == READ_WAIT) state <= READ_RETURN;

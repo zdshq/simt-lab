@@ -218,3 +218,21 @@
 - `python3 examples/run_workloads.py --build build-rtl --timing --tensor-rtl --out artifacts/rtl-integrated` 四类完整负载通过；GEMM 2253 模型周期、1536 次 RTL 有效乘积，Transformer 5671 周期、2304 次。`python3 examples/hardware_host.py --build build-rtl --tensor-rtl --out artifacts/rtl-host` 每类两次 Graph 重放通过，GEMM/Transformer kernel 为 2241/5655 周期，输出误差约 2.98e-7/1.07e-7；二者初始缓存状态不同。
 - 实际完成 RTL Graph GEMM 的设备保持存活时，原版 `/usr/bin/nvidia-smi` 经专用启动器显示名称和实际 64/7/57 MiB，退出后无设备；系统默认仍为 RTX 4070 SUPER。输出在 `artifacts/rtl-integrated/nvidia-smi-status.txt`，未宣称 CUDA/PCIe 枚举或默认视图合并。
 - 新增 `RTL_BACKEND.md`，同步 README、硬件来源、计划、Tensor/主机/RTL/验证文档。保持短函数、入口只调函数、相邻英中注释，没有样式计数测试。完整目标仍 active：其余 RTL 单元与整个 SM/存储层次连接、真实显卡参数校准、PTX 异步矩阵协议、系统默认 SMI 合并及最终逐项审计尚未完成。
+
+## 阶段 16 第四部分：L1/L2 RTL 接入持久执行层次（2026-10-29）
+
+- 接续干净的 `c744553`，继续 coding-standards。新增 `CachePort` 与 `SIMT_CACHE_RTL`，每 SM 实例化 64 KiB、4 路 L1，全设备共享 256 KiB、8 路 L2。CLI `--cache-rtl` 与 Python `cache_rtl=True` 要求 timing；不支持的构建和非默认几何配置明确拒绝，不回退或静默忽略配置。
+- 缓存 tag/data、MSHR、合并返回和替换实际经过 `sector_cache.sv` / `sector_sram.sv`。适配器只保留一个入口、四个下游票据、一个 fill 与八个未消费响应；ID 在用户取回响应后复用，没有 C++ 影子 tag/data。`tick()` 含首次复位也只推进一个边沿，提交、取回和查询无隐藏时钟。
+- 新增 RTL 范围失效控制器：首尾 sector、模式、游标、busy/done，每拍扫描一行；L1/L2 分别 512/2048 拍。目标在途 MSHR 阻止失效，无关 fill 可继续；同一行的非目标 sector 同拍 fill 与目标失效有专门验证。C++ 维护队列上限 64，各缓存先统一预检，避免部分修改分配状态。
+- 主机上传下载、普通访问、local、原子、DMA 与 Tensor 供数复用所选真实缓存层次。跨 SM 写入依然由 C++ 一致性协议排空较早读取、预约 L1 失效、绕过 L1 写穿 L2，并阻止较新读取越过维护。DRAM、维护队列、原子 ALU 和整个一致性控制器尚非 RTL。
+- 内核快照新增实际后端、绝对缓存时钟、几何和端口容量；hit/miss/merge/eviction 来自硬件寄存器，line miss/fill bytes 来自电路事件。适配器统计反压，不依据算例规模伪造缓存事件。缓存时钟与持久设备时钟逐拍一致。
+- 新增 2 项后端选择、5 项 C++ 桥接/层次检查；在新后端复用 61 项存储/DMA/Tensor 和 35 项主机/Graph 契约。定向覆盖八个未消费响应、80 次 ID 复用、无隐藏时钟、真实 SRAM 命中、维护队列、两 SM 一致性、160 次独立字节参考混合访问。原最大 32×32×256 矩阵与全部数值断言保留。
+- 实际构建默认 Debug 与 `build-cache-rtl` Release（同时启用 Tensor/Cache RTL）。`ctest --test-dir build --output-on-failure -j6` 通过 22 套件 / 261 项；`ctest --test-dir build-cache-rtl --output-on-failure -j6` 通过 28 套件 / 421 项（368 Python、53 C++）。这些数字包括后端复跑，不等于新增独立场景数。
+- `build-cache-sanitize` 对适配器和所有生成电路插桩。`UBSAN_OPTIONS=halt_on_error=1 ctest --test-dir build-cache-sanitize --output-on-failure -j3` 首次其余 27 套件通过，最大矩阵超出 60 秒进程限制；仅把缓存 RTL 执行限时设为 180 秒后，61 项通过，139.05 秒。最终复位优化后重建两种 RTL 构建，并以 `-R '^(cache_backend_selection|rtl_cache_engine|rtl_cache_execution|rtl_cache_host)$'` 重跑受影响四套件，全部通过；sanitizer 最终执行套件 139.22 秒，无检测报告。
+- 新诊断输出的向量位依赖触发旧 Verilator 组合环误报，改为独立标量输出后通过，未禁用警告或 `check -assert`。完整 L2 复位循环需提高 Verilator `--unroll-stmts` 到 100000，实际两套构建成功。删除冗余 tag/valid 复位，以已有 present 位保护旧元数据，新分配仍初始化；带旧数据的复位行为重新验证。
+- `python3 tools/rtl.py --out artifacts/rtl-cache-all` 通过当前全部 32 项独立 RTL 检查；缓存新增范围维护两项后共 11 项。`--module cache` 的 RTL、`--synth`、`--gate-sim` 在 `artifacts/rtl-cache-integrated` 均通过；`--build build-cache-sanitize --module cache --out artifacts/rtl-cache-integrated-sanitize` 同样 11 项通过，无 sanitizer 报告。64 KiB 参数的同样 11 项也通过。
+- 小配置综合实际为 55,212 generic cells / 22,083 触发器位，比去除冗余复位前少 96 个组合单元；不是等效 NAND2 门数。`--module cache --sets 128 --synth --infer-only --out artifacts/rtl-cache-integrated-full` 通过，识别 524,288 个 SRAM 数据位、单读/单写；tag 写端口降至 1、valid 为 2。最终七份仿真/综合/网表清单的源码哈希匹配当前文件，小配置网表哈希匹配。
+- 256 KiB L2 的 `--sets 256 --ways 8 --synth --infer-only` 首次超过 600 秒；修改复位后第二次仍超过限制，最后在 Yosys `OPT_CLEAN`。工具改为实时保存输出，第二次超时前的日志位于 `artifacts/rtl-l2-integrated-inference/cache/synthesis.log`。没有把超时当作成功或用已通过的 L2 Verilator 执行替代综合结果；L2 综合性能问题仍待解决。
+- 最终 `python3 examples/hardware_host.py --build build-cache-rtl --tensor-rtl --cache-rtl --out artifacts/rtl-cache-host` 四类负载各两次 Graph 重放通过。冷/热只读分别 40/18 模型周期且热读取无新增 DRAM 请求；GEMM 96 输出最大误差约 2.98e-7，Transformer 32 输出约 1.07e-7。两种后端身份、机器码、下载值和统计均保存，不作为 4070 SUPER 性能预测。
+- 实际完成两级缓存和 Tensor RTL GEMM 的活会话经原版 nvidia-smi 显示模拟器及 64/7/57 MiB，关闭后无设备；系统默认仍显示真实 4070 SUPER。记录在 `artifacts/rtl-cache-host/nvidia-smi-status.txt`，没有 CUDA/PCIe 枚举或默认合并结论。
+- 新增 `RTL_CACHE_BACKEND.md` 并同步架构、来源、计划及验证文档。当前是 CPU 上运行的混合仿真，非 NVIDIA 内部电路复刻。L2 综合、其余 SM 单元的 RTL 接入、整机连接、实卡校准、PTX 异步矩阵协议、系统默认 SMI 视图合并及最终审计仍未完成，完整目标继续 active。

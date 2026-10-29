@@ -1,5 +1,6 @@
 #include "simt/device.hpp"
 #include "simt/tensor_engine.hpp"
+#include "simt/cache_engine.hpp"
 #include <sstream>
 #include <stdexcept>
 
@@ -64,7 +65,9 @@ std::string Device::stats_json() const {
         << ",\"copy\":" << copy_.value_or(0) << ",\"dropped_trace\":" << dropped_trace_
         << ",\"mode\":\"" << (hardware_ ? "timing" : "functional") << "\",\"tensor_backend\":\""
         << (hardware_ ? (tensor_rtl_ ? "rtl" : "model") : "functional")
-        << "\",\"tensor_rtl_available\":" << (hw::tensor_rtl_available() ? "true" : "false") << ",\"hardware\":";
+        << "\",\"tensor_rtl_available\":" << (hw::tensor_rtl_available() ? "true" : "false")
+        << ",\"cache_backend\":\"" << (hardware_ ? (cache_rtl_ ? "rtl" : "model") : "functional")
+        << "\",\"cache_rtl_available\":" << (hw::cache_rtl_available() ? "true" : "false") << ",\"hardware\":";
     if (hardware_) hardware_->dump(out); else out << "null";
     out << '}';
     return out.str();

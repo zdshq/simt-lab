@@ -28,8 +28,11 @@ TimingMachine::TimingMachine(Machine& machine, std::shared_ptr<hw::HardwareConte
     if (!probe.acquire(0, config.threads, config.cta_shared_bytes))
         throw std::runtime_error("kernel_exceeds_sm_resources");
     hw::HierarchyConfig memory_config; memory_config.sms = config.sms; memory_config.atomic = config.atomic;
+    memory_config.cache_rtl = config.cache_rtl;
     if (!hardware_) hardware_ = std::make_shared<hw::HardwareContext>(*machine.global_, memory_config);
     if (hardware_->sms() != config.sms) throw std::runtime_error("hardware_sm_count_mismatch");
+    if ((hardware_->memory.l2_cache().name() == "rtl") != config.cache_rtl)
+        throw std::runtime_error("hardware_cache_backend_mismatch");
     memory_ = &hardware_->memory;
     owner_ = hardware_->new_owner(); local_base_ = hardware_->reserve_local(uint64_t{config.blocks} * 32);
     started_ = cycle_ = hardware_->cycle();

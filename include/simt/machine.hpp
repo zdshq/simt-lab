@@ -39,7 +39,7 @@ struct Config {
     uint64_t max_steps = 1000000;
     Policy policy = Policy::round_robin;
     Policy warp_policy = Policy::round_robin;
-    bool timing = false, hardware_trace = false;
+    bool timing = false, hardware_trace = false, cache_rtl = false;
     uint64_t max_cycles = 100000000;
     uint32_t cta_shared_bytes = 65536;
     hw::PipelineConfig pipeline;

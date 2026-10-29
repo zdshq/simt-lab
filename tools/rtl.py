@@ -41,12 +41,17 @@ def environment():
 # Keep complete diagnostics on disk and expose failures instead of silently skipping unavailable tools.
 # 将完整诊断保存在磁盘，并报告失败，不静默跳过缺失工具。
 def run(command, destination, name, env=None):
-    result = subprocess.run(command, cwd=destination, env=env, text=True, stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT, timeout=600)
-    (destination/f'{name}.log').write_text(result.stdout)
+    path = destination/f'{name}.log'
+    with path.open('w') as output:
+        try:
+            result = subprocess.run(command, cwd=destination, env=env, text=True, stdout=output,
+                                    stderr=subprocess.STDOUT, timeout=600)
+        except subprocess.TimeoutExpired as error:
+            raise RuntimeError(f'{name} timed out; partial diagnostics: {path}') from error
+    report = path.read_text()
     if result.returncode:
-        raise RuntimeError(f'{name} failed ({result.returncode}):\n{result.stdout[-6000:]}')
-    return result.stdout
+        raise RuntimeError(f'{name} failed ({result.returncode}):\n{report[-6000:]}')
+    return report
 
 
 def source_hashes(paths):
@@ -58,6 +63,8 @@ def compiler_flags(options):
     libraries = ' '.join(str(options.build/name) for name in ('libsimt_core.a', 'libsimt_hardware.a', 'libsimt_storage.a'))
     if 'SIMT_TENSOR_RTL:BOOL=ON' in (options.build/'CMakeCache.txt').read_text():
         libraries += ' '+str(options.build/'libsimt_tensor_circuit.a')
+    if 'SIMT_CACHE_RTL:BOOL=ON' in (options.build/'CMakeCache.txt').read_text():
+        libraries += ' '+str(options.build/'libsimt_cache_circuit.a')
     if sanitized(options):
         includes += ' -fsanitize=address,undefined -fno-omit-frame-pointer'
         libraries += ' -fsanitize=address,undefined'
@@ -129,7 +136,7 @@ def synthesis(options, name):
     destination = options.out/name
     destination.mkdir(parents=True, exist_ok=True)
     lines = ['read_verilog -sv '+' '.join(yosys_string(ROOT/'rtl'/file) for file in files)]
-    if name == 'cache': lines.append(f'chparam -set SETS {options.sets} {top}')
+    if name == 'cache': lines.append(f'chparam -set SETS {options.sets} -set WAYS {options.ways} {top}')
     lines += [f'synth -top {top} -run begin:fine', 'check -assert',
               'write_json inferred.json', 'tee -o inferred-stat.json stat -json']
     if not options.infer_only:
@@ -178,6 +185,7 @@ def parse_options():
     parser.add_argument('--out', type=Path, default=ROOT/'artifacts/rtl')
     parser.add_argument('--module', choices=tuple(MODULES)+('all',), default='all')
     parser.add_argument('--sets', type=int, default=4)
+    parser.add_argument('--ways', type=int, choices=(4, 8), default=4)
     parser.add_argument('--jobs', type=int, default=4)
     parser.add_argument('--synth', action='store_true')
     parser.add_argument('--infer-only', action='store_true')
@@ -186,8 +194,11 @@ def parse_options():
     options = parser.parse_args()
     options.build, options.out = options.build.resolve(), options.out.resolve()
     options.simcells = options.simcells.resolve()
-    if options.sets < 2 or options.sets > 128 or options.sets & (options.sets-1):
-        parser.error('--sets must be a power of two in [2, 128]')
+    if options.sets < 2 or options.sets > 256 or options.sets & (options.sets-1):
+        parser.error('--sets must be a power of two in [2, 256]')
+    if options.ways != 4 and not (options.module == 'cache' and options.synth and options.infer_only):
+        parser.error('--ways 8 is supported for cache storage inference; full L2 execution is checked by CTest')
+    if options.infer_only and not options.synth: parser.error('--infer-only requires --synth')
     if options.gate_sim and options.synth: parser.error('--gate-sim and --synth are separate steps')
     return options
 

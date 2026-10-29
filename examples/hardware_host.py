@@ -66,8 +66,12 @@ def run_workload(device, factory, destination):
         backends = {item['backend'] for item in kernel['hardware']['tensor']}
         if backends != {device.properties['tensor_backend']}:
             raise AssertionError('unexpected_tensor_backend')
+        caches = kernel['hardware']['l1']+[kernel['hardware']['l2']]
+        if {item['backend'] for item in caches} != {device.properties['cache_backend']}:
+            raise AssertionError('unexpected_cache_backend')
         record.update(replay=replay, device_cycles=device.stats()['ticks']-before,
-                      kernel_cycles=kernel['hardware']['cycles'], tensor_backends=sorted(backends))
+                      kernel_cycles=kernel['hardware']['cycles'], tensor_backends=sorted(backends),
+                      cache_backend=device.properties['cache_backend'])
         (destination/f'output-{replay}.bin').write_bytes(data)
         save_json(destination/f'kernel-{replay}.json', kernel)
         records.append(record)
@@ -96,7 +100,8 @@ def run_demo(options):
     from simt_lab.workloads import vector_add, reduction, gemm
     from simt_lab.transformer import tiny_transformer
     options.out.mkdir(parents=True, exist_ok=True)
-    with Device(options.build/'simt-device', timing=True, hardware_trace=True, tensor_rtl=options.tensor_rtl) as device:
+    with Device(options.build/'simt-device', timing=True, hardware_trace=True,
+                tensor_rtl=options.tensor_rtl, cache_rtl=options.cache_rtl) as device:
         summary = {'cache_reuse': cache_reuse(device), 'workloads': []}
         for factory in (vector_add, reduction, gemm, tiny_transformer):
             summary['workloads'].append(run_workload(device, factory, options.out/factory.__name__))
@@ -111,6 +116,7 @@ def parse_options():
     parser.add_argument('--build', type=Path, default=ROOT/'build')
     parser.add_argument('--out', type=Path, default=ROOT/'artifacts'/'hardware-host')
     parser.add_argument('--tensor-rtl', action='store_true')
+    parser.add_argument('--cache-rtl', action='store_true')
     return parser.parse_args()
 
 

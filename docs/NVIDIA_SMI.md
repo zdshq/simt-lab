@@ -32,6 +32,8 @@ SIMT Lab 2 SM (simulator), 64 MiB, 7 MiB, 57 MiB
 
 已构建 [Tensor RTL 后端](RTL_BACKEND.md) 时，终端一可用 `python3 examples/nvml_device.py --build build-rtl --timing --tensor-rtl --seconds 120`，终端二用 `python3 tools/simt_smi.py --build build-rtl -L`。另已对实际完成 RTL Graph GEMM 的会话验证枚举、7 MiB 活分配和退出后消失，原始输出保存在 `artifacts/rtl-integrated/nvidia-smi-status.txt`。
 
+缓存与 Tensor 联合 RTL 构建可改为 `--build build-cache-rtl --timing --tensor-rtl --cache-rtl`，查询命令也选 `--build build-cache-rtl`。对实际经过两级缓存和 Tensor 电路的 Graph GEMM 已重复验证相同行为，证据在 `artifacts/rtl-cache-host/nvidia-smi-status.txt`；没有扩大为系统默认枚举或 CUDA 支持。
+
 ## 接入的实际含义
 
 ```mermaid
@@ -47,7 +49,7 @@ flowchart LR
 - 多个模拟器会话可以同时枚举。独立 lifetime lock 判断进程存活；正常退出删除记录，SIGKILL 后即使文件残留也不再显示。
 - 当前默认表格的进程列表未接入模拟 kernel 归属；不能把它解释为已实现 CUDA 进程监控或 GPU 利用率采样。
 
-直接执行系统 `nvidia-smi`，仍只查询原来的 NVIDIA 后端，当前返回 RTX 4070 SUPER。专用启动方式的视图只列模拟会话，**尚未将真实 GPU 和模拟器合并到系统默认视图**。用户对此方式尚未回复，当前按此前说明的专用启动方式推进；整个硬件目标仍未完成。
+直接执行系统 `nvidia-smi`，仍只查询原来的 NVIDIA 后端，当前返回 RTX 4070 SUPER。专用启动方式的视图只列模拟会话，**尚未将真实 GPU 和模拟器合并到系统默认视图**。默认视图合并仍是未完成事项；整个硬件目标仍未完成。
 
 ## ABI 与版本约束
 

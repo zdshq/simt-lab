@@ -24,7 +24,7 @@ flowchart LR
 
 ## L1 到底由什么实现
 
-当前 C++ 模型明确包含以下硬件结构的状态。另有独立可综合的 [sector 缓存 RTL](RTL.md)，实现实际数据阵列、tag/valid、MSHR、LRU 和有界响应；尚未替换这里的 C++ 存储层次，端口数量和时序也不能直接等同。
+当前 C++ 模型明确包含以下硬件结构的状态。另有可综合的 [sector 缓存 RTL](RTL.md)，实现实际数据阵列、tag/valid、MSHR、LRU、有界响应及逐拍失效扫描；已通过可选 [L1/L2 RTL 后端](RTL_CACHE_BACKEND.md) 接入这里的存储层次。单请求端口和较小缺失队列与下面 C++ 模型的端口及时间不能直接等同。
 
 1. **tag 阵列**：按 `(address / line_bytes) % set_count` 选组，同组比较所有 way 的 tag。默认 L1 为 64 KiB、128 B/line、4-way，共 128 组。这是可配置研究参数，未声称恢复 NVIDIA 的真实地址 hash。
 2. **data 阵列**：每个 way 保存一整行的实际字节。128 B 行分成四个 32 B sector，分别保存有效位；tag 命中而目标 sector 无效，仍需向下游取数。

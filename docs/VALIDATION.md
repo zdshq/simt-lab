@@ -4,6 +4,8 @@
 
 最新 Tensor RTL 接入后：默认 Debug 为 21 套件、259 项；RTL Release 与 ASan/UBSan 为 24 套件、318 项（270 Python、48 C++）。其中后端复用的检查不计作新增独立场景，详细执行结果见本页“Tensor RTL 执行后端”及 [RTL_BACKEND.md](RTL_BACKEND.md)。
 
+后续 L1/L2 RTL 接入：默认 Debug 为 22 套件、261 项；缓存+Tensor RTL 构建为 28 套件、421 项（368 Python、53 C++）。缓存增加两项失效检查后，独立 RTL 总数为 32。细节见“L1/L2 RTL 执行后端”和 [RTL_CACHE_BACKEND.md](RTL_CACHE_BACKEND.md)；前面阶段数字保留为历史记录。
+
 验收日期：2026-10-29。环境：Linux、GCC 11.4、CMake 3.22、Python 3.13.5。基础构建要求 C++20、CMake 3.20+ 和 Python 3.10+；可选 RTL 构建还需 Verilator，综合需 Yosys/ABC。
 
 ## 阶段 0–10 实际执行结果
@@ -121,6 +123,28 @@ Verilator 4.038 和 Yosys 0.40 的实际产物、命令及源码哈希保存在 
 失败测试还验证了时钟统计范围：故障后私有计算单元冻结，存储请求继续排空，因此失败快照的阵列拍数可以小于 kernel 生命周期。正常执行/完成时两者相等。未将测试中的错误时钟假设改写成虚假的电路计数。
 
 事件端口加入后的当前综合统计为 PE 13,090 / 794、完整阵列 217,928 / 16,636（generic cells / 触发器位），替代上一小节历史数值。没有整 GPU 面积或工艺频率结论。
+
+## 阶段 16：L1/L2 RTL 执行后端
+
+`SIMT_CACHE_RTL=ON` 构建及 `--cache-rtl` / Python `cache_rtl=True` 接入每 SM 64 KiB L1 和共享 256 KiB L2。tag/data/MSHR/响应/失效扫描由实际电路执行；适配器只持有有限请求/响应票据，无影子缓存。读取返回值来自 SRAM，普通写入、local、原子、DMA、Tensor 和主机拷贝复用该层次。DRAM 与跨 SM 一致性协调仍为 C++。
+
+| 验收 | 结果 |
+|---|---|
+| 默认 Debug | `ctest --test-dir build --output-on-failure -j6`，22 套件 / 261 项通过 |
+| 缓存+Tensor RTL Release | `ctest --test-dir build-cache-rtl --output-on-failure -j6`，28 套件 / 421 项通过 |
+| RTL ASan/UBSan | 使用 `UBSAN_OPTIONS=halt_on_error=1`，首轮 27 套件通过，最大矩阵超过 60 秒；保留算例并设 180 秒后，`rtl_cache_execution` 的 61 项重跑通过（139.05 秒），全部套件均有通过证据 |
+| 接入检查 | 2 项后端选择、5 项 C++ 适配器/层次检查；61 项存储/DMA/Tensor 契约与 35 项主机/Graph 契约在新后端复跑 |
+| 独立 RTL | `artifacts/rtl-cache-all/simulation.json` 包含 32 项；缓存 11 项在普通仿真、sanitizer 和实际综合后网表通过；64 KiB 参数也执行相同 11 项 |
+| 完整负载 | `examples/hardware_host.py --build build-cache-rtl --tensor-rtl --cache-rtl --out artifacts/rtl-cache-host` 四类负载各重放两次，GEMM 96 输出与 Transformer 32 输出通过原数值阈值 |
+| 活设备监控 | 原版 nvidia-smi 经项目后端查询实际 RTL GEMM 会话，显示 64/7/57 MiB，关闭后无设备；系统默认仍显示真实 4070 SUPER |
+
+最终删除冗余 tag/valid 复位后，重新构建 Release 与 sanitizer，并执行 `ctest --test-dir <build> --output-on-failure -R '^(cache_backend_selection|rtl_cache_engine|rtl_cache_execution|rtl_cache_host)$'`，受影响四套件全部通过。sanitizer 使用 `UBSAN_OPTIONS=halt_on_error=1`，最终 61 项执行检查耗时 139.22 秒，无检测报告。此前全套检查与这次受影响复跑分开记录，没有宣称一次完整 sanitizer 执行从未超时。
+
+最终源码的 32 项独立 RTL、11 项缓存 sanitizer、11 项缓存综合网表以及 64 KiB 配置的相同 11 项检查均通过。2 KiB 小配置综合为 55,212 个 generic cells / 22,083 个触发器位；64 KiB 保留存储综合识别出 524,288 个数据位、单读/单写端口，以及 tag 单写端口、valid 双写端口。相关 `simulation.json` / `synthesis.json` / `gate.json` 的源码哈希与当前文件一致；小配置网表哈希也匹配。
+
+256 KiB、8 路 L2 保留存储综合两次超过 600 秒，第二次在上述复位优化后仍停留于 Yosys `OPT_CLEAN`，日志保留在 `artifacts/rtl-l2-integrated-inference/cache/synthesis.log`。未取得 L2 综合通过证据；完整 L2 的功能和时钟验证来自实际 Verilator 集成执行，不能与综合完成混为一谈。
+
+失效检查覆盖精确的一行/拍扫描、非目标 sector 保留、目标 MSHR 拒绝失效、同一行的无关 fill 与失效同拍，以及主机范围清零前的在途访问排斥。新增诊断向量曾触发旧 Verilator 的位依赖误报，拆为标量输出后通过，未关闭组合环检查。
 
 ## 明确边界
 

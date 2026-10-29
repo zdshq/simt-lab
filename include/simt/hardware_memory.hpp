@@ -4,6 +4,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <string_view>
 #include <vector>
 
 namespace simt::hw {
@@ -25,7 +26,7 @@ public:
     virtual ~SectorPort() = default;
     virtual std::optional<Ticket> submit(const Packet& packet) = 0;
     virtual void tick() = 0;
-    std::optional<Sector> take(Ticket ticket);
+    virtual std::optional<Sector> take(Ticket ticket);
     uint64_t cycle() const { return cycle_; }
     size_t outstanding() const { return responses_.size(); }
 protected:
@@ -91,17 +92,33 @@ struct MissEntry {
     std::optional<Sector> returned;
 };
 
+// Cache backends share transport and coherence operations, not shadow tag or data arrays.
+// 缓存后端共享传输与一致性操作接口，不共享影子 tag 或数据阵列。
+class CachePort : public SectorPort {
+public:
+    virtual void invalidate() = 0;
+    virtual void check_invalidation(uint64_t address, uint64_t size) const = 0;
+    virtual void invalidate_range(uint64_t address, uint64_t size) = 0;
+    virtual const CacheStats& stats() const = 0;
+    virtual const CacheConfig& config() const = 0;
+    virtual size_t miss_count() const = 0;
+    virtual std::string_view name() const = 0;
+};
+
 // Sector valid bits, actual data arrays, locked victims, and merged misses are architectural state.
 // sector 有效位、真实数据阵列、被锁定替换行和合并未命中均为模型状态。
-class SectorCache final : public SectorPort {
+class SectorCache final : public CachePort {
 public:
     SectorCache(SectorPort& lower, CacheConfig config = {});
     std::optional<Ticket> submit(const Packet& packet) override;
     void tick() override;
-    void invalidate();
-    void invalidate_range(uint64_t address, uint64_t size);
-    const CacheStats& stats() const { return stats_; }
-    size_t miss_count() const { return misses_.size(); }
+    void invalidate() override;
+    void check_invalidation(uint64_t address, uint64_t size) const override;
+    void invalidate_range(uint64_t address, uint64_t size) override;
+    const CacheStats& stats() const override { return stats_; }
+    const CacheConfig& config() const override { return config_; }
+    size_t miss_count() const override { return misses_.size(); }
+    std::string_view name() const override { return "model"; }
 private:
     SectorPort& lower_;
     CacheConfig config_;
@@ -149,6 +166,7 @@ struct HierarchyConfig {
     CacheConfig l2{262144, 128, 8, 8, 12, 32, 32, 256};
     DramConfig dram;
     AtomicConfig atomic;
+    bool cache_rtl = false;
 };
 struct SectorFlight { size_t index; Ticket ticket; };
 struct WarpRequest {
@@ -178,15 +196,17 @@ public:
     bool drain_owner(uint64_t owner);
     uint64_t cycle() const { return dram_.cycle(); }
     const CacheStats& l1_stats(uint32_t sm) const;
-    const CacheStats& l2_stats() const { return l2_.stats(); }
+    const CacheStats& l2_stats() const { return l2_->stats(); }
+    const CachePort& l1_cache(uint32_t sm) const;
+    const CachePort& l2_cache() const { return *l2_; }
     const DramStats& dram_stats() const { return dram_.stats(); }
     const AtomicStats& atomic_stats() const;
 private:
     MemoryBacking& memory_;
     HierarchyConfig config_;
     Dram dram_;
-    SectorCache l2_;
-    std::vector<std::unique_ptr<SectorCache>> l1_;
+    std::unique_ptr<CachePort> l2_;
+    std::vector<std::unique_ptr<CachePort>> l1_;
     std::unique_ptr<GlobalAtomics> atomics_;
     Ticket next_ = 1;
     std::map<Ticket, WarpRequest> requests_;

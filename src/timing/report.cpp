@@ -9,8 +9,12 @@ std::string timing_location(uint32_t cta, uint32_t sm, uint32_t warp, uint32_t p
 }
 
 namespace {
-void cache_stats(std::ostream& out, const hw::CacheStats& s) {
-    out << "{\"hits\":" << s.hits << ",\"sector_misses\":" << s.sector_misses
+void cache_stats(std::ostream& out, const hw::CachePort& cache) {
+    const auto& s = cache.stats(); const auto& config = cache.config();
+    out << "{\"backend\":\"" << cache.name() << "\",\"clocks\":" << cache.cycle()
+        << ",\"bytes\":" << config.bytes << ",\"ways\":" << config.ways << ",\"ports\":" << config.banks
+        << ",\"miss_entries\":" << config.miss_entries << ",\"response_capacity\":" << config.capacity
+        << ",\"hits\":" << s.hits << ",\"sector_misses\":" << s.sector_misses
         << ",\"line_misses\":" << s.line_misses << ",\"merges\":" << s.merges
         << ",\"evictions\":" << s.evictions << ",\"mshr_stalls\":" << s.mshr_stalls
         << ",\"bank_stalls\":" << s.port_stalls << ",\"fill_stalls\":" << s.fill_stalls
@@ -40,9 +44,9 @@ void TimingMachine::dump_memory(std::ostream& out) const {
     out << ",\"l1\":[";
     for (uint32_t sm = 0; sm < sms_.size(); ++sm) {
         if (sm) out << ',';
-        cache_stats(out, memory_->l1_stats(sm));
+        cache_stats(out, memory_->l1_cache(sm));
     }
-    out << "],\"l2\":"; cache_stats(out, memory_->l2_stats());
+    out << "],\"l2\":"; cache_stats(out, memory_->l2_cache());
     const auto& dram = memory_->dram_stats();
     out << ",\"dram\":{\"reads\":" << dram.reads << ",\"writes\":" << dram.writes
         << ",\"row_hits\":" << dram.row_hits << ",\"row_misses\":" << dram.row_misses << "},\"shared\":[";

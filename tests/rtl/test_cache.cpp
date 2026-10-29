@@ -32,6 +32,7 @@ void merge_limit_response_capacity_and_backpressure() {
     b.send_fill = true;
     for (uint32_t tick = 0; tick < 80; ++tick) b.step();
     require(!b.submit(8, {64}), "unconsumed responses released credits");
+    b.dut.invalidate_all = 1; b.dut.eval();
     require(!b.dut.invalidate_ready, "invalidation accepted while responses owned");
     b.take_response = true;
     for (uint32_t id = 0; id < 8; ++id) b.wait(id);
@@ -149,6 +150,44 @@ void cpp_model_differential_random_stream() {
         require(b.backing.read(byte, 1) == reference.read(byte, 1), "final backing bytes differ");
 }
 
+// An unaligned range clears intersecting sectors and retains neighboring data in the same line.
+// 非对齐范围清除相交 sector，同时保留同一行中的相邻数据。
+void range_invalidation_and_scan_clocks() {
+    CacheBench b("cache-invalidate-range.vcd");
+    b.backing.write(0, 4, 11); b.backing.write(32, 4, 22); b.backing.write(64, 4, 33);
+    for (uint32_t id = 0; id < 3; ++id) { send(b, id, {id*32}); b.wait(id); }
+    b.drain(); const auto reads = b.reads;
+    b.backing.write(0, 4, 77); b.backing.write(32, 4, 88); b.backing.write(64, 4, 99);
+    b.dut.invalidate_all = 0; b.dut.invalidate_first = 0; b.dut.invalidate_last = 1;
+    b.dut.invalidate_valid = 1; b.dut.eval(); require(b.dut.invalidate_ready, "range refused");
+    b.step(); b.dut.invalidate_valid = 0; b.dut.eval();
+    require(b.dut.invalidate_busy && !b.dut.req_ready, "scan did not block admission");
+    const auto start = b.cycle;
+    while (b.dut.invalidate_busy && b.cycle-start < SIMT_RTL_SETS*4+1) b.step();
+    require(b.dut.invalidate_done && b.cycle-start == SIMT_RTL_SETS*4, "scan must visit one line per clock");
+    send(b, 3, {64}); require(b.wait(3)[0] == 33 && b.reads == reads, "unrelated sector was discarded");
+    send(b, 4, {0}); require(b.wait(4)[0] == 77, "first sector stale");
+    send(b, 5, {32}); require(b.wait(5)[0] == 88, "last sector stale");
+}
+
+void range_invalidation_with_pending_fill() {
+    CacheBench b("cache-invalidate-fill.vcd");
+    b.backing.write(32, 4, 22); send(b, 0, {32}); b.wait(0); b.drain();
+    b.backing.write(32, 4, 55); b.send_fill = false;
+    b.backing.write(0, 4, 41); send(b, 1, {0});
+    for (uint32_t clock = 0; clock < 30; ++clock) b.step();
+    b.dut.invalidate_all = 0; b.dut.invalidate_first = 0; b.dut.invalidate_last = 0;
+    b.dut.invalidate_valid = 1; b.dut.eval();
+    require(!b.dut.invalidate_ready, "overlapping MSHR allowed invalidation");
+    b.dut.invalidate_first = 1; b.dut.invalidate_last = 1; b.dut.eval();
+    require(b.dut.invalidate_ready, "unrelated MSHR blocked range");
+    b.step(); b.dut.invalidate_valid = 0; b.dut.eval(); b.send_fill = true;
+    require(b.wait(1)[0] == 41, "unrelated fill lost"); b.drain();
+    const auto reads = b.reads; send(b, 2, {0});
+    require(b.wait(2)[0] == 41 && b.reads == reads, "scan damaged concurrent fill");
+    send(b, 3, {32}); require(b.wait(3)[0] == 55 && b.reads == reads+1, "same-line fill cancelled invalidation");
+}
+
 void run_cases() {
     run_case("RTL cache cold/warm, sector validity, actual SRAM bytes", cold_warm_sector_and_cached_bytes);
     run_case("RTL cache merge/response capacity and backpressure", merge_limit_response_capacity_and_backpressure);
@@ -159,6 +198,8 @@ void run_cases() {
     run_case("RTL cache 64-bit tags and exact SRAM hit pipeline", high_address_tags_and_hit_pipeline);
     run_case("RTL cache out-of-order fills and stable stalled payloads", out_of_order_fills_and_stalled_payloads);
     run_case("RTL cache 360-request C++ differential stream", cpp_model_differential_random_stream);
+    run_case("RTL cache sector range and exact metadata scan", range_invalidation_and_scan_clocks);
+    run_case("RTL cache range conflict and unrelated in-flight fill", range_invalidation_with_pending_fill);
 }
 
 int run_application() {
