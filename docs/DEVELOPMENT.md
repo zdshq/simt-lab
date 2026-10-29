@@ -251,3 +251,13 @@
 - `UBSAN_OPTIONS=halt_on_error=1 ctest --test-dir build-cache-sanitize --output-on-failure -j2 -R '^(cache_backend_selection|rtl_cache_engine|rtl_cache_execution|rtl_cache_host)$'` 首次三套件及执行套件 60 项通过，完整最大矩阵超过 180 秒。组内显式寄存器增加未优化插桩代码求值开销，将缓存执行进程上限改为 420 秒，保留 Debug 编译、原算例、全部断言和检测。单独重跑 `CacheTensorPipeline.test_maximum_descriptor_shape` 通过，308.877 秒，1,024 个输出和 262,144 次有效乘积正确，无 sanitizer 报告。失败与重跑日志分别在 `artifacts/rtl-banked-sanitize/ctest-before-timeout-change.log` / `maximum-matrix.log`。
 - `python3 examples/hardware_host.py --build build-cache-rtl --tensor-rtl --cache-rtl --out artifacts/rtl-banked-host` 四类负载各两次 Graph 重放通过。新旧 `validation.json` 全量比较相等，包括输出误差、所有 kernel/设备周期、缓存与 DRAM 累计计数；冷/热仍为 40/18 模型周期，设备最终 64,500 拍。这是重构前后可观察行为对照，不是实卡性能校准。
 - 最终 11 份本轮仿真/综合/网表清单的源码、参数和两份网表哈希核对通过，摘要保留于 `artifacts/rtl-banked-evidence.json`。更新 RTL、缓存后端、来源、验证、README 和整体计划，保留历史超时而不覆盖成成功记录。完整目标继续 active：其余 SM 电路接入、整机连接、实卡校准、PTX 异步矩阵协议、系统默认 SMI 合并与最终审计仍待完成。
+
+## 阶段 17 第二部分：合并 NVML 与用户级默认入口（2026-10-29）
+
+- 从 `fc0aa9b` 继续，实现真实 NVML 与活模拟快照的合并枚举。物理设备保留原索引，模拟设备追加；按 UUID/索引查找、分配字节、生命周期和旧句柄返回分开路由。精确官方签名的单设备只读接口转发原生库，其他未实现接口返回不支持。默认直接加载库仍为仅模拟模式，`--merge` 显式启用合并。
+- 原生私有进程查询不接受包装后的物理句柄，最终保留原生句柄并验证登记身份。ABI 辅助程序暴露关闭死锁：原生 `nvmlShutdown` 回调桥接 `nvmlDeviceGetCount_v2`，重复进入注册表 mutex。用线程局部原生调用范围和各公开入口的回调分支修复；没有使用递归锁、deepbind 或关闭 sanitizer。
+- NVIDIA 私有 PCI 选择扫描无法处理没有 PCI 身份的模拟设备。`tools/simt_smi.py` 将 PCI-BDF 选择、compute/accounted-process 专用查询、管理命令及其他模式送回原生后端；默认表格、列表和设备查询进入合并后端。未伪造 PCI 地址或宣称完整 NVML/CLI 兼容。
+- 新增安装器，将可撤销的入口写入用户 bin，拒绝替换无关命令、符号链接和用户修改过的安装。实际执行 `python3 tools/install_smi.py --build build-release`，`command -v nvidia-smi` 指向 `/home/zeke/.local/bin/nvidia-smi`，原版 `/usr/bin/nvidia-smi` 安装前后 SHA-256 相同。未修改系统驱动、库或 shell 配置。
+- 新增 7 项合并检查，复用原 6 项模拟监控检查，覆盖真实元数据对照、分配/释放、多会话、选择器、退出/SIGKILL、ABI、引用计数、并发查询、安装/撤销及拒绝覆盖。Debug 全量 23 套件、268 项通过（225 Python / 43 C++），Release 与 ASan/UBSan 本次各运行受影响的 2 套件、13 项且全部通过。原始日志与计数保存在 `artifacts/nvml-merged/`；没有把嵌入的 C++ 断言重复计数。
+- 使用 `Device('build-cache-rtl/simt-device', timing=True, tensor_rtl=True, cache_rtl=True, monitor_dir=...)` 完成两次 Graph GEMM，每次 96 个值通过，最大误差约 2.98e-7。随后普通 `nvidia-smi` 同时显示实卡和模拟器、保留真实进程表；7 MiB 分配、释放到 0 和退出后移除均验证。`installation.json`、`default-command.txt` 和 `gemm/` 保存原始证据。
+- 同步 NVIDIA_SMI、计划、验证、来源、README 和两份 RTL 后端文档。普通 `Device()` 仍须显式启用监控；原生二进制直接执行及其他用户的环境保持原生视图。完整目标保持 active：Tensor/缓存电路已接入，但其余 SM 电路接入、整体 RTL、实卡校准、PTX 异步矩阵协议与最终审计仍未完成。

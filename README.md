@@ -52,7 +52,7 @@ python3 examples/host_graph.py
 
 [Tensor 时序通路](docs/HARDWARE_TENSOR.md) 已接入逐拍乘加阵列、有限操作数 FIFO、真实内存供数和 TMEM bank。[异步搬运通路](docs/HARDWARE_ASYNC.md) 已接入有限 DMA 命令/片段池、真实 global→shared 数据流和事务屏障。运行 `python3 examples/run_workloads.py --timing --out artifacts/timed` 可验证向量、规约、GEMM 与小型 Transformer；`python3 examples/hardware_async.py` 可查看容量与完成顺序实验。
 
-已验证 [原版 nvidia-smi 接入](docs/NVIDIA_SMI.md)：终端一运行 `python3 examples/nvml_device.py`，终端二运行 `python3 tools/simt_smi.py`，可查看实际模拟设备及其分配内存。专用 NVML 后端只作用于该子进程，系统默认命令仍查询真实显卡；没有 CUDA 或 PCIe 兼容。
+已验证 [原版 nvidia-smi 接入](docs/NVIDIA_SMI.md)：本机已安装用户级命令入口，终端一运行 `python3 examples/nvml_device.py --timing`，终端二直接运行 `nvidia-smi -L` 或 `nvidia-smi`，可同时查看真实 4070 SUPER 和活模拟器。分配、释放和退出会更新原版程序的输出；系统二进制及驱动未改动。自己的 `Device` 会话须显式设置 `monitor_dir`；这不提供 CUDA 或 PCIe 兼容。安装、撤销及查询范围见链接文档。
 
 [Local 与原子通路](docs/HARDWARE_ATOMIC_LOCAL.md) 已接入字交错物理映射、同一缓存/DRAM 层次，以及 global/shared 原子的 bank 预约、读取、ALU 延迟和写确认。`python3 examples/hardware_memory_ops.py` 可生成合并、缓存和原子竞争实验。自定义 59 个 opcode 均有时序路径，仍不表示支持 NVIDIA 的全部硬件。
 
@@ -68,4 +68,4 @@ python3 examples/host_graph.py
 
 缓存 LRU 已按组实现为排名寄存器和局部比较电路，完整 256 KiB、8 路 L2 的保留存储综合、RTL 和 sanitizer 检查均通过。2/4 KiB 小配置另通过完整综合及相同网表行为检查；这些结果不等于具体 FPGA/ASIC 的存储宏映射或整 GPU 面积。
 
-当前默认 Debug 通过 22 个 CTest 套件、261 项检查；缓存+Tensor RTL 的 Release 与 ASan/UBSan 均验证通过 28 套件、421 项检查（368 项 Python、53 项 C++），独立 RTL 检查另计。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。
+当前默认 Debug 通过 23 个 CTest 套件、268 项检查（225 Python、43 C++）；本次受影响的 NVML 13 项另通过 Release 和 ASan/UBSan。此前缓存+Tensor RTL 联合构建的 28 套件、421 项有单独验收记录，独立 RTL 检查另计；未把本次监控增量描述成重新执行整套 RTL 验收。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。

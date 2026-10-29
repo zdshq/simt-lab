@@ -172,6 +172,26 @@ PYTHONPATH=build-cache-sanitize/generated:python SIMT_RUNNER="$PWD/build-cache-s
 
 最终核对 11 份本阶段仿真/综合/网表清单中的 RTL 哈希、SETS/WAYS 和两份实际网表哈希，与当前文件一致；摘要保存在 `artifacts/rtl-banked-evidence.json`。Release 日志重新计数为 368 项 Python 与 53 项 C++，没有跳过。此次未重复无改动的默认软件构建及其余独立 RTL 模块，前阶段证据保留各自范围。
 
+## 阶段 17：真实/模拟设备合并与用户级默认命令
+
+原版 `/usr/bin/nvidia-smi` 575.57.08 通过合并 NVML 后端同时查询 RTX 4070 SUPER 和活模拟器。真实设备保持原索引、句柄、元数据和默认进程表；模拟设备追加在后，内存读取实际分配表，正常退出或 SIGKILL 后退出枚举。公开 ABI 同时验证精确字节数、未知指针拒绝、引用计数、重新初始化和双线程真实/模拟查询。
+
+| 实际命令或场景 | 结果与证据 |
+|---|---|
+| `cmake --build <build> --target simt_nvml test-nvml-api test-nvml-merge-api -j4` | `build`、`build-release`、`build-sanitize` 均成功；所有被修改的 NVML 代码及两个 ABI 辅助程序重新构建 |
+| `ctest --test-dir build --output-on-failure -j4` | 23 套件、268 项全部通过，225 Python / 43 C++；日志 `artifacts/nvml-merged/debug-full.log` |
+| `ctest --test-dir build-release -R '^(native_nvidia_smi|merged_nvidia_smi)$' --output-on-failure -j2` | 2 套件、13 Python 用例通过；`release-nvml.log` |
+| `UBSAN_OPTIONS=halt_on_error=1 ctest --test-dir build-sanitize -R '^(native_nvidia_smi|merged_nvidia_smi)$' --output-on-failure -j2` | 同样 13 项通过，无 sanitizer 报告；`sanitize-nvml.log`。原有外部程序 libasan 预加载及仅关闭泄漏报告的约定保留 |
+| `python3 tools/install_smi.py --build build-release` | 已安装 `/home/zeke/.local/bin/nvidia-smi`；PATH 原本已包含该目录，无系统文件或 shell 配置改动；安装/卸载及拒绝覆盖行为有自动检查 |
+| 实际联合 RTL Graph GEMM 后运行普通 `nvidia-smi` | 两次重放各验证 96 个值，最大误差约 2.98e-7；Tensor/cache 均为 RTL。随后 7 MiB 分配与释放正确显示，退出后与原版 `-L` 一致，仅剩实卡 |
+| 原版文件核对 | 安装前后 `/usr/bin/nvidia-smi` SHA-256 相同；`installation.json` 保存路径、哈希、GEMM 与硬件统计，`default-command.txt` 保存原版输出 |
+
+检查数来自实际日志，摘要为 `artifacts/nvml-merged/tests.json`。7 项新增合并用例中的 C++ ABI 断言不重复计数。本次没有重跑不受改动影响的全套 RTL/综合验证，之前的 421 项联合 RTL 记录保留原阶段范围；这里的联合 RTL GEMM 属于端到端监控验证。
+
+最初包装原生句柄导致私有进程查询无法识别实卡；改为保留原生句柄，并在公开入口登记和验证身份。ABI 辅助程序还发现关闭死锁：原生 `nvmlShutdown` 内部回调被接管的 `nvmlDeviceGetCount_v2`，重入桥接锁。增加线程局部原生调用状态后，厂商内部调用直接回到原生符号，嵌套关闭、重建与并发测试通过；没有换成递归锁或关闭检测。早期失败保存在 `first-test-failures.log`。
+
+PCI 选择在原程序私有路径中假定所有设备都有 PCI 状态，模拟设备无法满足；启动器因此将 PCI bus ID 选择、compute/accounted-process 查询以及管理/其他模式交给原生后端。数字索引和 UUID 可合并选择，公开 NVML 的 PCI 句柄查询也已验证。没有用虚假 PCI 地址掩盖协议差异。完整命令范围、启动监控的要求和撤销方式见 [NVIDIA_SMI.md](NVIDIA_SMI.md)。
+
 ## 明确边界
 
 - 功能模式和时序模式都在 CPU 上执行；不会利用 RTX 4070 SUPER 来获得模拟 GPU 的实际吞吐。

@@ -116,7 +116,7 @@ python3 tools/rtl.py --module cache --ways 8 --gate-sim --out artifacts/rtl-cach
 
 主机演示的四种负载均完成两次重放：GEMM 96 输出最大误差约 2.98e-7，Transformer 32 输出约 1.07e-7。相邻的只读 kernel 冷/热分别 40/18 模型周期，热读取不增加 DRAM 请求。维护扫描、缓存状态和输入到达时间会影响各次重放周期；这些不是 RTX 4070 SUPER 性能预测。机器码、镜像、下载字节和 kernel/设备快照保存在 `artifacts/rtl-cache-host`。
 
-实际完成上述 RTL GEMM 的存活会话还通过原版 nvidia-smi 查询，显示模拟器及实际 7 MiB 分配，退出后消失；记录为 `artifacts/rtl-cache-host/nvidia-smi-status.txt`。专用 NVML 方式仍不提供系统默认视图合并或 CUDA 设备枚举。
+实际完成上述 RTL GEMM 的存活会话还通过原版 nvidia-smi 查询，显示模拟器及实际 7 MiB 分配，退出后消失；记录为 `artifacts/rtl-cache-host/nvidia-smi-status.txt`。这是当时的专用视图证据。后续已完成用户级默认命令的真实/模拟设备合并，并再次用联合 RTL GEMM 验证，见 [当前接入方式](NVIDIA_SMI.md)；仍不提供 CUDA 设备枚举。
 
 ## 尚未完成
 

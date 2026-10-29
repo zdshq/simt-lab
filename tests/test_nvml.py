@@ -9,12 +9,12 @@ import unittest
 from host_support import HostCase
 
 
-class NvmlTest(HostCase):
+class NvmlCase(HostCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory(prefix='simt-nvml-test-')
         self.addCleanup(self.directory.cleanup)
         self.build = Path(os.environ['SIMT_RUNNER']).resolve().parent
-        self.environment = dict(os.environ, SIMT_MONITOR_DIR=self.directory.name,
+        self.environment = dict(os.environ, SIMT_MONITOR_DIR=self.directory.name, SIMT_NVML_MERGE='0',
                                 LD_LIBRARY_PATH=str(self.build/'nvml'))
         preload = os.environ.get('SIMT_NVML_ASAN_PRELOAD')
         if preload:
@@ -32,6 +32,8 @@ class NvmlTest(HostCase):
         self.assertNotIn('Sanitizer',result.stderr)
         return result.stdout
 
+
+class NvmlTest(NvmlCase):
     def test_native_list_default_and_live_memory(self):
         device = self.monitored(timing=True)
         self.assertIn('SIMT Lab 2 SM (simulator)',self.smi('-L'))

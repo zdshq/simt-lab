@@ -98,4 +98,4 @@ cmake --build build --target rtl-check
 
 实际完成上述 RTL Graph GEMM 的存活设备已由原版 `/usr/bin/nvidia-smi` 查询，专用 NVML 启动器显示 `SIMT Lab 2 SM (simulator)` 和实际分配的 `64, 7, 57` MiB；进程退出后返回 `No devices found.`。系统默认命令仍显示真实 RTX 4070 SUPER。原始输出在 `artifacts/rtl-integrated/nvidia-smi-status.txt`。
 
-管理面可见性不代表 CUDA 设备枚举、PCIe 设备或驱动兼容。整个 SM/存储层次的 RTL 连接、实卡参数校准、PTX 异步矩阵协议、最终硬件审计与系统默认 nvidia-smi 视图合并仍未完成；完整目标见 [HARDWARE_PLAN.md](HARDWARE_PLAN.md)。
+上述为本阶段当时的监控记录；后续已完成用户级默认 nvidia-smi 合并视图，见 [当前接入方式](NVIDIA_SMI.md)。管理面可见性不代表 CUDA 设备枚举、PCIe 设备或驱动兼容。整个 SM/存储层次的 RTL 连接、实卡参数校准、PTX 异步矩阵协议与最终硬件审计仍未完成；完整目标见 [HARDWARE_PLAN.md](HARDWARE_PLAN.md)。
