@@ -124,4 +124,4 @@ Transformer 每次实际搬入 2,176 B，并在阵列中完成 2,304 次乘加�
 
 新增四项 C++ 检查覆盖相邻 sector、在途 fill、按所有者排空和 local 生命周期；33 项 Python 检查包含原有 20 项主机/Graph 契约和 13 项持久硬件场景，包括并发时钟、链路等待、有限展开、CP 反压、重叠搬运、故障排空、三次 DMA/Tensor 图重放和四类完整负载。整体三种构建结果见 [VALIDATION.md](VALIDATION.md)。
 
-统一时钟和跨 kernel 缓存已接入。RTL、实机参数校准、PTX 异步矩阵协议与完整硬件审计仍待完成，见 [HARDWARE_PLAN.md](HARDWARE_PLAN.md)。
+统一时钟和跨 kernel 缓存已接入。独立缓存/scoreboard/bank 仲裁 [RTL](RTL.md) 已验证，但尚未成为本主机设备的执行后端。Tensor RTL、完整 RTL 连接、实机参数校准、PTX 异步矩阵协议与完整硬件审计仍待完成，见 [HARDWARE_PLAN.md](HARDWARE_PLAN.md)。

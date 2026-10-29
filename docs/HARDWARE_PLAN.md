@@ -11,7 +11,7 @@
 | 13 | SM 分区、warp 发射、寄存器 bank/operand collector、scoreboard、执行流水线、多 CTA 资源准入 | 依赖链/独立链、RAW/WAW、结构冲突、occupancy 和退休顺序；逐周期轨迹 | 基础时序通路已实现，7 项 C++/35 项 Python 检查；见 HARDWARE_SM.md，尚非完整 GPU |
 | 14 | 分拍 Tensor 数据通路、乘法/累加单元、操作数供给、TMEM bank、异步完成 | 不再一条宿主循环完成 MMA；数值差分、带宽和流水线反压测试 | 分拍阵列/供数/TMEM 已接入并验证，见 HARDWARE_TENSOR.md；当前发起 warp 阻塞到完成，PTX 异步提交协议未实现 |
 | 15 | 将上述单元接入实际 ISA 执行、CP、拷贝与 Graph，缓存跨 kernel 保留 | 原功能负载在微架构执行模式中运行；同步与失败行为保持正确；无绕过模型的快路径 | 自定义 59 个 opcode 与持久 CP/copy/Graph 已接入；四类完整负载通过主机上传/Graph/下载执行，跨 kernel 缓存与故障排空通过 4 项 C++/33 项 Python 增量检查；见 HARDWARE_HOST.md，完整 NVIDIA 协议不在此阶段完成范围 |
-| 16 | 可综合的关键硬件模块与 RTL 对照 | cache tag/controller、bank arbiter、scoreboard、乘加阵列的仿真和综合结果；面积只报告实际工具结果 | 待完成 |
+| 16 | 可综合的关键硬件模块与 RTL 对照 | cache tag/controller、bank arbiter、scoreboard、乘加阵列的仿真和综合结果；面积只报告实际工具结果 | 进行中：前三类模块通过 14 项 RTL/综合后网表检查，64 KiB 缓存另有实际仿真与存储推断；见 RTL.md。Tensor 数值/乘加电路和整体连接尚未完成 |
 | 17 | 活设备状态服务与 NVML 接入 | 原版 `/usr/bin/nvidia-smi` 实际枚举活模拟设备，内存/状态跟随执行变化，关闭后不留虚假设备；明确启动方式与真实设备共存范围 | 专用启动方式已验证，见 NVIDIA_SMI.md；系统默认视图合并未实现 |
 | 18 | 整体数值/时序/RTL/NVML 验收及结构说明 | 可复现实验命令、波形/trace、来源表、限制和阶段 Git 历史；逐项审计本表 | 待完成 |
 
@@ -28,5 +28,5 @@
 
 - 当前 `/usr/bin/nvidia-smi -L` 只返回 RTX 4070 SUPER；驱动 575.57.08。
 - CUDA 编译器和 NVML 官方头文件存在，可对接原程序并进行本机微基准。
-- `verilator`、`iverilog`、`yosys` 当前不在 PATH，RTL 阶段需准备工具。
+- 初始 `verilator`、`iverilog`、`yosys` 不在 PATH；阶段 16 已在项目 `.tools/rtl` 准备固定版本工具，复现方式见 RTL.md，没有修改系统库。
 - 初始仓库干净，基线提交 `9b52311`，75 项功能测试。

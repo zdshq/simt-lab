@@ -88,6 +88,6 @@ python3 examples/hardware_pipeline.py
 - 编译器自动 spill、原生 PTX 指令与完整 async-group/TMA；显式 local 和自定义整数原子已接入时序通路。
 - 指令 cache、TLB/页表、跨 SM 互连网络、真实弱内存一致性协议。
 - 持久 CP/copy/Graph 与跨 kernel 缓存已通过 `Device(timing=True)` 接入，见 [HARDWARE_HOST.md](HARDWARE_HOST.md)；并发多 kernel、上下文切换与抢占仍未实现。
-- 可综合 RTL、FPGA 下载、面积/频率估计及真实 GPU 参数校准。
+- 完整 SM 的 RTL 连接、寄存器数据阵列/operand collector 电路、FPGA 下载、工艺面积/频率估计及真实 GPU 参数校准。独立 scoreboard 和 bank 仲裁 RTL 已通过仿真与综合后检查，见 [RTL.md](RTL.md)。
 
 完整剩余目标见 [HARDWARE_PLAN.md](HARDWARE_PLAN.md)。NVML 展示能力单独见 [NVIDIA_SMI.md](NVIDIA_SMI.md)，它不能证明上述执行硬件已完成。

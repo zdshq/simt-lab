@@ -173,3 +173,17 @@
 - `python3 examples/host_graph.py --timing --hardware-trace --out artifacts/timed-host-graph` 通过普通提交、三次图更新/重放和跨 stream capture，8 个公开任务全部完成，65 个输出逐项一致。原版 nvidia-smi 对实际时序设备重新实测，返回模拟器名称和 64/7/57 MiB；记录保存在 artifacts/hardware-host/nvidia-smi.txt，系统默认仍只显示真实 4070 SUPER。
 - 新增 HARDWARE_HOST.md，更新整体计划、来源假设和结构边界。所有 CP 容量、链路参数、拷贝暂存与故障协议均标为研究设计；不能解释为已逆向 NVIDIA 内部实现。保持短函数和相邻中英文注释，未添加样式测试。
 - 阶段 15 的自定义 ISA/CP/copy/Graph 接入已验收；完整目标仍 active。可综合 RTL、实机参数校准、PTX 异步矩阵协议、最终逐项硬件审计和系统默认 nvidia-smi 视图合并仍未完成。
+
+## 阶段 16 第一部分：实际缓存、依赖状态和端口仲裁 RTL（2026-10-29）
+
+- 新增 `sector_sram.sv` 和 `sector_cache.sv`：默认 64 KiB、128 sets、4 ways、32 B sector 的实际数据阵列；单同步读/写端口、tag/valid、有限 LRU rank、4 个 MSHR、最多 4 个合并等待者及 8 个响应槽。请求和返回使用稳定 valid-ready 握手，way 在事务完成前锁定，支持乱序 fill、byte mask、写穿/不写分配和排空后失效。
+- 数据 SRAM 不复位，由有效位保护未初始化内容。Yosys 在 64 KiB 配置下实际识别出 2,048×256 = 524,288 位、一个读端口和一个写端口。它还没有映射到 FPGA BRAM 或工艺 SRAM macro；单入口端口时序不等于原 C++ 四 bank 模型。
+- 新增单 warp 的逐 lane scoreboard：writer/predicate 位和 3 位有界 reader 计数，保留 RAW/WAW/WAR、掩码及常零语义；计数饱和反压，非法命令无部分修改。新增 4 请求者/4 bank 的独立读写循环仲裁，验证持续竞争下的公平性；尚无寄存器数据阵列或整个 SM 发射连接。
+- 工具准备使用项目私有 `.tools/rtl`，无 sudo/系统库改写。`python3 tools/bootstrap_rtl.py` 实际通过；保留固定 Ubuntu 软件包及 SHA-256、Verilator 4.038、Yosys 0.40 commit `a1bb0255d654ffd0d8503577274f24b349a42995`。发行版 Yosys 0.9 无法解析使用的 SV cast，因此从官方固定版本构建新工具，而非改用宿主伪模型替代综合。
+- 首次行为验证暴露 LRU victim 比较中负 sentinel 与无符号 rank 的比较问题，修正显式空候选判断。首次综合暴露 LRU rank 的存储资源共享形成组合环，改成明确触发器数组后通过 `check -assert`。门级导出清理无用别名并拆开内部位网，消除旧 Verilator 的向量级依赖误报，未关闭组合环或未驱动检查。
+- `cmake --build build --target rtl-check` 及 `python3 tools/rtl.py --out artifacts/rtl-final` 均通过 14 项检查：cache 9、scoreboard 3、bank 仲裁 2。包括 360 个混合缓存事务、5,000 条 scoreboard 命令和 4,000 拍端口授权的 C++ 对照，验证精确 hit 流水线、高地址、锁定 way、反压稳定性和真实缓存字节。
+- `python3 tools/rtl.py --module cache --sets 128 --out artifacts/rtl-full` 通过同样 9 项缓存检查；`--synth --infer-only --module cache --sets 128 --out artifacts/rtl-synth-full` 通过保留存储的综合。大配置没有全部展开成门，不把重复配置运行计作新的行为场景。
+- `python3 tools/rtl.py --synth --out artifacts/rtl-synth-final` 三模块均通过综合检查；`--gate-sim --out artifacts/rtl-synth-final` 对实际生成网表再次通过同样 14 项检查。2 KiB 缓存、scoreboard 和仲裁分别为 50,627/31,015/1,391 个 generic cells，包含调试状态和展开存储，不能称为 NAND2 等效门数或芯片面积。网表与 RTL 哈希保留并在门级检查前核对。
+- `python3 tools/rtl.py --build build-sanitize --out artifacts/rtl-sanitize-final` 最终 14 项检查全部通过，无 sanitizer 报告。最初开波形运行虽退出码为零，但 UBSan 报告旧 Verilator VCD 库的非对齐访问，不能算作通过；最终只关闭此模式的波形，保留 ASan/UBSan 并启用 `halt_on_error`。普通 RTL 和门级仿真继续生成 VCD。
+- `ctest --test-dir build --output-on-failure -j6` 本阶段再次通过 20 套件、257 项软件检查。复核最终 RTL/网表/sanitizer/64 KiB 产物中的源码哈希均与当前文件一致。再次实测原版 nvidia-smi：系统视图为 RTX 4070 SUPER，专用后端为活模拟设备 64/7/57 MiB，关闭后不再显示；记录在 `artifacts/rtl-final/nvidia-smi-status.txt`。
+- 新增 `docs/RTL.md`，同步 README、来源、计划、验证及相关硬件文档，明确运行中的 `simt-device` 仍使用 C++ 后端。Tensor 目前为逐拍研究阵列，浮点乘加仍调用宿主 `std::fma`；Tensor 数值/乘加 RTL、整体 RTL 连接、实卡参数校准、PTX 异步矩阵协议和最终硬件审计仍未完成。阶段 16 和完整目标保持 active。

@@ -127,6 +127,13 @@ add_simt_test(native_host_protocol test_protocol.py)
 add_simt_test(host_command_processor test_host.py)
 add_simt_test(graph_submission_and_capture test_graph.py)
 add_simt_test(timed_host_and_graph test_timed_host.py)
+
+# RTL verification is explicit: missing synthesis/simulation tools fail instead of silently passing.
+# RTL 验证显式启用：缺失综合或仿真工具会失败，不会静默通过。
+add_custom_target(rtl-check
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/rtl.py
+        --build ${CMAKE_CURRENT_BINARY_DIR} --out ${CMAKE_CURRENT_BINARY_DIR}/rtl
+    DEPENDS simt_hardware VERBATIM USES_TERMINAL)
 if(TARGET simt_nvml)
     add_executable(test-nvml-api tests/test_nvml_api.cpp)
     target_include_directories(test-nvml-api PRIVATE ${SIMT_NVML_INCLUDE})

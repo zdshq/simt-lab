@@ -43,4 +43,6 @@ local 的具体字交错物理布局、global 原子 8 banks/8 请求/4 拍 ALU�
 
 持久主机模式的 16 个 CP 解码槽、每拍一次取包/图解码/任务启动、128 B 拷贝暂存、每块 8 拍建立加 16 B/clock 链路服务，全部是模型设计选择。主机 DMA 绕过 L1、写入失效全部 L1、按所有者故障排空及不重复 local tag 是本项目一致性与生命周期协议；没有据此声称 NVIDIA 的 PCIe、GPFIFO、copy engine 或 fault/replay 微架构。对应证据见 [HARDWARE_HOST.md](HARDWARE_HOST.md)。
 
-实现 CUDA pointer-chase、合并和 shared bank 微基准，记录原始结果、GPU/驱动/编译器信息、样本分布和计时开销。结果用于判断模型能否解释趋势，不通过调参强行宣称结构唯一可识别。
+独立 RTL 的 128 sets/4 ways、256 位同步 SRAM 读写端口、4 个 MSHR/8 个响应槽、4 个合并等待者、有限 LRU rank、单 warp 单命令 scoreboard 及 bank 循环仲裁均是本项目电路选择。它们与 C++ 参考模型比较功能事务和资源约束，不构成 NVIDIA 门级逆向；单入口 RTL 缓存也不是 C++ 四 bank 端口的逐拍等价替换。Verilator/Yosys 验证和实际 generic-cell 计数见 [RTL.md](RTL.md)，计数不能替代工艺面积或整 GPU 门数估计。
+
+仍需实现 CUDA pointer-chase、合并和 shared bank 微基准，记录原始结果、GPU/驱动/编译器信息、样本分布和计时开销。结果用于判断模型能否解释趋势，不通过调参强行宣称结构唯一可识别。

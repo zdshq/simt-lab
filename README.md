@@ -4,7 +4,7 @@
 
 项目使用 C++20 实现执行核心，Python 生成 ISA 编码接口、构造 kernel 和独立参考结果。默认设备含两个 SM，每个 warp 有 32 个逻辑线程。它运行在 CPU 上，模拟的是自定义机器的行为，不预测真实 GPU 周期、面积或功耗。
 
-这里使用自己的指令编码与数值规范，借鉴作者公开的设计方法，不宣称兼容 curryGPU 的私有二进制、NVIDIA SASS 或完整 CUDA。第一条交付路线是可运行的 ISS；RTL、PTX 编译器和 FPGA 实现属于后续项目。
+这里使用自己的指令编码与数值规范，借鉴作者公开的设计方法，不宣称兼容 curryGPU 的私有二进制、NVIDIA SASS 或完整 CUDA。ISS 和时序模型已运行；缓存、scoreboard 与寄存器 bank 仲裁已有独立验证的 RTL，完整 RTL GPU、PTX 编译器和 FPGA 实现仍未完成。
 
 开发阶段、验收条件和当前进展见 [实施计划](docs/PLAN.md)、[主机与 Graph 扩展计划](docs/HOST_PLAN.md) 和 [开发记录](docs/DEVELOPMENT.md)。每个通过验收的阶段单独 Git 提交。
 
@@ -58,4 +58,6 @@ python3 examples/host_graph.py
 
 [持久设备时序](docs/HARDWARE_HOST.md) 已将主机 CP、拷贝和 Graph 接入同一时钟，L1/L2 跨 kernel 保留。使用 `Device(timing=True)` 或 `python3 examples/hardware_host.py` 可执行带上传/下载的四类完整负载及 Graph 重放，并检查缓存、链路、故障排空和逐拍轨迹。
 
-当前三种构建均通过 20 个 CTest 套件、257 项检查（214 项 Python、43 项 C++）。可综合 RTL、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。
+[关键模块 RTL](docs/RTL.md) 已实现 64 KiB sector 缓存的数据阵列和控制器、逐 lane scoreboard、4 bank 读写仲裁。14 项检查通过普通 RTL 仿真、ASan/UBSan 对照平台和综合后网表仿真；64 KiB 配置另外通过同样 9 项缓存检查及存储推断。RTL 尚未接入 `simt-device`，Tensor 乘加与浮点数值电路仍待实现。
+
+软件三种构建均通过 20 个 CTest 套件、257 项检查（214 项 Python、43 项 C++），本阶段再次通过 Debug 回归；上述 14 项 RTL 检查单独统计。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。
