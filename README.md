@@ -6,7 +6,7 @@
 
 这里使用自己的指令编码与数值规范，借鉴作者公开的设计方法，不宣称兼容 curryGPU 的私有二进制、NVIDIA SASS 或完整 CUDA。第一条交付路线是可运行的 ISS；RTL、PTX 编译器和 FPGA 实现属于后续项目。
 
-开发阶段、验收条件和当前进展见 [实施计划](docs/PLAN.md) 与 [开发记录](docs/DEVELOPMENT.md)。每个通过验收的阶段单独 Git 提交。
+开发阶段、验收条件和当前进展见 [实施计划](docs/PLAN.md)、[主机与 Graph 扩展计划](docs/HOST_PLAN.md) 和 [开发记录](docs/DEVELOPMENT.md)。每个通过验收的阶段单独 Git 提交。
 
 ## 构建与运行
 
@@ -19,6 +19,7 @@ ctest --test-dir build --output-on-failure
 python3 examples/identifiers.py
 ./build/simt-run build/identifiers.bin --sms 2 --blocks 5 --threads 37
 python3 examples/run_workloads.py
+python3 examples/host_graph.py
 ```
 
 加 `--dump-state` 可以查看每个 CTA/warp 的寄存器和谓词。程序输出 JSON，失败返回退出码 2，并报告 block、SM、warp 与 PC。编码规则和当前实现边界见 [ISA 规范](docs/ISA.md)。
@@ -27,7 +28,11 @@ python3 examples/run_workloads.py
 
 先看 [从示例读懂模拟器](docs/WALKTHROUGH.md)，再查 [内存规范](docs/MEMORY.md) 和 [张量规范](docs/TENSOR.md)。示例产物写入 `artifacts/examples/`，其中包含可阅读汇编、机器码、启动参数及验证结果。
 
-最终验证覆盖 Debug、Release 和 ASan/UBSan 三种构建，52 项测试全部通过。命令、证据映射与未实现范围见 [验证记录](docs/VALIDATION.md)。
+新增持久设备进程 `simt-device`、Python 主机接口、命令环与 doorbell、软件 CP、独立计算/拷贝引擎、stream/event 和完成状态。支持 CUDA Graph 风格的显式建图、实例化、重放、节点参数更新和跨 stream capture，详见 [主机、命令处理器与 Graph](docs/HOST.md)。这套自定义接口不能直接运行标准 CUDA 程序，也不会让 `nvidia-smi` 检测到新设备。
+
+`host_graph.py` 验证普通提交的 4 个命令包与图重放的 1 个命令包均得到正确向量结果，并输出 `artifacts/host-graph/trace.json` 与 `validation.json`；包数量不是实际 CUDA 加速比。
+
+最终验证覆盖 Debug、Release 和 ASan/UBSan 三种构建，每种构建的九个套件、75 项测试全部通过。命令、证据映射与未实现范围见 [验证记录](docs/VALIDATION.md)。
 
 ## 路线依据
 

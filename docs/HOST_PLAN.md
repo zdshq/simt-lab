@@ -2,12 +2,12 @@
 
 本次用户要求补齐主机提交链路，并询问 CUDA Graph。交付目标为模拟器自己的持久设备接口及 CUDA Graph 风格的功能语义，不宣称 NVIDIA CUDA ABI、PTX、驱动或 PCIe 兼容。
 
-| 阶段 | 内容 | 验收 |
-|---|---|---|
-| 7 | 持久设备内存、可推进 kernel、有界提交队列、doorbell、CP、DMA 与完成状态 | 命令取走不等于完成；内存跨 kernel 保留；错误传播；运行中的资源禁止释放 |
-| 8 | Python 主机接口、stream 顺序、跨 stream event、同步与跟踪 | H2D→kernel→D2H；多 stream 依赖；查询、超时和生命周期 |
-| 9 | 显式 DAG、实例化、一次提交启动整图、重复启动、节点参数更新、stream capture | 循环拒绝、fork/join、独立分支、capture 不执行、失败节点传播、更新与重放 |
-| 10 | 可运行示例、文档、全量回归及 sanitizer | Debug/Release/ASan+UBSan；独立数值比较；Git 保留阶段记录 |
+| 阶段 | 内容 | 验收 | 状态 |
+|---|---|---|---|
+| 7 | 持久设备内存、可推进 kernel、有界提交队列、doorbell、CP、DMA 与完成状态 | 三项原生协议测试；命令取走不等于完成；失败请求不部分提交 | 已完成，04f78cb |
+| 8 | Python 主机接口、stream 顺序、跨 stream event、同步与跟踪 | 九项主机测试；H2D→kernel→D2H；多 stream 依赖、超时、资源保留 | 已完成，dc95372 |
+| 9 | 显式 DAG、实例化、一次提交启动整图、重复启动、节点参数更新、stream capture | 11 项图测试；循环拒绝、fork/join、独立分支、capture 不执行、失败传播、更新与重放 | 已完成，1b1833a |
+| 10 | 可运行示例、文档、全量回归及 sanitizer | Debug/Release/ASan+UBSan 均通过九套件、75 项测试；65 元素向量示例独立比较；阶段记录见 DEVELOPMENT.md | 已完成 |
 
 ## 实现约定
 

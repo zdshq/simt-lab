@@ -6,9 +6,11 @@
 
 | 构建 | CTest 套件 | unittest 项数 | 结果 |
 |---|---:|---:|---|
-| Debug | 6 | 52 | 全部通过 |
-| Release | 6 | 52 | 全部通过 |
-| Debug + AddressSanitizer + UndefinedBehaviorSanitizer | 6 | 52 | 全部通过，未报告 sanitizer 错误 |
+| Debug | 9 | 75 | 全部通过 |
+| Release | 9 | 75 | 全部通过 |
+| Debug + AddressSanitizer + UndefinedBehaviorSanitizer | 9 | 75 | 全部通过，未报告 sanitizer 错误 |
+
+当前结果包括原 ISA/执行器 52 项、原生主机协议 3 项、主机接口 9 项和 Graph/capture 11 项；开发记录保留各阶段当时的测试数量。
 
 ```sh
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
@@ -24,6 +26,7 @@ cmake --build build-sanitize
 ctest --test-dir build-sanitize --output-on-failure
 
 python3 examples/run_workloads.py
+python3 examples/host_graph.py
 ```
 
 ## 需求与证据映射
@@ -45,20 +48,31 @@ python3 examples/run_workloads.py
 | 异步错误诊断 | 丢失搬运字节、未初始化记录、未来令牌、超出字节预算、覆盖屏障记录 |
 | 组合负载 | `test_workloads.py`：向量尾部、规约、分块 GEMM、完整小型 Transformer；三种 PC/warp 策略下结果一致 |
 | 易复现与解释 | `examples/run_workloads.py` 生成二进制、镜像、汇编、参数、状态和验证摘要；WALKTHROUGH.md 提供架构图 |
-| 用户代码规范 | 入口只调用流程函数；源码、模板注释相邻英文/中文；人工审查中最长 C++ 函数 24 行、Python 22 行；没有添加样式计数测试 |
+| 主机与 CP | `test_protocol.py`：发布/取走/完成不同步、无效请求无部分提交、单包图展开；`test_host.py`：有界环绕队列、超时后继续等待 |
+| 持久资源与 stream/event | 两个 SM 的三 CTA kernel 连续读写同一分配；引用保留、释放与地址复用、H2D 快照、D2D 重叠、设备归属、跨 stream 完成依赖 |
+| 计算/拷贝引擎 | 独立 stream 或图分支中同时观察到运行中的计算与拷贝；join 的开始时刻不早于所有前驱完成 |
+| Graph 生命周期 | `test_graph.py`：模板快照、三次单包重放、参数更新、运行中更新拒绝、同实例跨 stream 串行化、非拓扑编号、空图和环路拒绝 |
+| 捕获与错误 | 单/多 stream capture 不执行，事件边及重新汇合、捕获错误恢复；失败节点取消后继而独立分支完成，资源最终释放 |
+| 主机组合示例 | `examples/host_graph.py`：普通提交、三次更新/重放、跨 stream capture，逐元素验证 65 个值并保存指令及 trace |
+| 用户代码规范 | 入口只调用流程函数；源码、模板注释相邻英文/中文；函数保持简短，按含声明与结束行统计最长 C++ 函数 25 行、Python 22 行；没有添加样式计数测试 |
 | 开发过程 | 独立 Git 仓库按阶段提交，未改写此前历史；构建与示例产物不跟踪 |
 
 相同输入的默认示例输出：vector 257 个值误差 0；reduction 3 个整数和完全一致；GEMM 96 个值最大绝对误差约 2.98e-7；Transformer 32 个值约 1.07e-7。精确数值单元测试和组合数学容差测试分开，不能互相替代。
+
+主机 Graph 示例输出：普通路径 4 个公开提交包，三次图重放各 1 个包，跨 stream capture 启动 1 个包；write/read/completed 均为 8，最终计算及拷贝引擎空闲，trace 未丢弃。每次均与主机独立计算的 65 元素向量结果逐项相等。计数验证提交结构，不代表真实 GPU 的时间或吞吐收益。
 
 ## 明确边界
 
 - 这是 CPU 上执行的功能模拟器；不会利用 RTX 4070 SUPER 来获得模拟 GPU 的实际吞吐。
 - 两个 SM 是逻辑调度资源，不是两份 RTL，也不代表已经估算逻辑门、频率、面积或功耗。
 - 自定义编码不兼容 CUDA/PTX/SASS/curryGPU 私有二进制；Python Program 是指令构造接口，不是 CUDA 编译器。
+- 主机接口及 CUDA Graph 风格功能通过 Python/C++ 进程协议运行，不实现 NVIDIA `cudaGraph*` API/ABI、驱动、PCIe/MMIO 或系统可枚举的 CUDA 设备。
+- Graph 支持范围见 [主机接口规范](HOST.md)：无 child graph、host callback、条件/内存分配节点、device-side launch 或完整 capture mode；单计算引擎不支持并发 kernel。
+- 主机提交通过显式推进执行；完成历史保留到进程退出。kernel 的原始 global 访存不自动检查分配归属，硬编码地址需显式声明资源引用。
 - 不建模 cache、bank conflict、scoreboard、指令延迟、弱内存全结果或多个 CTA 同驻留一个 SM。
 - TMEM 使用本项目显式坐标接口；MMA tile 范围、浮点累加与异步事件规则是公开功能约定，非 NVIDIA 精确硬件复刻。
 - FP4 数据与 binary32 块系数已实现；完整 MXFP4/NVFP4 scale 编码、tensor 级 scale、多维 TMA 和异步 MMA 未实现。
 - 顺序敏感原子和无同步竞争程序不能要求跨所有调度顺序逐线程结果一致；没有实现自动 race checker。
 - 测试覆盖所声明的功能案例和负例，并非形式验证或所有输入穷举。
 
-后续可在这些边界内增加 RTL 对照或独立时序模型。当前交付的完成标准是可执行、可检查、具有独立参考和分阶段 Git 历史的功能 ISS。
+后续可在这些边界内增加 RTL 对照或独立时序模型。当前交付的完成标准是可执行、可检查、具有独立参考和分阶段 Git 历史的功能 ISS，以及持久主机链路与任务图功能。
