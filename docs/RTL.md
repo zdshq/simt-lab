@@ -2,7 +2,7 @@
 
 本阶段把三个关键结构写成 SystemVerilog，并完成 RTL 仿真、Yosys 综合和综合后网表的同一套行为验证。源码在 `rtl/`，C++ 对照平台在 `tests/rtl/`。这是真正的触发器、存储阵列、组合选择和握手状态描述，不是在 C++ 模拟器外套一层延迟。
 
-当前还没有完整 RTL SM、RTL Tensor 乘加阵列或 FPGA bitstream。`simt-run`/`simt-device` 的运行后端仍是已有 C++ 模型；本阶段的 RTL 是独立验证的模块，并未通过 Verilator 替换其执行核心。阶段 16 和整个硬件目标保持进行中。
+本页记录阶段 16 的首批三个结构。后续 [Tensor RTL](RTL_TENSOR.md) 已补充数值电路和 4×4 乘加阵列；当前仍没有完整 RTL SM 或 FPGA bitstream。`simt-run`/`simt-device` 的运行后端仍是已有 C++ 模型；这些 RTL 是独立验证的模块，并未通过 Verilator 替换其执行核心。阶段 16 和整个硬件目标保持进行中。
 
 ## 已实现的电路
 
@@ -113,7 +113,7 @@ cmake --build build --target rtl-check
 python3 tools/rtl.py --module cache --sets 128 --out artifacts/rtl-full
 python3 tools/rtl.py --synth --infer-only --module cache --sets 128 --out artifacts/rtl-synth-full
 
-# 三个模块的完整小配置综合与门级行为检查。
+# 当前全部模块的完整综合与门级行为检查，缓存使用小配置。
 python3 tools/rtl.py --synth --out artifacts/rtl-synth-final
 python3 tools/rtl.py --gate-sim --out artifacts/rtl-synth-final
 
@@ -123,12 +123,14 @@ python3 tools/rtl.py --build build-sanitize --out artifacts/rtl-sanitize-final
 
 `bootstrap_rtl.py` 从系统已配置的 APT 源获取固定版本包，解包到项目内，再构建固定 commit 的 Yosys；manifest 保留 deb 的 SHA-256。其他系统可自行安装相应工具，或设置 `SIMT_VERILATOR`、`SIMT_YOSYS`、`SIMT_BERKELEY_ABC`。外部 Yosys 的门级检查还需用 `--simcells` 指向相应发行版的 `simcells.v`。
 
+当前未指定 `--module` 时也执行后续 Tensor 增量，共 30 项检查；本页以下 14 项及 `rtl-*-final` 数值记录首批三个结构，Tensor 的独立产物和计数见 RTL_TENSOR.md。
+
 三组共 **14 项 RTL 检查**：cache 9 项、scoreboard 3 项、bank 仲裁 2 项。覆盖实际缓存字节、独立 sector、MSHR/merge/response 容量、锁定 way、LRU、byte mask、写确认、反压字段稳定、高地址、精确 hit 流水线、乱序 fill，以及 360 个混合事务与 C++ 差分。scoreboard 包含 5,000 条随机命令，bank 仲裁包含 4,000 拍随机端口对照。64 KiB 配置另外复跑同样的 9 项 cache 检查，不能把重复运行当作新增场景。
 
 综合后网表执行同样 14 项检查。这是有覆盖范围的门级仿真，不是全输入形式等价证明。`netlist.json` 保留 RTL 源码和导出网表哈希；源码或网表改变后，门级检查会拒绝使用旧产物。
 
 普通运行生成 VCD 波形、完整构建/仿真日志及工具版本。源码 hash、参数化命令、存储 inventory、generic netlist、统计 JSON 和综合脚本都在产物目录。旧 Verilator 4.038 的 VCD runtime 使用会触发 UBSan 的非对齐访问；sanitizer 模式因此执行同一设计和对照平台但关闭波形，保留 ASan/UBSan 检测并启用 `halt_on_error`。最终该模式 14 项检查全部通过，无 sanitizer 报告。普通 RTL/门级运行仍生成波形，不通过关闭 alignment sanitizer 掩盖问题。
 
-原软件回归保持 20 套件、257 项检查；本阶段 Debug 回归再次通过，RTL 检查单独统计。下一阶段仍需 Tensor 乘加/数值电路、完整 RTL 单元连接、真实显卡参数校准和最终审计，见 [HARDWARE_PLAN.md](HARDWARE_PLAN.md)。
+原软件回归保持 20 套件、257 项检查；本阶段 Debug 回归再次通过，RTL 检查单独统计。后续 Tensor 数值电路/乘加阵列另增 16 项检查，当前 `rtl-check` 共 30 项，见 [RTL_TENSOR.md](RTL_TENSOR.md)。仍须将 RTL 接入 ISA/TMEM、完成整个 RTL 单元连接、真实显卡参数校准和最终审计，见 [HARDWARE_PLAN.md](HARDWARE_PLAN.md)。
 
 工具机制参考 [Verilator 波形说明](https://veripool.org/guide/latest/faq.html) 与 [Yosys 综合与存储统计示例](https://yosyshq.readthedocs.io/projects/yosys/en/latest/getting_started/example_synth.html)；具体实现、版本差异和上述数值以本地命令及产物为证据。

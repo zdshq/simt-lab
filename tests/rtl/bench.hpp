@@ -20,9 +20,12 @@ public:
     uint64_t cycle = 0;
     explicit Bench(const char* path) {
 #if VM_TRACE
-        Verilated::traceEverOn(true);
-        dut.trace(&trace_, 3);
-        trace_.open(path);
+        tracing_ = path != nullptr;
+        if (tracing_) {
+            Verilated::traceEverOn(true);
+            dut.trace(&trace_, 3);
+            trace_.open(path);
+        }
 #else
         static_cast<void>(path);
 #endif
@@ -39,12 +42,13 @@ public:
 private:
 #if VM_TRACE
     VerilatedVcdC trace_;
+    bool tracing_ = false;
 #endif
     // The old trace runtime uses unaligned accesses; sanitizer checks execute the same design without tracing.
     // 旧版波形运行库使用非对齐访问；sanitizer 检查执行同一设计，但不记录波形。
     void dump(uint64_t time) {
 #if VM_TRACE
-        trace_.dump(time);
+        if (tracing_) trace_.dump(time);
 #else
         static_cast<void>(time);
 #endif

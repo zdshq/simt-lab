@@ -2,7 +2,7 @@
 
 `simt-run --timing` 已接入 TMEM_ALLOC、TMEM_FREE、LDT、STT 和 MMA。MMA 的结果现在由逐拍传输的操作数、有限乘加单元及 TMEM 写端口产生，不调用功能模式的 `matrix_multiply()`。现有五种格式、稀疏和块缩放均可运行，数学规则沿用 [TENSOR.md](TENSOR.md)。
 
-这是本项目研究架构的 Tensor 数据通路，尚非 NVIDIA Tensor Core 的精确复刻或可综合电路。NVIDIA [PTX 的 Tensor Memory 与异步语义](https://docs.nvidia.com/cuda/parallel-thread-execution/#tensor-memory) 说明了特定目标的组织与同步要求，没有公开完整内部乘加阵列电路；本项目没有据此认定 NVIDIA 使用下述 4×4 阵列。SM100a/SM100f 的文档 TMEM 形状与本项目自定义的 128×256 逻辑窗口也不同。
+本页描述 C++ 时序后端的 Tensor 数据通路；后续独立可综合 [Tensor RTL](RTL_TENSOR.md) 已实现数值电路和 4×4 阵列，但尚未替换本后端。两者均非 NVIDIA Tensor Core 的精确复刻。NVIDIA [PTX 的 Tensor Memory 与异步语义](https://docs.nvidia.com/cuda/parallel-thread-execution/#tensor-memory) 说明了特定目标的组织与同步要求，没有公开完整内部乘加阵列电路；本项目没有据此认定 NVIDIA 使用下述 4×4 阵列。SM100a/SM100f 的文档 TMEM 形状与本项目自定义的 128×256 逻辑窗口也不同。
 
 ## 前端、乘加单元和返回路径
 
@@ -42,7 +42,7 @@ flowchart LR
     B1[B 列1] --> P01 --> P11
 ```
 
-默认乘加延迟 4 拍。一个 PE 在前一项累加写回后才能接受下一 K，边缘注入按这个依赖间隔限速。计算得到的位模式先保存在 pending 运算中，到期后才更新该 PE 累加器。浮点运算目前使用宿主 `std::fma` 保持规定的 binary32 融合舍入；INT8 解码为有符号值，累加保留低 32 位。尚未实现门级浮点乘法器、对阶/规格化/舍入电路。
+默认乘加延迟 4 拍。一个 PE 在前一项累加写回后才能接受下一 K，边缘注入按这个依赖间隔限速。计算得到的位模式先保存在 pending 运算中，到期后才更新该 PE 累加器。本 C++ 后端仍使用宿主 `std::fma` 保持规定的 binary32 融合舍入；INT8 解码为有符号值，累加保留低 32 位。独立 RTL 已实现乘法、对齐、规格化和舍入电路，并完成综合后行为验证，具体接口与时钟差异见 RTL_TENSOR.md。
 
 最远 PE 也完成最后运算后，阵列才产生响应。未消费响应继续占用阵列，下一微 tile 不能覆盖它。单元测试独立推导：2×3 阵列、2 个 K、4 拍延迟，第一组在 cycle 1 注入，最后结果在 `1 + 4 + 1 + 2 + 4 = 12` 完成；提前取结果均失败。
 
@@ -88,4 +88,4 @@ python3 examples/run_workloads.py --workload gemm --timing --out artifacts/timed
 
 本阶段的 Debug、Release、ASan+UBSan 全部通过，当时为 15 个 CTest 套件、165 项检查。后续异步增量见 [HARDWARE_ASYNC.md](HARDWARE_ASYNC.md)，当前总数见 [VALIDATION.md](VALIDATION.md)。源码主要在 `src/hardware/tensor_array.cpp` 和 `src/timing/tensor_*.cpp`。
 
-CP_ASYNC/mbarrier 时序通路已接入，原 Transformer 可执行 DMA→shared→MMA→TMEM 路径；local/整数原子也有独立增量验证。CP/copy/Graph 统一时钟、持久缓存与完整 Transformer 图重放见 [HARDWARE_HOST.md](HARDWARE_HOST.md)。缓存、scoreboard 和 bank 仲裁已实现独立 [RTL](RTL.md)，但本页 Tensor 的乘加/浮点数值电路尚未实现。剩余完整硬件目标还包括整体 RTL 连接、参数校准、PTX 异步矩阵协议和最终逐项审计，见 [HARDWARE_PLAN.md](HARDWARE_PLAN.md)。
+CP_ASYNC/mbarrier 时序通路已接入，原 Transformer 可执行 DMA→shared→MMA→TMEM 路径；local/整数原子也有独立增量验证。CP/copy/Graph 统一时钟、持久缓存与完整 Transformer 图重放见 [HARDWARE_HOST.md](HARDWARE_HOST.md)。缓存、scoreboard、bank 仲裁和 Tensor 数值/乘加阵列已实现独立 RTL。剩余完整硬件目标还包括与 ISA/TMEM 的接入、整体 RTL 连接、参数校准、PTX 异步矩阵协议和最终逐项审计，见 [HARDWARE_PLAN.md](HARDWARE_PLAN.md)。

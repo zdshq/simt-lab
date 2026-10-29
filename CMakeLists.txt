@@ -133,7 +133,7 @@ add_simt_test(timed_host_and_graph test_timed_host.py)
 add_custom_target(rtl-check
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/rtl.py
         --build ${CMAKE_CURRENT_BINARY_DIR} --out ${CMAKE_CURRENT_BINARY_DIR}/rtl
-    DEPENDS simt_hardware VERBATIM USES_TERMINAL)
+    DEPENDS simt_core VERBATIM USES_TERMINAL)
 if(TARGET simt_nvml)
     add_executable(test-nvml-api tests/test_nvml_api.cpp)
     target_include_directories(test-nvml-api PRIVATE ${SIMT_NVML_INCLUDE})

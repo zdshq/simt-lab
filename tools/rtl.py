@@ -8,11 +8,17 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = {'cache': ('sector_cache', 'test_cache.cpp', ['sector_sram.sv', 'sector_cache.sv']),
            'scoreboard': ('lane_scoreboard', 'test_scoreboard.cpp', ['lane_scoreboard.sv']),
-           'arbiter': ('register_arbiter', 'test_arbiter.cpp', ['register_arbiter.sv'])}
+           'arbiter': ('register_arbiter', 'test_arbiter.cpp', ['register_arbiter.sv']),
+           'fma': ('fp32_fma', 'test_fma.cpp', ['fp32_fma.sv']),
+           'decode': ('tensor_decode', 'test_decode.cpp', ['tensor_decode.sv']),
+           'pe': ('tensor_pe', 'test_pe.cpp', ['fp32_fma.sv', 'int8_mac.sv', 'tensor_pe.sv']),
+           'tensor': ('tensor_array', 'test_array.cpp',
+                      ['fp32_fma.sv', 'int8_mac.sv', 'tensor_decode.sv', 'tensor_pe.sv', 'tensor_array.sv'])}
 
 
 def tool(name):
@@ -48,8 +54,8 @@ def source_hashes(paths):
 
 
 def compiler_flags(options):
-    includes = f'-std=c++20 -I{ROOT / "include"} -I{ROOT / "tests/rtl"} -DSIMT_RTL_SETS={options.sets}'
-    libraries = f'{options.build / "libsimt_hardware.a"} {options.build / "libsimt_storage.a"}'
+    includes = f'-std=c++20 -I{ROOT / "include"} -I{ROOT / "tests/rtl"} -I{options.build / "generated"} -DSIMT_RTL_SETS={options.sets}'
+    libraries = ' '.join(str(options.build/name) for name in ('libsimt_core.a', 'libsimt_hardware.a', 'libsimt_storage.a'))
     if sanitized(options):
         includes += ' -fsanitize=address,undefined -fno-omit-frame-pointer'
         libraries += ' -fsanitize=address,undefined'
@@ -80,6 +86,9 @@ def simulation(options, name):
     top, _, files = MODULES[name]
     destination = options.out/name
     destination.mkdir(parents=True, exist_ok=True)
+    if name == 'fma':
+        run([sys.executable, str(ROOT/'tests/rtl/fma_vectors.py'), '--out', str(destination/'reference.txt')],
+            destination, 'reference')
     if options.gate_sim: verify_netlist(destination, files)
     label, objects = ('gate', 'gate-obj') if options.gate_sim else ('simulation', 'obj')
     flags, libraries = compiler_flags(options)

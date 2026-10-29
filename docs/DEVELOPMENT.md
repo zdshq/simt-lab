@@ -187,3 +187,18 @@
 - `python3 tools/rtl.py --build build-sanitize --out artifacts/rtl-sanitize-final` 最终 14 项检查全部通过，无 sanitizer 报告。最初开波形运行虽退出码为零，但 UBSan 报告旧 Verilator VCD 库的非对齐访问，不能算作通过；最终只关闭此模式的波形，保留 ASan/UBSan 并启用 `halt_on_error`。普通 RTL 和门级仿真继续生成 VCD。
 - `ctest --test-dir build --output-on-failure -j6` 本阶段再次通过 20 套件、257 项软件检查。复核最终 RTL/网表/sanitizer/64 KiB 产物中的源码哈希均与当前文件一致。再次实测原版 nvidia-smi：系统视图为 RTX 4070 SUPER，专用后端为活模拟设备 64/7/57 MiB，关闭后不再显示；记录在 `artifacts/rtl-final/nvidia-smi-status.txt`。
 - 新增 `docs/RTL.md`，同步 README、来源、计划、验证及相关硬件文档，明确运行中的 `simt-device` 仍使用 C++ 后端。Tensor 目前为逐拍研究阵列，浮点乘加仍调用宿主 `std::fma`；Tensor 数值/乘加 RTL、整体 RTL 连接、实卡参数校准、PTX 异步矩阵协议和最终硬件审计仍未完成。阶段 16 和完整目标保持 active。
+
+## 阶段 16 第二部分：Tensor 数值电路与完整 4×4 阵列（2026-10-29）
+
+- 开始前核对仓库干净及上一阶段 `12d12ad`，将上一轮分类为已提交且有验证证据的进展。继续 coding-standards 的按职责拆分、入口只调用函数、相邻英中注释要求。
+- 新增四级 `fp32_fma.sv`：实际 24×24 位尾数乘法、指数对齐/77 位带 sticky 通路、有符号幅度加减、前导位检测与规格化/最近偶数舍入。保留次正规数、带符号零、溢出无穷与统一 NaN；零操作数不参与最大指数选择。RTL 不调用宿主浮点或 DPI，输出反压冻结在途流水线。
+- 新增 `int8_mac.sv` 的有符号 8×8 乘法和模 2^32 累加，以及 `tensor_decode.sv` 的 FP16/BF16/FP4/INT8 转换。全部 65,536 个 FP16 与 BF16 编码逐项验证，全部 65,536 个 INT8 乘积在实际 PE 中验证；FP4 高/低半字节与负零均覆盖。
+- `tensor_pe.sv` 具有输出累加器、块内部分和、元数据与 DOT/SCALE/ACCUMULATE 状态，复用同一浮点流水线执行三段块缩放。稀疏缺失项保留原值而不计算传入 NaN；scale 乘法使用同号零保持原有符号零语义。上一项退休与下一项准入同拍时，反馈旁路提供最新累加值。
+- `tensor_array.sv` 实例化 16 个 PE、8 个格式转换器、两项各 526 位 FIFO、边缘错拍与相邻传输寄存器。有限输入队列、last 归属、全部 PE 完成及结果反压均有实际状态，支持 1..4 行列、五种格式、显式稀疏使能和块缩放。原 C++ 对照接口更抽象，RTL 首个波多两个前端时钟；定向验证 2×3/两波 14 拍、1×1/两缩放块 27 拍、4×4/256 波 1,033 拍。
+- 数值验证没有只使用普通 GEMM：FMA 包含 13,824 个边界/特殊值组合、250,000 个随机/抵消输入，以及独立 `numeric_reference.py` 的 12,000 组 Fraction 参考；还验证四级延迟、输入气泡、反压和复位。阵列与原 `simt::hw::TensorArray` 对照 100 个混合格式/输入气泡 tile、最大 K、模式复用、稀疏 NaN、结果保持和失败后重试。
+- 首次阵列综合在 FIFO 的存储输出寄存器合并后报告 260 个未驱动位，改为明确两项寄存器 FIFO 后通过 `check -assert`；失败日志保留在 `artifacts/rtl-tensor-array-synth/tensor/synthesis-before-fifo-fix.log`。复查发现 PE 最后令牌退休同拍的反馈准入边界，增加 `!saved_last` 约束和专门测试，再次执行受影响模块的仿真、综合、网表和 sanitizer 检查。
+- 最终 `cmake --build build --target rtl-check` 全部通过 30 项（原 14 + 新增 FMA 4/转换 3/PE 3/阵列 6），当前报告 `build/rtl/simulation.json`。测试驱动加入 `simt_core` 静态库依赖以使用实际 Tensor 参考；大随机测试不生成巨量波形，短场景仍保留 VCD，sanitizer 继续保留全部检测并关闭旧波形运行库。
+- 实际执行 `tools/rtl.py --synth` 和 `--gate-sim` 的 fma/decode/pe/tensor 四个模块，分别记录在 `artifacts/rtl-tensor-synth`、`rtl-tensor-decode-synth`、`rtl-tensor-pe-synth`、`rtl-tensor-array-synth`。最终 16 项网表检查全部通过；对应四个 `--build build-sanitize` 目录也全部通过，无 sanitizer 报告。
+- Yosys 0.40/ABC 实际统计：FMA 为 11,498 个 generic cells/478 个触发器位；转换器 546/0；PE 13,088/794；完整 4×4 阵列 217,893/16,636。阵列统计包含全部实例，不是只计模块定义。没有工艺库、P&R 或 DSP 映射，不能解释成 NAND2 等效门数、工艺面积、Fmax 或整 SM 成本。
+- `ctest --test-dir build --output-on-failure -j6` 本阶段再次通过 20 套件、257 项软件检查，包括原版 nvidia-smi；C++ 数值执行方式没有改动。本阶段主要说明新增于 `RTL_TENSOR.md`，同步计划、Tensor 数值规范、来源、README 和验证记录。
+- 完整目标保持 active。当前 `simt-run`/`simt-device` 仍使用 C++ 后端，下一步须接入 RTL 数值/阵列、ISA/TMEM 和整体 RTL 层次；实卡参数校准、PTX 异步矩阵协议、最终逐项审计及系统默认 nvidia-smi 视图合并仍未完成。

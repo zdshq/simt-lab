@@ -1,6 +1,6 @@
 # 验证记录
 
-本页原表记录阶段 0–10 的 75 项功能验收。后续增量包括 17 项存储硬件检查、6 项 NVML 端到端检查、7 项流水线单元检查、35 项基础时序执行检查、6 项 Tensor 阵列检查、19 项 Tensor 时序执行检查、29 项异步/组合时序检查、9 项 C++/17 项 Python local 与原子检查，以及 4 项 C++/33 项 Python 持久上下文、CP/copy/Graph 检查。软件三种构建均通过 20 套件、257 项检查（214 项 Python、43 项 C++）。具体证据见 [存储单元](HARDWARE_MEMORY.md)、[SM](HARDWARE_SM.md)、[Tensor](HARDWARE_TENSOR.md)、[DMA/事务屏障](HARDWARE_ASYNC.md)、[local/原子](HARDWARE_ATOMIC_LOCAL.md)、[持久设备](HARDWARE_HOST.md) 和 [原版 nvidia-smi](NVIDIA_SMI.md)。另有 14 项独立 [RTL 检查](RTL.md)，见下表。完整 RTL GPU、实机校准和最终硬件验收仍待完成。
+本页原表记录阶段 0–10 的 75 项功能验收。后续增量包括 17 项存储硬件检查、6 项 NVML 端到端检查、7 项流水线单元检查、35 项基础时序执行检查、6 项 Tensor 阵列检查、19 项 Tensor 时序执行检查、29 项异步/组合时序检查、9 项 C++/17 项 Python local 与原子检查，以及 4 项 C++/33 项 Python 持久上下文、CP/copy/Graph 检查。软件三种构建均通过 20 套件、257 项检查（214 项 Python、43 项 C++）。具体证据见 [存储单元](HARDWARE_MEMORY.md)、[SM](HARDWARE_SM.md)、[Tensor](HARDWARE_TENSOR.md)、[DMA/事务屏障](HARDWARE_ASYNC.md)、[local/原子](HARDWARE_ATOMIC_LOCAL.md)、[持久设备](HARDWARE_HOST.md) 和 [原版 nvidia-smi](NVIDIA_SMI.md)。另有 30 项独立 RTL 检查：首批 [缓存/依赖/仲裁](RTL.md) 14 项及 [Tensor 数值/阵列](RTL_TENSOR.md) 16 项，见下表。完整 RTL GPU、实机校准和最终硬件验收仍待完成。
 
 验收日期：2026-10-29。环境：Linux、GCC 11.4、CMake 3.22、Python 3.13.5。构建要求 C++20、CMake 3.20+ 和 Python 3.10+，无第三方运行时依赖。
 
@@ -86,6 +86,21 @@ Verilator 4.038 和 Yosys 0.40 的实际产物、命令及源码哈希保存在 
 
 本阶段再次实际运行原版 `/usr/bin/nvidia-smi`：系统后端显示 RTX 4070 SUPER；项目启动器显示活模拟设备及 64/7/57 MiB，关闭后返回 `No devices found.`。记录在 `artifacts/rtl-final/nvidia-smi-status.txt`，没有合并系统默认视图。
 
+## 阶段 16：Tensor 数值与完整阵列 RTL
+
+新增 16 项：FMA 4、格式转换 3、PE 3、完整 4×4 阵列 6；`cmake --build build --target rtl-check` 合计 30 项全部通过，当前报告为 `build/rtl/simulation.json`。这些检查另在 ASan/UBSan 和实际综合后网表上通过，详见 [RTL_TENSOR.md](RTL_TENSOR.md)。
+
+| 检查对象 | 主要覆盖 | 实际证据目录 |
+|---|---|---|
+| 四级 FP32 FMA | 13,824 个特殊值组合、250,000 个随机/抵消输入、12,000 个精确有理数参考、时钟/反压/复位 | `artifacts/rtl-tensor-synth`、`artifacts/rtl-tensor-fma-sanitize` |
+| 格式转换 | 全部 FP16/BF16 编码、INT8 字节、FP4 半字节及非法格式 | `artifacts/rtl-tensor-decode-synth`、`artifacts/rtl-tensor-decode-sanitize` |
+| 独立 PE | 65,536 种整数乘积、融合/缩放/稀疏语义、最后令牌阻止后继 | `artifacts/rtl-tensor-pe-synth`、`artifacts/rtl-tensor-pe-sanitize` |
+| 完整 4×4 阵列 | 100 个混合格式/输入气泡 tile、256 K、有限 FIFO、结果保持、控制拒绝、在途复位；与 C++ 阵列逐位比较 | `artifacts/rtl-tensor-array-synth`、`artifacts/rtl-tensor-array-sanitize` |
+
+完整阵列实际综合为 217,893 个 generic cells，其中 16,636 个触发器位；没有工艺面积或全 GPU 门数结论。首次 FIFO 推断存在未驱动位，明确使用寄存器组后通过严格综合检查和网表验证；复查补上最后令牌退休同拍的准入约束，并重跑受影响 PE/阵列的 RTL、sanitizer、综合和网表检查。
+
+本阶段软件 Debug 回归再次通过全部 20 套件、257 项检查，包括原版 nvidia-smi 集成。没有改变当前 C++ 执行后端的 Tensor 计算方式；新增 RTL 尚未接入 ISA/TMEM 或主机设备。
+
 ## 明确边界
 
 - 功能模式和时序模式都在 CPU 上执行；不会利用 RTX 4070 SUPER 来获得模拟 GPU 的实际吞吐。
@@ -100,4 +115,4 @@ Verilator 4.038 和 Yosys 0.40 的实际产物、命令及源码哈希保存在 
 - 顺序敏感原子和无同步竞争程序不能要求跨所有调度顺序逐线程结果一致；没有实现自动 race checker。
 - 测试覆盖所声明的功能案例和负例，并非形式验证或所有输入穷举。
 
-阶段 0–10 的功能 ISS、持久主机链路与任务图已完成其原有验收。后续 CP/copy/Graph 时序与持久缓存也已接入。完整硬件目标仍未完成，剩余 PTX 异步矩阵提交、Tensor 数值/乘加 RTL、整体 RTL 连接、参数校准和最终审计以 HARDWARE_PLAN.md 为准。
+阶段 0–10 的功能 ISS、持久主机链路与任务图已完成其原有验收。后续 CP/copy/Graph 时序与持久缓存也已接入。完整硬件目标仍未完成，剩余 PTX 异步矩阵提交、RTL 与 ISA/TMEM 接入、整体 RTL 连接、参数校准和最终审计以 HARDWARE_PLAN.md 为准。
