@@ -247,12 +247,40 @@ PCI 选择在原程序私有路径中假定所有设备都有 PCI 状态，模�
 
 首轮集成的 96 项指令检查中，1 项 CAS 替换值/WAR 检查因固定四端口几何拒绝 `--register-banks 1`。失败日志保存在 `rtl-register-file-history/first-integration.log`。实现 1/2/4 端口组的 RTL 冲突逻辑后，保留原算例、数值断言与 sanitizer，最终全部通过。没有将不支持的配置悄悄回退到 C++。
 
-当前寄存器数据、有效位和旁路已经电路化；collector、请求优先级、调度和谓词值仍是 C++。不宣称循环 bank 仲裁器、整个 SM、FPGA 存储/时钟宏映射或真实 NVIDIA 数据通路已经完成。
+寄存器阶段结束时，数据、有效位和旁路已经电路化，collector、请求优先级、调度和谓词值仍是 C++；后续 collector/读仲裁接入见下一节。不宣称循环 bank 仲裁器、整个 SM、FPGA 存储/时钟宏映射或真实 NVIDIA 数据通路已经完成。
+
+## 阶段 16：寄存器直连 collector 与读请求年龄仲裁（2026-10-29）
+
+本阶段从 `063ff61` 接续，新增可选 `--register-rtl --collector-rtl`。实际 RTL 保存每分区 32 个物理条目的源描述符、三个源向量、等待位和相对年龄，读授权直接驱动寄存器堆端口。默认运行额度 4 不等于只综合 4 个条目。实现、数据路径与执行交接边界见 [RTL_COLLECTOR.md](RTL_COLLECTOR.md)。
+
+| 验证 | 实际结果 |
+|---|---|
+| 默认 Debug 全量 | `ctest --test-dir build --output-on-failure -j6`：26 套件、274 项运行（231 Python / 43 C++），272 通过、2 项因未构建 RTL 而跳过，2.30 秒 |
+| 联合 Release 全量 | `ctest --test-dir build-cache-rtl --output-on-failure -j6`：41 套件、834 项（771 Python / 63 C++）全部通过，5.20 秒；各套件选择其测试后端，不把全部检查说成同时开启五个 RTL |
+| 寄存器/collector Debug sanitizer | `UBSAN_OPTIONS=halt_on_error=1 ctest --test-dir build-register-sanitize --output-on-failure -j3`：32 套件、540 项（491 Python / 49 C++）全部通过，133.94 秒；Tensor/cache/scoreboard 为软件实现 |
+| 最终适配器空闲断言 | 上述 sanitizer 全量后新增空槽和已收齐条目各 20 拍时钟门检查；重建受影响目标，3 项 C++ 适配器检查在 Release 和 ASan/UBSan 下再次通过；最终联合 Release 全量也包含这批断言 |
+| collector 独立 RTL | `python3 tools/rtl.py --module collector --out artifacts/rtl-collector-final`：32 条目、5 项场景通过；相同 5 项在 `rtl-collector-sanitize` 下带 ASan/UBSan 通过 |
+| 直连寄存器/collector | `--module operand_unit`：2 项真实顶层连线检查通过；同 2 项在 `rtl-operand-unit-sanitize` 下通过 |
+| 完整 collector 综合及网表 | `--module collector --synth --out artifacts/rtl-collector-full-gates`：32 条目，840,085 generic cells / 102,432 触发器位；`check -assert` 通过，随后 `--gate-sim` 同 5 项全部通过 |
+| 小 collector 综合与网表 | `--collector-entries 4 --synth`：122,764 generic cells / 12,804 触发器位；随后 `--gate-sim` 同 5 项通过，产物 `rtl-collector-gates` |
+| 完整直连顶层存储综合 | `--module operand_unit --synth --infer-only --out artifacts/rtl-operand-unit-full`：8 个 warp 槽 RF + 32 条目 collector；按层次展开为 135 个数组、626,688 存储位，`check -assert` 通过 |
+| 五后端完整主机负载 | `python3 examples/hardware_host.py --build build-cache-rtl --register-rtl --collector-rtl --scoreboard-rtl --cache-rtl --tensor-rtl --out artifacts/rtl-collector-host-final`：四类负载各两次 Graph 重放通过，设备最终 64,500 拍 |
+| 状态与监控审计 | 10 个 kernel 报告确认五种 RTL 身份、collector 分配/释放/读取与时钟关系；普通 `nvidia-smi` 经桥接层显示实卡和活模拟器、7 MiB 分配、释放到零及退出移除 |
+
+全量 CTest 日志与计数在 `artifacts/rtl-collector-final/{debug,joint-release,register-collector-sanitize}.log` 和 `tests.json`；最后增补的空闲断言结果另存 `adapter-sanitize-final.log`。独立工具每份清单记录源码哈希和参数；本阶段没有把先前 40 项独立电路检查全部重跑，新默认集合为 47 项。普通 RTL、sanitizer 与网表使用相同场景，不重复计算新增场景数。
+
+首轮 sanitizer 的 96 项执行检查只有 `test_maximum_descriptor_shape` 出错：子进程达到原有 120 秒限制，没有数值或 sanitizer 检测报告。日志在 `rtl-collector-history/sanitize-before-idle-elision.log`。适配器改为读取实际 waiting 位，无待处理源时不打开 collector 时钟、不重复空闲求值；RF 无输入变化时也省去引脚清空后的冗余求值。相同 96 项最终 133.94 秒全部通过，最大矩阵形状、全部断言、120 秒子进程与 600 秒套件限制不变。最初直连测试的 C++ 类型推导编译错误也保存在 `first-connected-bench-build.log`，已修正为明确的无符号类型。
+
+完整 32 条目网表第一次 Verilator/C++ 编译达到工具既有 600 秒限制；诊断保存在 `rtl-collector-history/full32-gate-build-timeout.log`。相同 `--module collector --gate-sim --out artifacts/rtl-collector-full-gates` 命令再次运行，复用已完成对象文件后编译与全部 5 项执行通过；没有改网表、缩减条目数或延长限制。最终十份清单的 RTL 源码哈希与两份实际网表哈希核对一致，结果在 `rtl-collector-final/evidence-audit.json`。
+
+主机负载与 `rtl-register-host-final` 对比，删除新增 collector 观测项后架构状态、模型周期、缓存/DRAM 统计一致。Transformer 两次重放的 trace 在同一拍内事件顺序改变，按 `(cycle, instruction, action, sm)` 归组后相等；其余六份 trace 全量相等。没有将归组相等写成原始 trace 逐项相等。证据在 `rtl-collector-host-final/backend-audit.json` 和 `nvidia-smi-status.txt`。
+
+当前还有 C++ 执行锁存器、发射调度、谓词值和写回请求仲裁。collector 的组合输出查询在宿主低电平阶段可顺序读取多个条目，尚非多执行单元的物理输出端口网络。综合结果只描述列出的模块，未作工艺宏映射、物理时序、整 SM 或整 GPU 门数结论。
 
 ## 明确边界
 
 - 功能模式和时序模式都在 CPU 上执行；不会利用 RTX 4070 SUPER 来获得模拟 GPU 的实际吞吐。
-- 两个 SM 已有基础时序资源模型；缓存、Tensor、scoreboard 和寄存器数据 RTL 已接入实际执行，循环 bank 仲裁 RTL 仍独立，尚未连接成两份完整 RTL SM。仅报告实际模块的 generic-cell 统计，没有整卡门数、工艺频率、面积或功耗结论。
+- 两个 SM 已有基础时序资源模型；缓存、Tensor、scoreboard、寄存器数据和 collector/读请求年龄仲裁 RTL 已接入实际执行，早期循环 bank 仲裁 RTL 仍独立，尚未连接成两份完整 RTL SM。仅报告实际模块的 generic-cell 统计，没有整卡门数、工艺频率、面积或功耗结论。
 - 自定义编码不兼容 CUDA/PTX/SASS/curryGPU 私有二进制；Python Program 是指令构造接口，不是 CUDA 编译器。
 - 主机接口及 CUDA Graph 风格功能通过 Python/C++ 进程协议运行，不实现 NVIDIA `cudaGraph*` API/ABI、驱动、PCIe/MMIO 或系统可枚举的 CUDA 设备。
 - Graph 支持范围见 [主机接口规范](HOST.md)：无 child graph、host callback、条件/内存分配节点、device-side launch 或完整 capture mode；单计算引擎不支持并发 kernel。

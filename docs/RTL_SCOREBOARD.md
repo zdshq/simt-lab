@@ -2,7 +2,7 @@
 
 `SIMT_SCOREBOARD_RTL=ON` 构建和 `--timing --scoreboard-rtl` 已将寄存器 RAW/WAW/WAR 与谓词写依赖交给实际 RTL 状态。C++ 不再为这个后端保存另一份写者表或读者计数。普通算术、访存、Tensor、异步搬运及主机 Graph 都通过同一依赖接口执行。
 
-这一步接入的是依赖控制电路。寄存器**数据**另可选择 [寄存器 RTL](RTL_REGISTERS.md)，collector 与请求排序仍为 C++；独立 `register_arbiter.sv` 尚未接入整机。它不是完整 RTL SM，也不是 NVIDIA scoreboard 的逆向复刻。
+这一步接入的是依赖控制电路。寄存器**数据**另可选择 [寄存器 RTL](RTL_REGISTERS.md)，collector/读仲裁另有 [直连后端](RTL_COLLECTOR.md)，写回请求排序仍为 C++；独立 `register_arbiter.sv` 尚未接入整机。它不是完整 RTL SM，也不是 NVIDIA scoreboard 的逆向复刻。
 
 ## 每个物理 warp 槽保存什么
 
@@ -83,4 +83,4 @@ Debug sanitizer 的大型电路仿真可能超过默认的单次主机响应等�
 
 最终独立电路证据位于 `artifacts/rtl-scoreboard-gated/` 和 `rtl-scoreboard-gated-sanitize/`；首版面积与阶段优化记录分别保留在 `rtl-scoreboard-integrated/`、`rtl-scoreboard-phases/`。最终完整主机产物位于 `rtl-scoreboard-gated-host/`。各构建的实际通过范围、失败与重跑记录见 [VALIDATION.md](VALIDATION.md)。
 
-寄存器数据已另有可选 RTL 后端；operand collector、bank 仲裁整机接入、其余 RTL 连接、实卡校准、PTX 异步矩阵协议和最终审计仍按 [HARDWARE_PLAN.md](HARDWARE_PLAN.md) 继续，不能用本模块的通过证明整颗 GPU 已经完成。
+寄存器数据已另有可选 RTL 后端；collector 和读仲裁亦有直连后端；写回仲裁整机接入、其余 RTL 连接、实卡校准、PTX 异步矩阵协议和最终审计仍按 [HARDWARE_PLAN.md](HARDWARE_PLAN.md) 继续，不能用本模块的通过证明整颗 GPU 已经完成。

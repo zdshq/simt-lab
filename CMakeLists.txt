@@ -19,7 +19,7 @@ add_library(simt_core src/machine.cpp src/execution.cpp src/control.cpp src/coll
     src/dump.cpp src/module.cpp src/memory_execution.cpp src/barrier.cpp
     src/diagnostics.cpp src/tensor.cpp src/tensor_numeric.cpp src/matrix.cpp src/matrix_descriptor.cpp
     src/async.cpp src/async_copy.cpp src/timing/footprint.cpp src/timing/scheduler.cpp src/timing/issue.cpp
-    src/timing/execute.cpp src/timing/registers.cpp src/timing/memory.cpp src/timing/retire.cpp src/timing/report.cpp
+    src/timing/execute.cpp src/timing/registers.cpp src/timing/collectors.cpp src/timing/memory.cpp src/timing/retire.cpp src/timing/report.cpp
     src/hardware/tensor_array.cpp src/hardware/tensor_engine.cpp src/timing/tensor_transfer.cpp src/timing/tensor_control.cpp
     src/timing/tensor_tile.cpp src/timing/tensor_operands.cpp src/timing/async_launch.cpp
     src/timing/async_barrier.cpp src/timing/async_dma.cpp src/timing/async_report.cpp src/timing/atomic.cpp ${GENERATED_DIR}/isa.hpp)
@@ -163,7 +163,15 @@ add_simt_test(tensor_backend_selection test_tensor_backend.py)
 add_simt_test(cache_backend_selection test_cache_backend.py)
 add_simt_test(scoreboard_backend_selection test_scoreboard_backend.py)
 add_simt_test(register_backend_selection test_register_backend.py)
+add_simt_test(collector_backend_selection test_collector_backend.py)
 if(SIMT_REGISTER_RTL)
+    add_executable(test-rtl-collector tests/test_rtl_collector.cpp)
+    target_link_libraries(test-rtl-collector PRIVATE simt_hardware)
+    target_compile_options(test-rtl-collector PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    add_test(NAME rtl_collector_adapter COMMAND test-rtl-collector)
+    add_simt_test(rtl_collector_execution test_rtl_collector.py)
+    add_simt_test(rtl_collector_host test_rtl_collector_host.py)
+    set_tests_properties(rtl_collector_execution rtl_collector_host PROPERTIES TIMEOUT 600)
     add_executable(test-rtl-register-file tests/test_rtl_register_file.cpp)
     target_link_libraries(test-rtl-register-file PRIVATE simt_hardware)
     target_compile_options(test-rtl-register-file PRIVATE -Wall -Wextra -Wpedantic -Werror)

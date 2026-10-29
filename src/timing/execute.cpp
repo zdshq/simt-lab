@@ -7,9 +7,10 @@ namespace simt {
 // Each physical bank read transfers one vector operand into its collector before releasing WAR locks.
 // 每次物理 bank 读取向收集器传送一个向量操作数，然后才释放 WAR 锁。
 void TimingMachine::collect_operands() {
+    collect_rtl_operands();
     for (auto& [id, pointer] : inflight_) {
         static_cast<void>(id); auto& entry = *pointer;
-        if (entry.stage != Stage::collect) continue;
+        if (entry.stage != Stage::collect || entry.collector) continue;
         auto use = entry.unread.begin();
         while (use != entry.unread.end()) {
             if (!collect_operand(entry, *use)) { ++stats_.register_stalls; ++use; continue; }
@@ -58,6 +59,7 @@ void TimingMachine::launch(Inflight& entry) {
         pipe == Pipe::floating ? config.float_latency : pipe == Pipe::special ? config.special_latency : 1;
     const uint32_t interval = pipe == Pipe::integer ? config.integer_interval :
         pipe == Pipe::floating ? config.float_interval : pipe == Pipe::special ? config.special_interval : 1;
+    take_collector(entry);
     partition.available[index] = cycle_ + interval;
     if (pipe == Pipe::async) start_async(entry);
     else if (pipe == Pipe::tensor) {

@@ -18,7 +18,7 @@ TimedSm::TimedSm(const hw::PipelineConfig& config, const hw::TensorConfig& tenso
       tmem({131072, tensor.tmem_banks, tensor.tmem_latency, 8}), array(hw::make_tensor_engine(tensor)) {
     for (uint32_t part = 0; part < config.partitions; ++part) {
         partitions.emplace_back(config.register_banks);
-        if (config.register_rtl) partitions.back().registers = hw::make_register_file(config.partitions, config.register_banks);
+        if (config.register_rtl) partitions.back().registers = hw::make_register_file(config.partitions, config.register_banks, config.collector_rtl ? config.collectors : 0);
     }
     scoreboards.resize(config.max_warps);
 }

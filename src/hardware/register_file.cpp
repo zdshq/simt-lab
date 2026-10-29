@@ -1,4 +1,5 @@
 #include "simt/register_file.hpp"
+#include "simt/operand_collector.hpp"
 #include <stdexcept>
 
 namespace simt::hw {
@@ -12,11 +13,12 @@ bool register_rtl_available() {
 
 // An unavailable data path must fail before executing a kernel, without a software fallback.
 // 不可用的数据通路必须在执行 kernel 前失败，不回退到软件。
-std::unique_ptr<RegisterFile> make_register_file(uint32_t partitions, uint32_t banks) {
+std::unique_ptr<RegisterFile> make_register_file(uint32_t partitions, uint32_t banks, uint32_t collectors) {
 #ifdef SIMT_HAS_REGISTER_RTL
+    if (collectors) return make_rtl_operand_unit(partitions, banks, collectors);
     return make_rtl_register_file(partitions, banks);
 #else
-    static_cast<void>(partitions); static_cast<void>(banks);
+    static_cast<void>(partitions); static_cast<void>(banks); static_cast<void>(collectors);
     throw std::runtime_error("register_rtl_backend_unavailable; build with SIMT_REGISTER_RTL=ON");
 #endif
 }

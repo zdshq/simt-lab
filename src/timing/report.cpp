@@ -29,6 +29,27 @@ void register_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedSm
     out << ']';
 }
 
+// Collector counters reflect circuit handshakes, not a software estimate of operand availability.
+// 收集器计数反映电路握手，而不是软件估算的操作数可用性。
+void collector_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedSm>>& sms) {
+    out << ",\"collectors\":[";
+    bool first = true;
+    for (uint32_t sm = 0; sm < sms.size(); ++sm)
+        for (uint32_t part = 0; part < sms[sm]->partitions.size(); ++part) {
+            const auto& file = sms[sm]->partitions[part].registers;
+            auto* collector = file ? file->collector() : nullptr;
+            if (!collector) continue;
+            if (!first) out << ',';
+            first = false;
+            const auto& s = collector->collector_stats();
+            out << "{\"sm\":" << sm << ",\"partition\":" << part << ",\"backend\":\"rtl\",\"physical_entries\":32,\"limit\":" << collector->limit()
+                << ",\"occupancy\":" << collector->occupancy() << ",\"clocks\":" << s.clocks << ",\"active_clocks\":" << s.active_clocks
+                << ",\"allocated\":" << s.allocated << ",\"released\":" << s.released
+                << ",\"reads\":" << s.reads << ",\"bank_stalls\":" << s.bank_stalls << '}';
+        }
+    out << ']';
+}
+
 void scoreboard_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedSm>>& sms) {
     out << ",\"scoreboards\":[";
     bool first = true;
@@ -132,6 +153,7 @@ void TimingMachine::dump(std::ostream& out) const {
     dump_statistics(out);
     scoreboard_stats(out, sms_);
     register_stats(out, sms_);
+    collector_stats(out, sms_);
     dump_memory(out);
     dump_tensor(out);
     dump_async(out);

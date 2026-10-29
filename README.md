@@ -4,7 +4,7 @@
 
 项目使用 C++20 实现执行核心，Python 生成 ISA 编码接口、构造 kernel 和独立参考结果。默认设备含两个 SM，每个 warp 有 32 个逻辑线程。它运行在 CPU 上，模拟的是自定义机器的行为，不预测真实 GPU 周期、面积或功耗。
 
-这里使用自己的指令编码与数值规范，借鉴作者公开的设计方法，不宣称兼容 curryGPU 的私有二进制、NVIDIA SASS 或完整 CUDA。ISS 和时序模型已运行；缓存、scoreboard、寄存器 bank 仲裁及 Tensor 数值/乘加阵列已有验证的 RTL。L1/L2、Tensor、scoreboard 和寄存器数据 RTL 已可选接入 ISA 和主机 Graph；完整 RTL GPU、PTX 编译器和 FPGA 实现仍未完成。
+这里使用自己的指令编码与数值规范，借鉴作者公开的设计方法，不宣称兼容 curryGPU 的私有二进制、NVIDIA SASS 或完整 CUDA。ISS 和时序模型已运行；缓存、scoreboard、寄存器 bank 仲裁及 Tensor 数值/乘加阵列已有验证的 RTL。L1/L2、Tensor、scoreboard、寄存器数据与操作数收集器 RTL 已可选接入 ISA 和主机 Graph；完整 RTL GPU、PTX 编译器和 FPGA 实现仍未完成。
 
 开发阶段、验收条件和当前进展见 [实施计划](docs/PLAN.md)、[主机与 Graph 扩展计划](docs/HOST_PLAN.md) 和 [开发记录](docs/DEVELOPMENT.md)。每个通过验收的阶段单独 Git 提交。
 
@@ -68,8 +68,10 @@ python3 examples/host_graph.py
 
 缓存 LRU 已按组实现为排名寄存器和局部比较电路，完整 256 KiB、8 路 L2 的保留存储综合、RTL 和 sanitizer 检查均通过。2/4 KiB 小配置另通过完整综合及相同网表行为检查；这些结果不等于具体 FPGA/ASIC 的存储宏映射或整 GPU 面积。
 
-[Scoreboard RTL 后端](docs/RTL_SCOREBOARD.md) 已将逐 lane 写者、读者计数和谓词依赖接入实际指令与主机 Graph。用 `-DSIMT_SCOREBOARD_RTL=ON` 构建、`--scoreboard-rtl` 运行；可与 Tensor/L1/L2 RTL 同时启用。包含有限同拍事件、阶段旁路和事件时钟门控，报告输入时钟与有效更新边沿。寄存器数据还可选择下述 RTL 后端，collector 与请求优先级仍由 C++ 实现。
+[Scoreboard RTL 后端](docs/RTL_SCOREBOARD.md) 已将逐 lane 写者、读者计数和谓词依赖接入实际指令与主机 Graph。用 `-DSIMT_SCOREBOARD_RTL=ON` 构建、`--scoreboard-rtl` 运行；可与 Tensor/L1/L2 RTL 同时启用。包含有限同拍事件、阶段旁路和事件时钟门控，报告输入时钟与有效更新边沿。寄存器数据还可选择下述 RTL 后端，collector 和读请求仲裁另可选择下述直连电路。
 
 [寄存器数据 RTL 后端](docs/RTL_REGISTERS.md) 用 `-DSIMT_REGISTER_RTL=ON` 构建、`--register-rtl` 或 Python `register_rtl=True` 启用。每 SM 256 KiB 数据按 partition 与四个物理 bank 划分，包含逐 lane 有效位、masked write、写回旁路和槽复用清零；源操作数来自实际电路输出，可与其他三个 RTL 后端联合运行。
 
-当前默认 Debug 运行 25 套件、272 项（271 通过，1 项未构建 RTL 而跳过）；四种 RTL 后端可用的联合 Release 构建通过 37 套件、699 项；寄存器 RTL 的 Debug ASan/UBSan 构建通过 28 套件、405 项。不同构建包含既有场景复跑，独立 RTL 检查另计，完整范围与早期失败记录见验证文档。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。
+[操作数收集器 RTL](docs/RTL_COLLECTOR.md) 通过 `--register-rtl --collector-rtl` 或 Python `register_rtl=True, collector_rtl=True` 启用。每分区 32 个物理条目保存三个源向量、待收集位和相对年龄；读请求由电路仲裁，寄存器数据直接连入收集器，执行接收后才传给 C++ 执行锁存器。
+
+当前默认 Debug 运行 26 套件、274 项（272 通过，2 项未构建 RTL 而跳过）；五种 RTL 后端可用的联合 Release 构建通过 41 套件、834 项；寄存器与 collector RTL 的 Debug ASan/UBSan 构建通过 32 套件、540 项。不同构建包含既有场景复跑，独立 RTL 检查另计，各套件按其目的选择后端，并非全部同时启用五种 RTL。完整范围与早期失败记录见验证文档。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。

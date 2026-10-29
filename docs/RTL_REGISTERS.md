@@ -2,7 +2,7 @@
 
 `SIMT_REGISTER_RTL=ON` 构建、`--timing --register-rtl` 或 Python `Device(timing=True, register_rtl=True)` 将普通寄存器数据接入 SystemVerilog 电路。指令源操作数来自电路的实际读取端口；C++ 架构状态中的寄存器副本只用于保存退休结果和转储，不再作为这个后端的操作数来源。
 
-这仍是 CPU 上的混合仿真，不是完整 RTL SM，也不是 NVIDIA 寄存器布局的逆向复刻。操作数收集器的存储、请求排序和调度还由 C++ 实现，独立 `register_arbiter.sv` 的循环优先级还没有接入。当前实现保留已有的按动态指令年龄提交请求的顺序。
+这仍是 CPU 上的混合仿真，不是完整 RTL SM，也不是 NVIDIA 寄存器布局的逆向复刻。单独启用寄存器后端时，操作数收集器和请求排序仍由 C++ 实现；另加 `--collector-rtl` 可启用 [直连收集器和年龄优先读仲裁](RTL_COLLECTOR.md)。独立 `register_arbiter.sv` 的循环优先级不是这个年龄优先策略，仍未接入。
 
 ## 容量、地址与端口
 
@@ -77,4 +77,4 @@ python3 tools/rtl.py --module register_file --rf-slots 2 --gate-sim --out artifa
 
 首轮 96 项指令复跑中，原 CAS 替换操作数检查使用单 bank 端口配置，首次固定四 bank 接口拒绝了该配置。保留原测试和失败日志，增加真实 RTL 端口共享授权后继续验证，没有删除 WAR/旧替换值检查。
 
-完整目标仍按 [HARDWARE_PLAN.md](HARDWARE_PLAN.md) 推进：collector 电路、请求仲裁与整体 SM 连接、其余存储/控制单元、实卡参数校准、PTX 异步矩阵协议和最终硬件审计尚未完成。
+完整目标仍按 [HARDWARE_PLAN.md](HARDWARE_PLAN.md) 推进：collector/读仲裁已经有可选直连后端；写回仲裁与整体 SM 连接、其余存储/控制单元、实卡参数校准、PTX 异步矩阵协议和最终硬件审计尚未完成。

@@ -13,6 +13,11 @@ bool TimingMachine::dependencies(uint32_t cta, uint32_t warp, Group group, const
 }
 
 bool TimingMachine::capacity(uint32_t sm, uint32_t partition) {
+    auto& file = sms_[sm]->partitions[partition].registers;
+    if (file && file->collector()) {
+        if (file->collector()->available()) return true;
+        ++stats_.collector_stalls; return false;
+    }
     uint32_t used = 0;
     for (const auto& [id, entry] : inflight_) {
         static_cast<void>(id);
@@ -75,7 +80,8 @@ void TimingMachine::enqueue(uint32_t cta_id, uint32_t wi, Group group, uint32_t 
     entry->id = next_++; entry->cta = cta_id; entry->warp = wi; entry->sm = cta.sm_id;
     entry->partition = warps_[cta_id][wi].slot % machine_.config_.pipeline.partitions;
     entry->group = group; entry->mask = mask; entry->instruction = machine_.module_.code[group.pc];
-    entry->footprint = std::move(footprint); entry->unread = entry->footprint.reads;
+    entry->footprint = std::move(footprint);
+    reserve_collector(*entry);
     entry->operands.predicates = warp.predicates; entry->operands.valid_mask = warp.valid_mask;
     reserve(*entry); resume_yielded(warp);
     if (!entry->footprint.boundary)

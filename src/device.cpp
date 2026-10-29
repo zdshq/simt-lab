@@ -14,9 +14,9 @@ bool terminal(JobState state) {
 
 // Bound the software queue independently of compute and copy engine occupancy.
 // 独立于计算和拷贝引擎占用情况，限制软件队列容量。
-Device::Device(uint32_t sms, uint32_t capacity, bool timing, bool hardware_trace, bool tensor_rtl, bool cache_rtl, bool scoreboard_rtl, bool register_rtl)
+Device::Device(uint32_t sms, uint32_t capacity, bool timing, bool hardware_trace, bool tensor_rtl, bool cache_rtl, bool scoreboard_rtl, bool register_rtl, bool collector_rtl)
     : sms_(sms), hardware_trace_(hardware_trace), tensor_rtl_(tensor_rtl), cache_rtl_(cache_rtl),
-      scoreboard_rtl_(scoreboard_rtl), register_rtl_(register_rtl), ring_(capacity) {
+      scoreboard_rtl_(scoreboard_rtl), register_rtl_(register_rtl), collector_rtl_(collector_rtl), ring_(capacity) {
     if (!sms || sms > 64 || !capacity || capacity > 4096) throw std::runtime_error("invalid_device_config");
     if (tensor_rtl && !timing) throw std::runtime_error("tensor_rtl_requires_timing");
     if (tensor_rtl && !hw::tensor_rtl_available()) throw std::runtime_error("tensor_rtl_backend_unavailable");
@@ -24,6 +24,7 @@ Device::Device(uint32_t sms, uint32_t capacity, bool timing, bool hardware_trace
     if (cache_rtl && !hw::cache_rtl_available()) throw std::runtime_error("cache_rtl_backend_unavailable");
     if (scoreboard_rtl && !timing) throw std::runtime_error("scoreboard_rtl_requires_timing");
     if (scoreboard_rtl && !hw::scoreboard_rtl_available()) throw std::runtime_error("scoreboard_rtl_backend_unavailable");
+    if (collector_rtl && !register_rtl) throw std::runtime_error("collector_rtl_requires_register_rtl");
     if (register_rtl && !timing) throw std::runtime_error("register_rtl_requires_timing");
     if (register_rtl && !hw::register_rtl_available()) throw std::runtime_error("register_rtl_backend_unavailable");
     if (timing) {

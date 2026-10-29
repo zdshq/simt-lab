@@ -13,6 +13,9 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = {'cache': ('sector_cache', 'test_cache.cpp', ['sector_sram.sv', 'cache_lru.sv', 'sector_cache.sv']),
            'scoreboard': ('lane_scoreboard', 'test_scoreboard.cpp', ['lane_scoreboard.sv']),
+           'operand_unit': ('register_operand_unit', 'test_operand_unit.cpp',
+                            ['register_bank.sv', 'register_file.sv', 'operand_collector.sv', 'register_operand_unit.sv']),
+           'collector': ('operand_collector', 'test_collector.cpp', ['operand_collector.sv']),
            'register_file': ('register_file', 'test_register_file.cpp', ['register_bank.sv', 'register_file.sv']),
            'warp_scoreboard': ('warp_scoreboard', 'test_warp_scoreboard.cpp', ['scoreboard_cell.sv', 'warp_scoreboard.sv']),
            'arbiter': ('register_arbiter', 'test_arbiter.cpp', ['register_arbiter.sv']),
@@ -95,7 +98,8 @@ def simulation_sources(options, name, destination):
         return ['-Wno-DECLFILENAME', '-Wno-UNUSED', str(destination/'gates.v'), str(options.simcells),
                 str(ROOT/'tests/rtl'/test)]
     parameters = [f'-GSETS={options.sets}', f'-GWAYS={options.ways}'] if name == 'cache' else []
-    if name == 'register_file': parameters = [f'-GSLOTS={options.rf_slots}']
+    if name in ('register_file', 'operand_unit'): parameters = [f'-GSLOTS={options.rf_slots}']
+    if name == 'collector': parameters = [f'-GENTRIES={options.collector_entries}']
     return parameters+[str(ROOT/'rtl'/file) for file in files]+[str(ROOT/'tests/rtl'/test)]
 
 
@@ -109,6 +113,7 @@ def simulation(options, name):
     if options.gate_sim: verify_netlist(destination, files, cache_parameters(options, name))
     label, objects = ('gate', 'gate-obj') if options.gate_sim else ('simulation', 'obj')
     flags, libraries = compiler_flags(options)
+    if name == 'collector': flags += f' -DCOLLECTOR_ENTRIES={options.collector_entries}'
     command = [tool('verilator'), '--cc', '--exe', '--build', '-j', str(options.jobs),
                '-Wall', '--unroll-count', '4096', '--top-module', top, '--Mdir', str(destination/objects),
                '-CFLAGS', flags, '-LDFLAGS', libraries]+simulation_sources(options, name, destination)
@@ -141,7 +146,8 @@ def verify_netlist(destination, files, parameters):
 
 
 def cache_parameters(options, name):
-    if name == 'register_file': return {'SLOTS': options.rf_slots}
+    if name in ('register_file', 'operand_unit'): return {'SLOTS': options.rf_slots}
+    if name == 'collector': return {'ENTRIES': options.collector_entries}
     return {'SETS': options.sets, 'WAYS': options.ways} if name == 'cache' else {}
 
 
@@ -152,7 +158,8 @@ def synthesis(options, name):
     destination = options.out/name
     destination.mkdir(parents=True, exist_ok=True)
     lines = ['read_verilog -sv '+' '.join(yosys_string(ROOT/'rtl'/file) for file in files)]
-    if name == 'register_file': lines.append(f'chparam -set SLOTS {options.rf_slots} {top}')
+    if name == 'collector': lines.append(f'chparam -set ENTRIES {options.collector_entries} {top}')
+    if name in ('register_file', 'operand_unit'): lines.append(f'chparam -set SLOTS {options.rf_slots} {top}')
     if name == 'cache': lines.append(f'chparam -set SETS {options.sets} -set WAYS {options.ways} {top}')
     lines += [f'synth -top {top} -run begin:fine', 'check -assert',
               'write_json inferred.json', 'tee -o inferred-stat.json stat -json']
@@ -204,6 +211,7 @@ def parse_options():
     parser.add_argument('--module', choices=tuple(MODULES)+('all',), default='all')
     parser.add_argument('--sets', type=int, default=4)
     parser.add_argument('--ways', type=int, choices=(4, 8), default=4)
+    parser.add_argument('--collector-entries', type=int, choices=(2, 4, 8, 16, 32), default=32)
     parser.add_argument('--rf-slots', type=int, choices=(2, 4, 8, 16, 32), default=8)
     parser.add_argument('--jobs', type=int, default=4)
     parser.add_argument('--synth', action='store_true')

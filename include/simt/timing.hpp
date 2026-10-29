@@ -6,6 +6,7 @@
 #include "simt/timing_async.hpp"
 #include "simt/scoreboard_engine.hpp"
 #include "simt/register_file.hpp"
+#include "simt/operand_collector.hpp"
 #include <deque>
 
 namespace simt {
@@ -31,6 +32,7 @@ struct WarpOwner { uint32_t cta, warp; };
 struct Partition {
     hw::RegisterPorts ports;
     std::unique_ptr<hw::RegisterFile> registers;
+    std::array<std::optional<uint64_t>,32> collector_owners;
     uint32_t cursor = 0;
     std::array<uint64_t, 7> available{};
     std::optional<uint64_t> predicate_write;
@@ -72,6 +74,7 @@ struct Inflight {
     Stage stage = Stage::collect;
     Warp operands, result;
     std::vector<hw::RegisterUse> unread;
+    std::optional<uint32_t> collector;
     std::vector<MemoryFlight> memory;
     std::optional<TensorFlight> tensor;
 };
@@ -120,6 +123,9 @@ private:
     void enqueue(uint32_t cta, uint32_t warp, Group group, uint32_t mask, Footprint footprint);
     void reserve(Inflight& entry);
     void collect_operands();
+    void collect_rtl_operands();
+    void reserve_collector(Inflight& entry);
+    void take_collector(Inflight& entry);
     bool collect_operand(Inflight& entry, const hw::RegisterUse& use);
     void commit_register_data(Inflight& entry);
     void launch_ready();

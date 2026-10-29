@@ -13,11 +13,14 @@ function(simt_enable_register_rtl)
         verilate(simt_register_circuit TOP_MODULE register_file PREFIX Vsimt_register${slots}
             SOURCES rtl/register_bank.sv rtl/register_file.sv
             VERILATOR_ARGS -Wall --unroll-count 4096 -GSLOTS=${slots})
+        verilate(simt_register_circuit TOP_MODULE register_operand_unit PREFIX Vsimt_operands${slots}
+            SOURCES rtl/register_bank.sv rtl/register_file.sv rtl/operand_collector.sv rtl/register_operand_unit.sv
+            VERILATOR_ARGS -Wall --unroll-count 4096 -GSLOTS=${slots})
     endforeach()
     target_compile_options(simt_register_circuit PRIVATE ${VERILATOR_CFLAGS})
     get_target_property(circuit_includes simt_register_circuit INTERFACE_INCLUDE_DIRECTORIES)
     set_property(TARGET simt_register_circuit PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${circuit_includes})
-    target_sources(simt_hardware PRIVATE src/rtl/register_file.cpp)
+    target_sources(simt_hardware PRIVATE src/rtl/register_file.cpp src/rtl/operand_collector.cpp)
     target_compile_definitions(simt_hardware PRIVATE SIMT_HAS_REGISTER_RTL=1)
     target_link_libraries(simt_hardware PRIVATE simt_register_circuit)
 endfunction()

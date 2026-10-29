@@ -73,7 +73,8 @@ std::string Device::stats_json() const {
         << ",\"scoreboard_backend\":\"" << (hardware_ ? (scoreboard_rtl_ ? "rtl" : "model") : "functional")
         << "\",\"scoreboard_rtl_available\":" << (hw::scoreboard_rtl_available() ? "true" : "false")
         << ",\"register_backend\":\"" << (hardware_ ? (register_rtl_ ? "rtl" : "model") : "functional")
-        << "\",\"register_rtl_available\":" << (hw::register_rtl_available() ? "true" : "false") << ",\"hardware\":";
+        << "\",\"register_rtl_available\":" << (hw::register_rtl_available() ? "true" : "false")
+        << ",\"collector_backend\":\"" << (hardware_ ? (collector_rtl_ ? "rtl" : "model") : "functional") << "\",\"hardware\":";
     if (hardware_) hardware_->dump(out); else out << "null";
     out << '}';
     return out.str();
