@@ -40,7 +40,7 @@ struct TimedSm {
     hw::BankedShared shared;
     hw::BankedShared constant{{65536, 1, 4, 8}};
     hw::BankedShared tmem;
-    hw::TensorArray array;
+    std::unique_ptr<hw::TensorEngine> array;
     std::optional<uint64_t> tensor_owner;
     std::map<uint32_t, uint32_t> tensor_columns;
     uint32_t allocated_columns = 0;

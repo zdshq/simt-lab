@@ -1,4 +1,5 @@
 #include "simt/device.hpp"
+#include "simt/tensor_engine.hpp"
 #include <algorithm>
 #include <cstdlib>
 #include <stdexcept>
@@ -10,9 +11,11 @@ bool terminal(JobState state) {
 
 // Bound the software queue independently of compute and copy engine occupancy.
 // 独立于计算和拷贝引擎占用情况，限制软件队列容量。
-Device::Device(uint32_t sms, uint32_t capacity, bool timing, bool hardware_trace)
-    : sms_(sms), hardware_trace_(hardware_trace), ring_(capacity) {
+Device::Device(uint32_t sms, uint32_t capacity, bool timing, bool hardware_trace, bool tensor_rtl)
+    : sms_(sms), hardware_trace_(hardware_trace), tensor_rtl_(tensor_rtl), ring_(capacity) {
     if (!sms || sms > 64 || !capacity || capacity > 4096) throw std::runtime_error("invalid_device_config");
+    if (tensor_rtl && !timing) throw std::runtime_error("tensor_rtl_requires_timing");
+    if (tensor_rtl && !hw::tensor_rtl_available()) throw std::runtime_error("tensor_rtl_backend_unavailable");
     if (timing) {
         hw::HierarchyConfig config; config.sms = sms;
         hardware_ = std::make_shared<hw::HardwareContext>(*arena.memory, config);

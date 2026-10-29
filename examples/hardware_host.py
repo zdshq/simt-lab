@@ -41,20 +41,20 @@ def make_graph(device, workload, buffer):
     return graph.instantiate(), compute, download
 
 
-def save_inputs(workload, buffer, destination):
+def save_inputs(workload, buffer, destination, backend):
     from simt_lab.runtime import listing
     destination.mkdir(parents=True, exist_ok=True)
     workload.program.save(destination/'kernel.bin')
     workload.image.save(destination/'upload.bin')
     (destination/'kernel.asm').write_text(listing(workload.program))
     save_json(destination/'launch.json', {'base': buffer.address, 'size': buffer.size,
-              'blocks': workload.blocks, 'threads': workload.threads, 'timing': True})
+              'blocks': workload.blocks, 'threads': workload.threads, 'timing': True, 'tensor_backend': backend})
 
 
 def run_workload(device, factory, destination):
     buffer = device.allocate(len(factory().image.data))
     workload = factory(base=buffer.address)
-    save_inputs(workload, buffer, destination)
+    save_inputs(workload, buffer, destination, device.properties['tensor_backend'])
     executable, compute, download = make_graph(device, workload, buffer)
     records = []
     for replay in range(2):
@@ -63,8 +63,11 @@ def run_workload(device, factory, destination):
         data = run.node_result(download)
         record = verify(workload, data)
         kernel = run.node_event(compute).query()
+        backends = {item['backend'] for item in kernel['hardware']['tensor']}
+        if backends != {device.properties['tensor_backend']}:
+            raise AssertionError('unexpected_tensor_backend')
         record.update(replay=replay, device_cycles=device.stats()['ticks']-before,
-                      kernel_cycles=kernel['hardware']['cycles'])
+                      kernel_cycles=kernel['hardware']['cycles'], tensor_backends=sorted(backends))
         (destination/f'output-{replay}.bin').write_bytes(data)
         save_json(destination/f'kernel-{replay}.json', kernel)
         records.append(record)
@@ -93,7 +96,7 @@ def run_demo(options):
     from simt_lab.workloads import vector_add, reduction, gemm
     from simt_lab.transformer import tiny_transformer
     options.out.mkdir(parents=True, exist_ok=True)
-    with Device(options.build/'simt-device', timing=True, hardware_trace=True) as device:
+    with Device(options.build/'simt-device', timing=True, hardware_trace=True, tensor_rtl=options.tensor_rtl) as device:
         summary = {'cache_reuse': cache_reuse(device), 'workloads': []}
         for factory in (vector_add, reduction, gemm, tiny_transformer):
             summary['workloads'].append(run_workload(device, factory, options.out/factory.__name__))
@@ -107,6 +110,7 @@ def parse_options():
     parser = argparse.ArgumentParser()
     parser.add_argument('--build', type=Path, default=ROOT/'build')
     parser.add_argument('--out', type=Path, default=ROOT/'artifacts'/'hardware-host')
+    parser.add_argument('--tensor-rtl', action='store_true')
     return parser.parse_args()
 
 

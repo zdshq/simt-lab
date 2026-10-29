@@ -17,7 +17,9 @@ module tensor_array (
     output wire [511:0] result_values,
     output wire command_error,
     output reg transport_error,
-    output reg busy
+    output reg busy,
+    output wire event_wave, event_input_stall,
+    output wire [15:0] event_products, event_skips, event_scales, event_accumulates
 );
     reg [2:0] rows, columns, format;
     reg scaled, last_accepted;
@@ -49,6 +51,10 @@ module tensor_array (
     assign wave_ready = !reset && busy && !last_accepted && count < 2 && !invalid_wave;
     assign result_valid = !reset && busy && ((finished & active_cell) == active_cell);
     assign command_error = !reset && ((start_valid && !valid_start) || (wave_valid && invalid_wave && busy));
+    // These observation ports expose actual edge events without performing arithmetic in the host adapter.
+    // 这些观测端口暴露实际时钟边沿事件，宿主适配器不执行算术。
+    assign event_wave = !reset && inject;
+    assign event_input_stall = !reset && busy && !last_accepted && count == 0 && cooldown == 0;
 
     generate for (genvar operand = 0; operand < 4; operand = operand+1) begin: conversion
         tensor_decode decode_a (
@@ -76,7 +82,9 @@ module tensor_array (
                 .input_ready(cell_ready[CELL]), .a(incoming_a[CELL][31:0]), .b(incoming_b[CELL][31:0]),
                 .scale_a(incoming_a[CELL][63:32]), .scale_b(incoming_b[CELL][63:32]),
                 .enabled(incoming_a[CELL][64]), .block_end(incoming_a[CELL][65]), .last(incoming_a[CELL][66]),
-                .accumulator(result_values[CELL*32+:32]), .finished(finished[CELL])
+                .accumulator(result_values[CELL*32+:32]), .finished(finished[CELL]),
+                .event_product(event_products[CELL]), .event_skip(event_skips[CELL]),
+                .event_scale(event_scales[CELL]), .event_accumulate(event_accumulates[CELL])
             );
         end
     end endgenerate

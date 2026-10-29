@@ -2,7 +2,7 @@
 
 `simt-run --timing` 已接入 TMEM_ALLOC、TMEM_FREE、LDT、STT 和 MMA。MMA 的结果现在由逐拍传输的操作数、有限乘加单元及 TMEM 写端口产生，不调用功能模式的 `matrix_multiply()`。现有五种格式、稀疏和块缩放均可运行，数学规则沿用 [TENSOR.md](TENSOR.md)。
 
-本页描述 C++ 时序后端的 Tensor 数据通路；后续独立可综合 [Tensor RTL](RTL_TENSOR.md) 已实现数值电路和 4×4 阵列，但尚未替换本后端。两者均非 NVIDIA Tensor Core 的精确复刻。NVIDIA [PTX 的 Tensor Memory 与异步语义](https://docs.nvidia.com/cuda/parallel-thread-execution/#tensor-memory) 说明了特定目标的组织与同步要求，没有公开完整内部乘加阵列电路；本项目没有据此认定 NVIDIA 使用下述 4×4 阵列。SM100a/SM100f 的文档 TMEM 形状与本项目自定义的 128×256 逻辑窗口也不同。
+本页描述 C++ 时序后端的 Tensor 数据通路；可综合 [Tensor RTL](RTL_TENSOR.md) 已实现数值电路和 4×4 阵列，并可通过 [RTL 后端选项](RTL_BACKEND.md) 替换其中的格式转换与阵列计算。两者均非 NVIDIA Tensor Core 的精确复刻。NVIDIA [PTX 的 Tensor Memory 与异步语义](https://docs.nvidia.com/cuda/parallel-thread-execution/#tensor-memory) 说明了特定目标的组织与同步要求，没有公开完整内部乘加阵列电路；本项目没有据此认定 NVIDIA 使用下述 4×4 阵列。SM100a/SM100f 的文档 TMEM 形状与本项目自定义的 128×256 逻辑窗口也不同。
 
 ## 前端、乘加单元和返回路径
 

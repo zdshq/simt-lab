@@ -6,12 +6,14 @@
 #include <stdexcept>
 
 namespace simt::hw {
-TensorArray::TensorArray(TensorConfig config) : config_(config) {
+void validate_tensor_config(const TensorConfig& config) {
     if (!config.rows || config.rows > 4 || !config.columns || config.columns > 4 || !config.latency ||
         !config.input_capacity || config.input_capacity > 32 || !config.tmem_banks || config.tmem_banks > 128 ||
         !config.tmem_latency || !config.tmem_columns || config.tmem_columns > 256 || config.tmem_columns % 8)
         throw std::runtime_error("invalid_tensor_pipeline_config");
 }
+
+TensorArray::TensorArray(TensorConfig config) : config_(config) { validate_tensor_config(config); }
 
 // An unconsumed tile still owns the array, bounding both request and response storage.
 // 尚未取走的 tile 仍占有阵列，以限制请求和响应存储容量。

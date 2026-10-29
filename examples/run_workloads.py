@@ -18,6 +18,7 @@ def parse_options():
     parser.add_argument('--workload',choices=['all','vector','reduction','gemm','transformer'],default='all')
     parser.add_argument('--policy',choices=['rr','min','max'],default='rr')
     parser.add_argument('--timing',action='store_true',help='Use the partial hardware timing model')
+    parser.add_argument('--tensor-rtl',action='store_true',help='Execute Tensor arithmetic in RTL; requires --timing and an enabled build')
     return parser.parse_args()
 
 
@@ -31,7 +32,7 @@ def execute_examples(options):
     builders = {'vector':vector_add,'reduction':reduction,'gemm':gemm,'transformer':tiny_transformer}
     selected = builders if options.workload=='all' else {options.workload:builders[options.workload]}
     for name,builder in selected.items():
-        summary = run_workload(builder(),options.build/'simt-run',options.out/name,options.policy,options.timing)
+        summary = run_workload(builder(),options.build/'simt-run',options.out/name,options.policy,options.timing,options.tensor_rtl)
         print(json.dumps(summary,ensure_ascii=False))
 
 

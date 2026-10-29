@@ -2,7 +2,7 @@
 
 本阶段把之前 C++ 模型中的数值运算落实为可综合 SystemVerilog：FP32 融合乘加、INT8 乘加、FP16/BF16/FP4 解码、PE 的点积/缩放/累加状态机，以及 16 个 PE 的逐跳阵列。RTL 中没有 `real`、`shortreal`、DPI 或宿主 `std::fma` 调用；Verilator 只负责执行电路描述，C++ 浮点运算用于独立验证。
 
-这仍是本项目的研究架构，不能称为 NVIDIA Tensor Core 的精确逆向。`simt-run`/`simt-device` 目前仍运行原 C++ 后端；本阶段没有把已验证的 RTL 替换到 ISA/TMEM 执行路径，也没有完成整 GPU RTL、FPGA bitstream 或工艺布局布线。
+这仍是本项目的研究架构，不能称为 NVIDIA Tensor Core 的精确逆向。`simt-run`/`simt-device` 已支持可选的 [RTL 执行后端](RTL_BACKEND.md)，将本阵列接入 ISA/TMEM；默认仍为 C++ 模型。整 GPU RTL、FPGA bitstream 和工艺布局布线尚未完成。
 
 ## 电路连接与存储
 
@@ -91,8 +91,10 @@ FP4 E2M1 的八种幅值为 0、0.5、1、1.5、2、3、4、6；符号独立。�
 |---|---:|---:|---:|
 | FP32 FMA | 11,498 | 478 | 11,020 |
 | 一个格式转换器 | 546 | 0 | 546 |
-| 一个 PE，含浮点/整数流水线和控制 | 13,088 | 794 | 12,294 |
-| 完整 4×4 Tensor 阵列 | 217,893 | 16,636 | 201,257 |
+| 一个 PE，含浮点/整数流水线、控制与事件输出 | 13,090 | 794 | 12,296 |
+| 完整 4×4 Tensor 阵列，含事件输出 | 217,928 | 16,636 | 201,292 |
+
+上表 PE/阵列已更新为执行后端所需观测端口的重新综合结果，产物为 `artifacts/rtl-pe-integrated` 和 `artifacts/rtl-array-integrated`。端口暴露实际发射事件，没有加入宿主算术或额外的 RTL 计数寄存器；当前源码对应的网表检查均已通过。
 
 这些值不是等价 NAND2 门数，也没有计入尚未实现的 TMEM、SM、缓存层次连接或外部接口。没有工艺 Liberty、DSP 映射、布局布线与时序回标，不能据此给出芯片面积、频率、功耗或两个完整 SM 的门数。
 
@@ -120,4 +122,4 @@ python3 tools/rtl.py --build build-sanitize --module tensor --out artifacts/rtl-
 
 浮点硬件与验证的背景资料参考 [Berkeley HardFloat](https://www.jhauser.us/arithmetic/HardFloat-1/doc/HardFloat-Verilog.html) 和 [Berkeley TestFloat](https://www.jhauser.us/arithmetic/TestFloat-3/doc/TestFloat-general.html)。本项目没有导入它们的实现；当前用例覆盖不代表通过了 TestFloat 的完整测试套件。
 
-仍须将 RTL 阵列接入 ISA/TMEM、完成整个 SM 和存储层次的 RTL 连接，并进行真实显卡参数校准。专用 NVML 启动器的 nvidia-smi 可见性独立于此电路，不证明 CUDA/PCIe 兼容；完整目标仍以 [HARDWARE_PLAN.md](HARDWARE_PLAN.md) 为准。
+RTL 阵列与 ISA/TMEM 的接入已完成本阶段验证，具体边界与时钟规则见 [RTL_BACKEND.md](RTL_BACKEND.md)。仍须完成整个 SM 和存储层次的 RTL 连接，并进行真实显卡参数校准。专用 NVML 启动器的 nvidia-smi 可见性独立于此电路，不证明 CUDA/PCIe 兼容；完整目标仍以 [HARDWARE_PLAN.md](HARDWARE_PLAN.md) 为准。

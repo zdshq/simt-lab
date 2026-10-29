@@ -2,7 +2,9 @@
 
 本页原表记录阶段 0–10 的 75 项功能验收。后续增量包括 17 项存储硬件检查、6 项 NVML 端到端检查、7 项流水线单元检查、35 项基础时序执行检查、6 项 Tensor 阵列检查、19 项 Tensor 时序执行检查、29 项异步/组合时序检查、9 项 C++/17 项 Python local 与原子检查，以及 4 项 C++/33 项 Python 持久上下文、CP/copy/Graph 检查。软件三种构建均通过 20 套件、257 项检查（214 项 Python、43 项 C++）。具体证据见 [存储单元](HARDWARE_MEMORY.md)、[SM](HARDWARE_SM.md)、[Tensor](HARDWARE_TENSOR.md)、[DMA/事务屏障](HARDWARE_ASYNC.md)、[local/原子](HARDWARE_ATOMIC_LOCAL.md)、[持久设备](HARDWARE_HOST.md) 和 [原版 nvidia-smi](NVIDIA_SMI.md)。另有 30 项独立 RTL 检查：首批 [缓存/依赖/仲裁](RTL.md) 14 项及 [Tensor 数值/阵列](RTL_TENSOR.md) 16 项，见下表。完整 RTL GPU、实机校准和最终硬件验收仍待完成。
 
-验收日期：2026-10-29。环境：Linux、GCC 11.4、CMake 3.22、Python 3.13.5。构建要求 C++20、CMake 3.20+ 和 Python 3.10+，无第三方运行时依赖。
+最新 Tensor RTL 接入后：默认 Debug 为 21 套件、259 项；RTL Release 与 ASan/UBSan 为 24 套件、318 项（270 Python、48 C++）。其中后端复用的检查不计作新增独立场景，详细执行结果见本页“Tensor RTL 执行后端”及 [RTL_BACKEND.md](RTL_BACKEND.md)。
+
+验收日期：2026-10-29。环境：Linux、GCC 11.4、CMake 3.22、Python 3.13.5。基础构建要求 C++20、CMake 3.20+ 和 Python 3.10+；可选 RTL 构建还需 Verilator，综合需 Yosys/ABC。
 
 ## 阶段 0–10 实际执行结果
 
@@ -99,7 +101,26 @@ Verilator 4.038 和 Yosys 0.40 的实际产物、命令及源码哈希保存在 
 
 完整阵列实际综合为 217,893 个 generic cells，其中 16,636 个触发器位；没有工艺面积或全 GPU 门数结论。首次 FIFO 推断存在未驱动位，明确使用寄存器组后通过严格综合检查和网表验证；复查补上最后令牌退休同拍的准入约束，并重跑受影响 PE/阵列的 RTL、sanitizer、综合和网表检查。
 
-本阶段软件 Debug 回归再次通过全部 20 套件、257 项检查，包括原版 nvidia-smi 集成。没有改变当前 C++ 执行后端的 Tensor 计算方式；新增 RTL 尚未接入 ISA/TMEM 或主机设备。
+本阶段软件 Debug 回归再次通过全部 20 套件、257 项检查，包括原版 nvidia-smi 集成。当时新增 RTL 尚未接入 ISA/TMEM 或主机设备；后续接入验收见下一节。
+
+## 阶段 16：Tensor RTL 执行后端
+
+新增可选 `SIMT_TENSOR_RTL` 构建、CLI/Python 显式选择、每 SM 独立 Verilator 实例和统一 `TensorEngine` 接口。前端传原始字节，RTL 负责转换、计算和控制；结果经原 TMEM banks 写确认。查询和引脚适配不推进隐藏时钟，工作计数来自实际 RTL 事件。详细实现、命令及边界见 [RTL_BACKEND.md](RTL_BACKEND.md)。
+
+| 验收项 | 实际结果 |
+|---|---|
+| 默认 Debug `ctest --test-dir build --output-on-failure -j6` | 全部 21 套件、259 项通过 |
+| RTL Release `ctest --test-dir build-rtl --output-on-failure -j6` | 全部 24 套件、318 项通过，270 Python / 48 C++ |
+| RTL Debug + ASan/UBSan，`UBSAN_OPTIONS=halt_on_error=1` | 首次 23 套件通过，最大矩阵超过 8 秒进程时限；保留原用例、将 RTL 时限改为 60 秒后，重跑 `rtl_tensor_execution` 的 19 项全部通过，耗时 65.46 秒；合计全部 24 套件通过，无 sanitizer 报告 |
+| 新增/复用检查 | 2 项显式选择；5 项 C++ 适配器；19 项复用数值/时序；35 项主机检查中 33 项复用，2 项验证查询不推进 RTL 和在途 MMA 失败后再次启动 |
+| `cmake --build build --target rtl-check` | 当前源码全部 30 项独立 RTL 检查通过 |
+| PE/阵列观测端口改动 | 同样 3+6 项在 ASan/UBSan 及重新综合的网表上通过；源码/网表哈希匹配，见 `artifacts/rtl-{pe,array}-integrated*` |
+| 四类 CLI 与主机 Graph 负载 | 原算法全部通过，每个 Graph 两次重放；GEMM 96 输出最大误差约 2.98e-7，Transformer 32 输出约 1.07e-7 |
+| 原版 nvidia-smi 查询完成 RTL GEMM 的会话 | 专用后端显示实际 7 MiB 分配，关闭后消失；系统默认仍为真实显卡，见 `artifacts/rtl-integrated/nvidia-smi-status.txt` |
+
+失败测试还验证了时钟统计范围：故障后私有计算单元冻结，存储请求继续排空，因此失败快照的阵列拍数可以小于 kernel 生命周期。正常执行/完成时两者相等。未将测试中的错误时钟假设改写成虚假的电路计数。
+
+事件端口加入后的当前综合统计为 PE 13,090 / 794、完整阵列 217,928 / 16,636（generic cells / 触发器位），替代上一小节历史数值。没有整 GPU 面积或工艺频率结论。
 
 ## 明确边界
 
@@ -115,4 +136,4 @@ Verilator 4.038 和 Yosys 0.40 的实际产物、命令及源码哈希保存在 
 - 顺序敏感原子和无同步竞争程序不能要求跨所有调度顺序逐线程结果一致；没有实现自动 race checker。
 - 测试覆盖所声明的功能案例和负例，并非形式验证或所有输入穷举。
 
-阶段 0–10 的功能 ISS、持久主机链路与任务图已完成其原有验收。后续 CP/copy/Graph 时序与持久缓存也已接入。完整硬件目标仍未完成，剩余 PTX 异步矩阵提交、RTL 与 ISA/TMEM 接入、整体 RTL 连接、参数校准和最终审计以 HARDWARE_PLAN.md 为准。
+阶段 0–10 的功能 ISS、持久主机链路与任务图已完成其原有验收。后续 CP/copy/Graph 时序、持久缓存和可选 Tensor RTL 后端也已接入。完整硬件目标仍未完成，剩余 PTX 异步矩阵提交、其余 RTL 单元接入、整体 RTL 连接、参数校准和最终审计以 HARDWARE_PLAN.md 为准。

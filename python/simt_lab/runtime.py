@@ -41,7 +41,9 @@ def compare(workload, report):
 
 # Persist exact inputs and invocation arguments before launching the executable.
 # 启动可执行文件之前保存精确输入和调用参数。
-def save_inputs(workload, runner, destination, policy, timing=False):
+def save_inputs(workload, runner, destination, policy, timing=False, tensor_rtl=False):
+    if tensor_rtl and not timing:
+        raise ValueError('tensor_rtl_requires_timing')
     destination.mkdir(parents=True,exist_ok=True)
     program, image = destination/'kernel.bin', destination/'global.bin'
     workload.program.save(program)
@@ -52,15 +54,17 @@ def save_inputs(workload, runner, destination, policy, timing=False):
                '--policy',policy,'--warp-policy',policy,'--dump-memory']
     if timing:
         command.append('--hardware-trace')
+    if tensor_rtl:
+        command.append('--tensor-rtl')
     (destination/'launch.json').write_text(json.dumps(command,indent=2)+'\n')
     return command
 
 
 # Execute machine code and preserve both raw output and comparison evidence.
 # 执行机器码，并保留原始输出和比较证据。
-def run_workload(workload, runner, destination, policy='rr', timing=False):
+def run_workload(workload, runner, destination, policy='rr', timing=False, tensor_rtl=False):
     destination = Path(destination)
-    command = save_inputs(workload,runner,destination,policy,timing)
+    command = save_inputs(workload,runner,destination,policy,timing,tensor_rtl)
     result = subprocess.run(command,text=True,capture_output=True,timeout=30)
     if result.returncode:
         raise RuntimeError(result.stderr)
@@ -70,5 +74,8 @@ def run_workload(workload, runner, destination, policy='rr', timing=False):
     if timing:
         summary['model_cycles'] = report['hardware']['cycles']
         summary['tensor_products'] = sum(sm['products'] for sm in report['hardware']['tensor'])
+        summary['tensor_backends'] = sorted({sm['backend'] for sm in report['hardware']['tensor']})
+        if summary['tensor_backends'] != ['rtl' if tensor_rtl else 'model']:
+            raise AssertionError('unexpected_tensor_backend')
     (destination/'validation.json').write_text(json.dumps(summary,indent=2)+'\n')
     return summary

@@ -30,6 +30,8 @@ SIMT Lab 2 SM (simulator), 64 MiB, 7 MiB, 57 MiB
 
 自选 registry 时，两个命令都传 `--registry /path/to/private-directory`。目录须属于当前用户且权限 0700。Python 接口也可以直接使用 `Device(monitor_dir=...)`，不必通过示例创建。
 
+已构建 [Tensor RTL 后端](RTL_BACKEND.md) 时，终端一可用 `python3 examples/nvml_device.py --build build-rtl --timing --tensor-rtl --seconds 120`，终端二用 `python3 tools/simt_smi.py --build build-rtl -L`。另已对实际完成 RTL Graph GEMM 的会话验证枚举、7 MiB 活分配和退出后消失，原始输出保存在 `artifacts/rtl-integrated/nvidia-smi-status.txt`。
+
 ## 接入的实际含义
 
 ```mermaid

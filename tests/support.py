@@ -10,6 +10,8 @@ from simt_lab import Program
 
 
 class SimulationCase(unittest.TestCase):
+    execution_timeout = 8
+
     # Give each execution its own input files and a bounded subprocess lifetime.
     # 为每次执行提供独立输入文件，并限制子进程运行时间。
     def invoke(self, data, options, images=None):
@@ -21,7 +23,7 @@ class SimulationCase(unittest.TestCase):
                 image_path = Path(temp) / (space + '.bin')
                 image_path.write_bytes(image)
                 command.extend(['--' + space, str(image_path)])
-            return subprocess.run(command, text=True, capture_output=True, timeout=8)
+            return subprocess.run(command, text=True, capture_output=True, timeout=self.execution_timeout)
 
     # Check the process boundary before inspecting architectural state.
     # 检查进程运行结果后，再读取架构状态。

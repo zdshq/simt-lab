@@ -33,13 +33,13 @@ void TimingMachine::initial_tensor_tile(Inflight& entry) {
     if (!poll_tensor_transfers(entry)) return;
     std::array<uint32_t, 16> initial{};
     std::copy_n(flight.fetched.begin(), 16, initial.begin());
-    sms_[entry.sm]->array.begin(flight.rows, flight.columns, d.format == 3, d.flags & 4, initial);
+    sms_[entry.sm]->array->begin(flight.rows, flight.columns, d.format, d.flags & 4, initial);
     trace(entry, "tensor_tile_start"); prepare_tensor_wave(entry);
 }
 
 void TimingMachine::feed_tensor(Inflight& entry) {
     auto& flight = *entry.tensor;
-    if (!sms_[entry.sm]->array.push(flight.wave)) return;
+    if (!sms_[entry.sm]->array->push(flight.wave)) return;
     trace(entry, "tensor_feed"); ++flight.k;
     if (flight.k == flight.descriptor.k) flight.phase = TensorPhase::drain;
     else prepare_tensor_wave(entry);
@@ -49,7 +49,7 @@ void TimingMachine::feed_tensor(Inflight& entry) {
 // 所有 PE 完成最后一级流水线之前，结果保持在阵列内部。
 void TimingMachine::drain_tensor(Inflight& entry) {
     auto& flight = *entry.tensor; const auto& d = flight.descriptor;
-    const auto result = sms_[entry.sm]->array.take();
+    const auto result = sms_[entry.sm]->array->take();
     if (!result) return;
     for (uint32_t row = 0; row < flight.rows; ++row) for (uint32_t column = 0; column < flight.columns; ++column) {
         const auto address = tensor_address(machine_.ctas_[entry.cta], d.row_d + flight.row + row, d.column_d + flight.column + column);

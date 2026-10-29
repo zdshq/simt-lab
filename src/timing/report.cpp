@@ -77,8 +77,10 @@ void TimingMachine::dump_tensor(std::ostream& out) const {
         << ",\"tmem_columns\":" << config.tmem_columns << "},\"tensor\":[";
     for (uint32_t sm = 0; sm < sms_.size(); ++sm) {
         if (sm) out << ',';
-        const auto& s = sms_[sm]->array.stats(); const auto& t = sms_[sm]->tmem.stats();
-        out << "{\"tiles\":" << s.tiles << ",\"waves\":" << s.waves << ",\"products\":" << s.products
+        const auto& array = *sms_[sm]->array;
+        const auto& s = array.stats(); const auto& t = sms_[sm]->tmem.stats();
+        out << "{\"backend\":\"" << array.name() << "\",\"array_clocks\":" << array.cycle()
+            << ",\"tiles\":" << s.tiles << ",\"waves\":" << s.waves << ",\"products\":" << s.products
             << ",\"skipped\":" << s.skipped << ",\"scale_products\":" << s.scale_products
             << ",\"scale_accumulates\":" << s.scale_accumulates << ",\"input_stalls\":" << s.input_stalls
             << ",\"queue_stalls\":" << s.queue_stalls << ",\"tmem_bank_services\":" << t.bank_services

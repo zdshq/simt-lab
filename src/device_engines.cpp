@@ -33,6 +33,7 @@ void Device::start_kernel(Job& job) {
     const auto& c = job.command;
     auto config = c.launch; config.sms = sms_;
     config.timing = bool(hardware_); config.hardware_trace = hardware_trace_;
+    config.tensor.rtl = tensor_rtl_;
     job.machine = std::make_unique<Machine>(modules_.at(c.module), config, arena.memory, hardware_);
     job.machine->set_arguments(c.arguments);
     compute_ = job.id;

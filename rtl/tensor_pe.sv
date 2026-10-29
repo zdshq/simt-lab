@@ -9,7 +9,8 @@ module tensor_pe (
     input wire [31:0] a, b, scale_a, scale_b,
     input wire enabled, block_end, last,
     output reg [31:0] accumulator,
-    output reg finished
+    output reg finished,
+    output wire event_product, event_skip, event_scale, event_accumulate
 );
     localparam [1:0] IDLE = 0, DOT = 1, SCALE = 2, ACCUMULATE = 3;
     reg [1:0] state;
@@ -32,6 +33,10 @@ module tensor_pe (
 
     assign input_ready = !reset && !initialize && !finished && (state == IDLE || (complete && !saved_last)) &&
                          (integer_mode ? int_ready : fp_ready);
+    assign event_product = dot_accept && enabled;
+    assign event_skip = dot_accept && !enabled;
+    assign event_scale = scale_issue;
+    assign event_accumulate = accumulate_issue;
 
     // Sparse holes preserve accumulator bits, including signed zero and NaN, without evaluating A*B.
     // 稀疏缺失项不计算 A*B，原样保留累加器位，包括负零和 NaN。

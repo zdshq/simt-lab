@@ -202,3 +202,19 @@
 - Yosys 0.40/ABC 实际统计：FMA 为 11,498 个 generic cells/478 个触发器位；转换器 546/0；PE 13,088/794；完整 4×4 阵列 217,893/16,636。阵列统计包含全部实例，不是只计模块定义。没有工艺库、P&R 或 DSP 映射，不能解释成 NAND2 等效门数、工艺面积、Fmax 或整 SM 成本。
 - `ctest --test-dir build --output-on-failure -j6` 本阶段再次通过 20 套件、257 项软件检查，包括原版 nvidia-smi；C++ 数值执行方式没有改动。本阶段主要说明新增于 `RTL_TENSOR.md`，同步计划、Tensor 数值规范、来源、README 和验证记录。
 - 完整目标保持 active。当前 `simt-run`/`simt-device` 仍使用 C++ 后端，下一步须接入 RTL 数值/阵列、ISA/TMEM 和整体 RTL 层次；实卡参数校准、PTX 异步矩阵协议、最终逐项审计及系统默认 nvidia-smi 视图合并仍未完成。
+
+## 阶段 16 第三部分：Tensor RTL 接入实际执行路径（2026-10-29）
+
+- 接续 `b75bec3`，新增 `TensorEngine` 接口和原始字节输入结构，保留原 C++ 阵列作为默认参考模型。`SIMT_TENSOR_RTL=ON` 构建通过 Verilator 官方 CMake 支持生成独立静态库，私有工具环境仅传给工具子进程；没有修改系统安装。
+- 每个 SM 单独持有 RTL 实例；MMA 前端继续经 shared/global 请求读取描述符、稀疏元数据、原始 A/B 和 scale。FP16/BF16/FP4 解码移至所选后端，RTL 路径不使用宿主转换或矩阵算术。结果仍经过 TMEM bank 写确认才退休。
+- 适配器只在 `tick()` 产生一个上升沿，首次复位也占真实一拍。start/input/result 的 valid-ready 保留归属和有限容量；结果尚未确认时的新启动等待旧结果释放，不重复交付。增加 RTL 观测端口，乘积/跳过/缩放计数来自实际 PE 发射，注入次数来自阵列注入事件。
+- CLI 增加 `--tensor-rtl`，Python `Device` 增加 `tensor_rtl=True`；两者要求 timing，未编译后端时明确失败。物理级数和 FIFO 固定为 4/2，不支持的参数明确拒绝。设备属性和逐 SM 快照分别报告可用能力、实际后端与阵列拍数；示例支持相同显式选择并验证实际后端。
+- 新增 2 项选择检查和 5 项适配器 C++ 检查；在 RTL 后端复用 19 项独立数值/时序和 33 项主机/Graph 契约，另加 2 项实际运行中查询不推进时钟、未完成 MMA 故障后再次启动的检查。最大矩阵保留 32×32×256 和 262,144 次乘积断言，没有缩小算例。
+- 首次失败恢复用例错误地假定故障排空期间阵列仍运行，实际私有计算状态已冻结、持久存储仍推进。修正测试以区分正常执行和故障排空拍数，保留实际计数；验证失败 tile 未写回、后继 DMA/MMA 输出仍为 31。不是通过改变电路统计来掩盖时钟差异。
+- `ctest --test-dir build --output-on-failure -j6` 通过默认 Debug 的 21 套件、259 项。`ctest --test-dir build-rtl --output-on-failure -j6` 通过 RTL Release 的 24 套件、318 项（270 Python、48 C++）；原始日志核对计数，没有把独立 RTL 重跑并入这些数字。
+- `cmake -S . -B build-rtl-sanitize -DCMAKE_BUILD_TYPE=Debug -DSIMT_SANITIZE=ON -DSIMT_TENSOR_RTL=ON` 并构建后，以 `UBSAN_OPTIONS=halt_on_error=1 ctest --test-dir build-rtl-sanitize --output-on-failure -j4` 执行。首次其余 23 套件通过，最大矩阵超出既有 8 秒上限。将 RTL 子进程上限设为 60 秒，保留原算例与检测，再执行 `-R '^rtl_tensor_execution$'`，19 项全部通过，整套耗时 65.46 秒。所有套件均验证通过，无 sanitizer 报告；生成电路代码也接受插桩。
+- 当前源码 `cmake --build build --target rtl-check` 再次通过全部 30 项。PE/阵列因增加观测端口，分别执行 `tools/rtl.py --synth` 与 `--gate-sim`，保存在 `artifacts/rtl-pe-integrated` / `rtl-array-integrated`；同样 3+6 项检查均通过。两模块还在 `--build build-rtl-sanitize` 的独立仿真下通过，记录在对应 `-sanitize` 目录。
+- 新综合统计：PE 13,090 个 generic cells / 794 个触发器位，阵列 217,928 / 16,636，严格综合检查和当前源码哈希验证通过。变化来自观测输出的组合逻辑；没有工艺面积或整 GPU 门数结论。
+- `python3 examples/run_workloads.py --build build-rtl --timing --tensor-rtl --out artifacts/rtl-integrated` 四类完整负载通过；GEMM 2253 模型周期、1536 次 RTL 有效乘积，Transformer 5671 周期、2304 次。`python3 examples/hardware_host.py --build build-rtl --tensor-rtl --out artifacts/rtl-host` 每类两次 Graph 重放通过，GEMM/Transformer kernel 为 2241/5655 周期，输出误差约 2.98e-7/1.07e-7；二者初始缓存状态不同。
+- 实际完成 RTL Graph GEMM 的设备保持存活时，原版 `/usr/bin/nvidia-smi` 经专用启动器显示名称和实际 64/7/57 MiB，退出后无设备；系统默认仍为 RTX 4070 SUPER。输出在 `artifacts/rtl-integrated/nvidia-smi-status.txt`，未宣称 CUDA/PCIe 枚举或默认视图合并。
+- 新增 `RTL_BACKEND.md`，同步 README、硬件来源、计划、Tensor/主机/RTL/验证文档。保持短函数、入口只调函数、相邻英中注释，没有样式计数测试。完整目标仍 active：其余 RTL 单元与整个 SM/存储层次连接、真实显卡参数校准、PTX 异步矩阵协议、系统默认 SMI 合并及最终逐项审计尚未完成。

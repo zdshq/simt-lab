@@ -8,7 +8,9 @@ namespace simt::hw {
 struct TensorConfig {
     uint32_t rows = 4, columns = 4, latency = 4, input_capacity = 2;
     uint32_t tmem_banks = 16, tmem_latency = 2, tmem_columns = 256;
+    bool rtl = false;
 };
+void validate_tensor_config(const TensorConfig& config);
 struct TensorWave {
     std::array<uint32_t, 4> a{}, b{}, scale_a{}, scale_b{};
     std::array<bool, 4> enabled{true, true, true, true};

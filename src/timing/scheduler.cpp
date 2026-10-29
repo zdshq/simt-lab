@@ -15,7 +15,7 @@ void validate_async_config(const hw::AsyncConfig& config) {
 TimedSm::TimedSm(const hw::PipelineConfig& config, const hw::TensorConfig& tensor, const hw::AtomicConfig& atomic)
     : resources(config), owners(config.max_warps),
       shared({65536, 32, 2, 8, atomic.latency}),
-      tmem({131072, tensor.tmem_banks, tensor.tmem_latency, 8}), array(tensor) {
+      tmem({131072, tensor.tmem_banks, tensor.tmem_latency, 8}), array(hw::make_tensor_engine(tensor)) {
     for (uint32_t part = 0; part < config.partitions; ++part) partitions.emplace_back(config.register_banks);
 }
 
@@ -143,7 +143,7 @@ bool TimingMachine::advance() {
     }
     admit();
     if (!external_clock_) { hardware_->tick(); cycle_ = hardware_->cycle(); }
-    for (auto& sm : sms_) { sm->shared.tick(); sm->constant.tick(); sm->tmem.tick(); sm->array.tick(); }
+    for (auto& sm : sms_) { sm->shared.tick(); sm->constant.tick(); sm->tmem.tick(); sm->array->tick(); }
     progress_async_units();
     retire_results(); collect_operands(); launch_ready();
     bool issued = false;

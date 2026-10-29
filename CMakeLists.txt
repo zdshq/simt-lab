@@ -20,7 +20,7 @@ add_library(simt_core src/machine.cpp src/execution.cpp src/control.cpp src/coll
     src/diagnostics.cpp src/tensor.cpp src/tensor_numeric.cpp src/matrix.cpp src/matrix_descriptor.cpp
     src/async.cpp src/async_copy.cpp src/timing/footprint.cpp src/timing/scheduler.cpp src/timing/issue.cpp
     src/timing/execute.cpp src/timing/memory.cpp src/timing/retire.cpp src/timing/report.cpp
-    src/hardware/tensor_array.cpp src/timing/tensor_transfer.cpp src/timing/tensor_control.cpp
+    src/hardware/tensor_array.cpp src/hardware/tensor_engine.cpp src/timing/tensor_transfer.cpp src/timing/tensor_control.cpp
     src/timing/tensor_tile.cpp src/timing/tensor_operands.cpp src/timing/async_launch.cpp
     src/timing/async_barrier.cpp src/timing/async_dma.cpp src/timing/async_report.cpp src/timing/atomic.cpp ${GENERATED_DIR}/isa.hpp)
 add_dependencies(simt_core generate_isa)
@@ -47,6 +47,11 @@ add_library(simt_hardware src/hardware/port.cpp src/hardware/dram.cpp src/hardwa
     src/hardware/lifetime.cpp src/hardware/context.cpp)
 target_link_libraries(simt_hardware PUBLIC simt_storage)
 target_link_libraries(simt_core PUBLIC simt_hardware)
+option(SIMT_TENSOR_RTL "Build the optional Verilator Tensor execution backend" OFF)
+if(SIMT_TENSOR_RTL)
+    include(cmake/TensorRtl.cmake)
+    simt_enable_tensor_rtl()
+endif()
 target_compile_options(simt_hardware PRIVATE -Wall -Wextra -Wpedantic -Werror)
 find_path(SIMT_NVML_INCLUDE nvml.h HINTS /usr/local/cuda/include)
 find_library(SIMT_NATIVE_NVML NAMES libnvidia-ml.so.1 HINTS /usr/lib/x86_64-linux-gnu)
@@ -67,6 +72,9 @@ if(SIMT_NVML_INCLUDE AND SIMT_NATIVE_NVML)
 endif()
 option(SIMT_SANITIZE "Enable address and undefined behavior sanitizers" OFF)
 if(SIMT_SANITIZE)
+    if(TARGET simt_tensor_circuit)
+        target_compile_options(simt_tensor_circuit PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+    endif()
     target_compile_options(simt_storage PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
     target_link_options(simt_storage PUBLIC -fsanitize=address,undefined)
     target_compile_options(simt_core PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
@@ -127,6 +135,15 @@ add_simt_test(native_host_protocol test_protocol.py)
 add_simt_test(host_command_processor test_host.py)
 add_simt_test(graph_submission_and_capture test_graph.py)
 add_simt_test(timed_host_and_graph test_timed_host.py)
+add_simt_test(tensor_backend_selection test_tensor_backend.py)
+if(SIMT_TENSOR_RTL)
+    add_executable(test-rtl-engine tests/test_rtl_engine.cpp)
+    target_link_libraries(test-rtl-engine PRIVATE simt_core)
+    target_compile_options(test-rtl-engine PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    add_test(NAME rtl_tensor_engine COMMAND test-rtl-engine)
+    add_simt_test(rtl_tensor_execution test_rtl_tensor.py)
+    add_simt_test(rtl_host_and_graph test_rtl_host.py)
+endif()
 
 # RTL verification is explicit: missing synthesis/simulation tools fail instead of silently passing.
 # RTL 验证显式启用：缺失综合或仿真工具会失败，不会静默通过。

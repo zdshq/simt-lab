@@ -1,6 +1,6 @@
 #pragma once
 #include "simt/hardware_memory.hpp"
-#include "simt/hardware_tensor.hpp"
+#include "simt/tensor_engine.hpp"
 #include "simt/tensor.hpp"
 
 namespace simt {
@@ -22,7 +22,7 @@ struct TensorFlight {
     std::array<uint64_t, 4> indices_a{};
     std::array<uint32_t, 32> fetched{};
     std::vector<TensorTransfer> transfers;
-    hw::TensorWave wave;
+    hw::TensorInput wave;
 };
 
 // A transfer's slot routes returned bytes into the frontend's bounded staging registers.

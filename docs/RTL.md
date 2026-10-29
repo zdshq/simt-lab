@@ -2,7 +2,7 @@
 
 本阶段把三个关键结构写成 SystemVerilog，并完成 RTL 仿真、Yosys 综合和综合后网表的同一套行为验证。源码在 `rtl/`，C++ 对照平台在 `tests/rtl/`。这是真正的触发器、存储阵列、组合选择和握手状态描述，不是在 C++ 模拟器外套一层延迟。
 
-本页记录阶段 16 的首批三个结构。后续 [Tensor RTL](RTL_TENSOR.md) 已补充数值电路和 4×4 乘加阵列；当前仍没有完整 RTL SM 或 FPGA bitstream。`simt-run`/`simt-device` 的运行后端仍是已有 C++ 模型；这些 RTL 是独立验证的模块，并未通过 Verilator 替换其执行核心。阶段 16 和整个硬件目标保持进行中。
+本页记录阶段 16 的首批三个结构。后续 [Tensor RTL](RTL_TENSOR.md) 已补充数值电路和 4×4 乘加阵列，并作为可选 [执行后端](RTL_BACKEND.md) 接入 ISA/TMEM 和主机 Graph。本页的缓存、scoreboard 与 bank 仲裁仍为独立验证模块，尚未替换整机对应的 C++ 单元。当前没有完整 RTL SM 或 FPGA bitstream，阶段 16 和整个硬件目标保持进行中。
 
 ## 已实现的电路
 
@@ -131,6 +131,6 @@ python3 tools/rtl.py --build build-sanitize --out artifacts/rtl-sanitize-final
 
 普通运行生成 VCD 波形、完整构建/仿真日志及工具版本。源码 hash、参数化命令、存储 inventory、generic netlist、统计 JSON 和综合脚本都在产物目录。旧 Verilator 4.038 的 VCD runtime 使用会触发 UBSan 的非对齐访问；sanitizer 模式因此执行同一设计和对照平台但关闭波形，保留 ASan/UBSan 检测并启用 `halt_on_error`。最终该模式 14 项检查全部通过，无 sanitizer 报告。普通 RTL/门级运行仍生成波形，不通过关闭 alignment sanitizer 掩盖问题。
 
-原软件回归保持 20 套件、257 项检查；本阶段 Debug 回归再次通过，RTL 检查单独统计。后续 Tensor 数值电路/乘加阵列另增 16 项检查，当前 `rtl-check` 共 30 项，见 [RTL_TENSOR.md](RTL_TENSOR.md)。仍须将 RTL 接入 ISA/TMEM、完成整个 RTL 单元连接、真实显卡参数校准和最终审计，见 [HARDWARE_PLAN.md](HARDWARE_PLAN.md)。
+本页原阶段软件回归为 20 套件、257 项检查，RTL 检查单独统计。后续 Tensor 数值电路/乘加阵列另增 16 项检查，当前 `rtl-check` 共 30 项，见 [RTL_TENSOR.md](RTL_TENSOR.md)。Tensor 与 ISA/TMEM 接入已另行验证；仍须完成其余 RTL 单元连接、真实显卡参数校准和最终审计，见 [HARDWARE_PLAN.md](HARDWARE_PLAN.md)。
 
 工具机制参考 [Verilator 波形说明](https://veripool.org/guide/latest/faq.html) 与 [Yosys 综合与存储统计示例](https://yosyshq.readthedocs.io/projects/yosys/en/latest/getting_started/example_synth.html)；具体实现、版本差异和上述数值以本地命令及产物为证据。

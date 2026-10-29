@@ -4,7 +4,7 @@
 
 本页主要描述现有**功能模式**及共同数值规则。`--timing` 已将 Tensor/TMEM 接入逐拍乘加阵列、真实内存供数和 TMEM bank 端口，见 [Tensor 硬件通路](HARDWARE_TENSOR.md)。CP_ASYNC/mbarrier 也已接入有限 DMA/事务控制器，见 [异步通路](HARDWARE_ASYNC.md)；尚未完成完整 NVIDIA Tensor Core 电路或 PTX 异步接口。
 
-本项目另有独立可综合 [Tensor RTL](RTL_TENSOR.md)，已实现上述数值约定的浮点/整数电路和 4×4 PE 阵列，并与 C++ 模型进行对照；尚未替换本页 ISA 的执行后端。
+本项目另有可综合 [Tensor RTL](RTL_TENSOR.md)，已实现上述数值约定的浮点/整数电路和 4×4 PE 阵列，并与 C++ 模型进行对照。以 `SIMT_TENSOR_RTL=ON` 构建后，可在时序模式通过 `--tensor-rtl` 使用该阵列执行本页 ISA；接入边界见 [RTL_BACKEND.md](RTL_BACKEND.md)。
 
 ## TMEM
 

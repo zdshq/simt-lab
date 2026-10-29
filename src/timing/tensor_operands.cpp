@@ -12,11 +12,6 @@ void element_read(TensorFlight& flight, uint32_t base, uint64_t index, uint32_t 
     tensor_transfer(flight, d.space ? 0 : 1, address, width, slot);
 }
 
-uint32_t operand(uint32_t bits, uint64_t index, uint32_t format) {
-    if (format == 3) return std::bit_cast<uint32_t>(int32_t{std::bit_cast<int8_t>(static_cast<uint8_t>(bits))});
-    return float_bits(decode_tensor_float(bits, index, format));
-}
-
 uint32_t checked_scale(uint32_t bits) {
     const auto value = to_float(bits);
     if (!std::isfinite(value) || value < 0) throw std::runtime_error("invalid_block_scale");
@@ -79,11 +74,13 @@ void TimingMachine::decode_tensor_operands(Inflight& entry) {
     auto& flight = *entry.tensor; const auto& d = flight.descriptor;
     if (!poll_tensor_transfers(entry)) return;
     for (uint32_t row = 0; row < flight.rows; ++row) {
-        if (flight.wave.enabled[row]) flight.wave.a[row] = operand(flight.fetched[row], flight.indices_a[row], d.format);
+        if (flight.wave.enabled[row]) flight.wave.raw_a[row] = flight.fetched[row];
+        flight.wave.high_a[row] = flight.indices_a[row] % 2;
         if (flight.wave.block_end) flight.wave.scale_a[row] = checked_scale(flight.fetched[8 + row]);
     }
     for (uint32_t column = 0; column < flight.columns; ++column) {
-        flight.wave.b[column] = operand(flight.fetched[4 + column], uint64_t{flight.k} * d.stride_b + flight.column + column, d.format);
+        flight.wave.raw_b[column] = flight.fetched[4 + column];
+        flight.wave.high_b[column] = (uint64_t{flight.k} * d.stride_b + flight.column + column) % 2;
         if (flight.wave.block_end) flight.wave.scale_b[column] = checked_scale(flight.fetched[12 + column]);
     }
     flight.phase = TensorPhase::feed;
