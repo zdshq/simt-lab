@@ -14,6 +14,7 @@ public:
     void check(uint64_t address, uint64_t size, uint32_t alignment = 1) const;
     uint32_t read(uint64_t address, uint32_t size) const;
     void write(uint64_t address, uint32_t size, uint32_t value);
+    void clear(uint64_t address, uint64_t size);
     void load(const std::string& path);
     void dump(std::ostream& out) const;
 private:

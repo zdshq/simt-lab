@@ -88,7 +88,7 @@ void Machine::dump(std::ostream& out, bool full_state, bool memory) const {
     out << ']';
     if (memory) {
         out << ",\"global\":";
-        global_.dump(out);
+        global_->dump(out);
         out << ",\"constant\":";
         constant_.dump(out);
     }

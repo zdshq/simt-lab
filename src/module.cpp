@@ -4,12 +4,18 @@
 #include <string>
 
 namespace simt {
-// Decode once and report malformed encodings using instruction-index PCs.
-// 只解码一次，并使用指令索引形式的 PC 报告畸形编码。
+// Read the standalone CLI's raw binary input before decoding.
+// 解码前读取独立 CLI 的原始二进制输入。
 Module Module::load(const std::filesystem::path& path) {
     std::ifstream stream(path, std::ios::binary);
     if (!stream) throw std::runtime_error("cannot_open_program");
     std::vector<unsigned char> bytes{std::istreambuf_iterator<char>(stream), {}};
+    return from_bytes(bytes);
+}
+
+// Decode once and report malformed encodings using instruction-index PCs.
+// 只解码一次，并使用指令索引形式的 PC 报告畸形编码。
+Module Module::from_bytes(const std::vector<uint8_t>& bytes) {
     if (bytes.empty() || bytes.size() % 16 != 0)
         throw std::runtime_error("invalid_program_size");
     Module module;

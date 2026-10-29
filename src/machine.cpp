@@ -60,7 +60,8 @@ std::string location(const Cta& cta, uint32_t warp, uint32_t pc) {
 
 // Retain completed CTA state for architectural inspection.
 // 保留已完成 CTA 的状态，供架构结果检查使用。
-Machine::Machine(Module module, Config config) : module_(std::move(module)), config_(config) {
+Machine::Machine(Module module, Config config, std::shared_ptr<Memory> global)
+    : module_(std::move(module)), config_(config), global_(global ? global : std::make_shared<Memory>()) {
     validate_config(config_);
     resident_.resize(config_.sms);
     ctas_.resize(config_.blocks);
@@ -153,17 +154,29 @@ uint32_t Machine::retire_completed() {
 // Advance the functional machine until completion or a proven lack of progress.
 // 推进功能模型，直到任务完成或确认无法继续前进。
 void Machine::run() {
-    uint32_t completed = 0;
-    while (completed < config_.blocks) {
-        admit();
-        bool progress = false;
-        for (const auto& slot : resident_)
-            if (slot) progress |= progress_async(ctas_[*slot]);
-        progress |= schedule_one();
-        const auto retired_count = retire_completed();
-        completed += retired_count;
-        if (!progress && !retired_count) throw std::runtime_error(deadlock_message());
-    }
+    while (!advance()) {}
+}
+
+// Yield after one scheduling opportunity so a command processor can service other engines.
+// 一个调度机会后交还控制权，让命令处理器服务其他引擎。
+bool Machine::advance() {
+    if (completed_ == config_.blocks) return true;
+    admit();
+    bool progress = false;
+    for (const auto& slot : resident_)
+        if (slot) progress |= progress_async(ctas_[*slot]);
+    progress |= schedule_one();
+    const auto retired_count = retire_completed();
+    completed_ += retired_count;
+    if (!progress && !retired_count) throw std::runtime_error(deadlock_message());
+    return completed_ == config_.blocks;
+}
+
+// Kernel arguments occupy per-launch constant words, separate from persistent global data.
+// kernel 参数占用每次启动独立的 constant 字，与持久 global 数据分开。
+void Machine::set_arguments(const std::vector<uint32_t>& arguments) {
+    if (next_block_ || arguments.size() > 16384) throw std::runtime_error("invalid_kernel_arguments");
+    for (size_t index = 0; index < arguments.size(); ++index) constant_.write(index * 4, 4, arguments[index]);
 }
 
 // Read old values and commit all lane results together.
@@ -176,7 +189,7 @@ void Machine::execute(Cta& cta, uint32_t warp_id, Group group) {
     ++op_counts_[static_cast<uint8_t>(instruction.op)];
     lane_instructions_ += std::popcount(mask);
     auto next = warp;
-    const ExecutionContext context{instruction, cta, warp, next, config_, warp_id, global_, constant_};
+    const ExecutionContext context{instruction, cta, warp, next, config_, warp_id, *global_, constant_};
     for (uint32_t lane = 0; lane < lanes; ++lane) {
         if (!(group.mask & lane_bit(lane))) continue;
         next.pc[lane] = group.pc + 1;
@@ -194,7 +207,7 @@ void Machine::execute(Cta& cta, uint32_t warp_id, Group group) {
 // Initialize device-visible data before any CTA is admitted.
 // 在准入任何 CTA 之前初始化设备可见数据。
 void Machine::load_images(const std::string& global, const std::string& constant) {
-    if (!global.empty()) global_.load(global);
+    if (!global.empty()) global_->load(global);
     if (!constant.empty()) constant_.load(constant);
 }
 }

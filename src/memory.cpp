@@ -1,4 +1,5 @@
 #include "simt/memory.hpp"
+#include <algorithm>
 #include <fstream>
 #include <stdexcept>
 
@@ -42,6 +43,20 @@ void Memory::write(uint64_t address, uint32_t size, uint32_t value) {
     check(address, size, size);
     for (uint32_t offset = 0; offset < size; ++offset)
         put(address + offset, static_cast<uint8_t>(value >> (offset * 8)));
+}
+
+// Clear only allocated pages, avoiding work proportional to an untouched address range.
+// 只清除已分配页，避免按未写地址范围执行大量工作。
+void Memory::clear(uint64_t address, uint64_t size) {
+    check(address, size);
+    auto page = pages_.lower_bound(static_cast<uint32_t>(address / page_size));
+    while (page != pages_.end() && uint64_t{page->first} * page_size < address + size) {
+        const uint64_t base = uint64_t{page->first} * page_size;
+        const auto begin = std::max(address, base) - base;
+        const auto end = std::min(address + size, base + page_size) - base;
+        if (begin == 0 && end == page_size) page = pages_.erase(page);
+        else { std::fill(page->second.begin() + begin, page->second.begin() + end, 0); ++page; }
+    }
 }
 
 // Host images start at address zero and may initialize read-only device constants.

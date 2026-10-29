@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <optional>
 #include <map>
+#include <memory>
 #include <ostream>
 #include <string>
 #include <vector>
@@ -86,18 +87,22 @@ struct Group { uint32_t pc; uint32_t mask; };
 
 class Machine {
 public:
-    Machine(Module module, Config config);
+    Machine(Module module, Config config, std::shared_ptr<Memory> global = {});
     void run();
+    bool advance();
+    void set_arguments(const std::vector<uint32_t>& arguments);
+    uint64_t instruction_steps() const { return steps_; }
     void dump(std::ostream& out, bool full_state, bool memory = false) const;
     void load_images(const std::string& global, const std::string& constant);
 private:
     Module module_;
     Config config_;
-    Memory global_;
+    std::shared_ptr<Memory> global_;
     Memory constant_{65536};
     std::vector<Cta> ctas_;
     std::vector<std::optional<uint32_t>> resident_;
     uint32_t next_block_ = 0;
+    uint32_t completed_ = 0;
     uint32_t sm_cursor_ = 0;
     uint64_t steps_ = 0;
     uint64_t lane_instructions_ = 0;
