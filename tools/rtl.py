@@ -13,6 +13,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = {'cache': ('sector_cache', 'test_cache.cpp', ['sector_sram.sv', 'cache_lru.sv', 'sector_cache.sv']),
            'scoreboard': ('lane_scoreboard', 'test_scoreboard.cpp', ['lane_scoreboard.sv']),
+           'warp_scoreboard': ('warp_scoreboard', 'test_warp_scoreboard.cpp', ['scoreboard_cell.sv', 'warp_scoreboard.sv']),
            'arbiter': ('register_arbiter', 'test_arbiter.cpp', ['register_arbiter.sv']),
            'fma': ('fp32_fma', 'test_fma.cpp', ['fp32_fma.sv']),
            'decode': ('tensor_decode', 'test_decode.cpp', ['tensor_decode.sv']),
@@ -66,6 +67,8 @@ def compiler_flags(options):
         libraries += ' '+str(options.build/'libsimt_tensor_circuit.a')
     if 'SIMT_CACHE_RTL:BOOL=ON' in (options.build/'CMakeCache.txt').read_text():
         libraries += ' '+str(options.build/'libsimt_cache_circuit.a')
+    if 'SIMT_SCOREBOARD_RTL:BOOL=ON' in (options.build/'CMakeCache.txt').read_text():
+        libraries += ' '+str(options.build/'libsimt_scoreboard_circuit.a')
     if sanitized(options):
         includes += ' -fsanitize=address,undefined -fno-omit-frame-pointer'
         libraries += ' -fsanitize=address,undefined'

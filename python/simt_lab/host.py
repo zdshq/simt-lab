@@ -9,16 +9,20 @@ class Device:
     # Start one persistent device process, keeping queue publication configurable for tests.
     # 启动一个持久设备进程，允许测试控制队列发布。
     def __init__(self, executable=None, *, sms=2, capacity=64, auto_doorbell=True, monitor_dir=None,
-                 timing=False, hardware_trace=False, tensor_rtl=False, cache_rtl=False):
+                 timing=False, hardware_trace=False, tensor_rtl=False, cache_rtl=False, scoreboard_rtl=False,
+                 request_timeout=30):
         if hardware_trace and not timing:
             raise ValueError('hardware_trace_requires_timing')
         if tensor_rtl and not timing:
             raise ValueError('tensor_rtl_requires_timing')
+        if scoreboard_rtl and not timing:
+            raise ValueError('scoreboard_rtl_requires_timing')
         if cache_rtl and not timing:
             raise ValueError('cache_rtl_requires_timing')
         executable = executable or Path(__file__).resolve().parents[2]/'build'/'simt-device'
         self.connection = Connection(executable,sms,capacity,monitor_dir,timing=timing,
-                                     hardware_trace=hardware_trace,tensor_rtl=tensor_rtl,cache_rtl=cache_rtl)
+                                     hardware_trace=hardware_trace,tensor_rtl=tensor_rtl,cache_rtl=cache_rtl,
+                                     scoreboard_rtl=scoreboard_rtl,request_timeout=request_timeout)
         self.auto_doorbell = auto_doorbell
         self.closed = False
         self._capture = None

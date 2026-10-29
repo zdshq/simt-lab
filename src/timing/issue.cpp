@@ -5,7 +5,7 @@
 
 namespace simt {
 bool TimingMachine::dependencies(uint32_t cta, uint32_t warp, Group group, const Footprint& f) const {
-    const auto& board = warps_[cta][warp].scoreboard;
+    const auto& board = *warps_[cta][warp].scoreboard;
     for (const auto& use : f.reads) if (!board.readable(use.reg, use.mask)) return false;
     if (f.destination && !board.writable(*f.destination, f.write_mask)) return false;
     if (f.predicate && !board.predicate_ready(*f.predicate, f.write_mask)) return false;
@@ -44,7 +44,7 @@ bool TimingMachine::issue_group(uint32_t cta_id, uint32_t wi, Group group) {
     auto& cta = machine_.ctas_[cta_id]; auto& warp = cta.warps[wi]; auto& timed = warps_[cta_id][wi];
     if (group.pc >= machine_.module_.code.size()) throw std::runtime_error("pc_out_of_range");
     const auto& instruction = machine_.module_.code[group.pc];
-    if (!timed.scoreboard.predicate_ready(instruction.guard & 7, group.mask)) { ++stats_.scoreboard_stalls; return false; }
+    if (!timed.scoreboard->predicate_ready(instruction.guard & 7, group.mask)) { ++stats_.scoreboard_stalls; return false; }
     const auto mask = participating_mask(warp, instruction, group);
     auto footprint = instruction_footprint(instruction, mask);
     if (footprint.boundary && timed.inflight) { ++stats_.boundary_stalls; return false; }
@@ -58,9 +58,9 @@ bool TimingMachine::issue_group(uint32_t cta_id, uint32_t wi, Group group) {
 void TimingMachine::reserve(Inflight& entry) {
     auto& timed = warps_[entry.cta][entry.warp];
     const auto& f = entry.footprint;
-    for (const auto& use : f.reads) timed.scoreboard.reserve_read(use.reg, use.mask);
-    if (f.destination) timed.scoreboard.reserve_write(*f.destination, f.write_mask);
-    if (f.predicate) timed.scoreboard.reserve_predicate(*f.predicate, f.write_mask);
+    for (const auto& use : f.reads) timed.scoreboard->reserve_read(use.reg, use.mask);
+    if (f.destination) timed.scoreboard->reserve_write(*f.destination, f.write_mask);
+    if (f.predicate) timed.scoreboard->reserve_predicate(*f.predicate, f.write_mask);
     ++timed.inflight;
     timed.boundary |= f.boundary;
     timed.memory |= f.pipe == Pipe::memory;

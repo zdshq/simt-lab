@@ -53,3 +53,5 @@ LRU 的每组独立 rank 寄存器、局部更新 mux 和组写使能是本项�
 Tensor RTL 的四级 FP32 FMA、77 位对齐通路、完整次正规数和最近偶数舍入、独立 INT8 流水线、两项 FIFO、16 个 PE 及反馈旁路都是项目自己的电路设计。它们实现既定数值约定，不是 NVIDIA 内部电路、精度模式或延迟的逆向结论。当前已通过可选 [RTL 后端](RTL_BACKEND.md) 接入 ISA/TMEM/主机 Graph，前端和存储层次仍是 C++。加入事件观测端口后的完整阵列为 217,928 个 generic cells，来自实际 Yosys/ABC 层次统计，不能用于声称整 SM 或显卡门数，见 [RTL_TENSOR.md](RTL_TENSOR.md)。
 
 仍需实现 CUDA pointer-chase、合并和 shared bank 微基准，记录原始结果、GPU/驱动/编译器信息、样本分布和计时开销。结果用于判断模型能否解释趋势，不通过调参强行宣称结构唯一可识别。
+
+接入 ISA 的 scoreboard RTL 按物理 warp 槽保存 63×32 个写者位、63×32 个 6 位读者计数和 8×32 个谓词位；16 组事件及逐寄存器阶段顺序来自本项目的发射/端口约束。事件时钟门控要求控制信号在低电平阶段稳定，当前没有工艺 ICG 映射、时序收敛或功耗数据。这些结构与数目都是项目设计，不能从 NVIDIA 的可见依赖行为推断出相同电路，详见 [RTL_SCOREBOARD.md](RTL_SCOREBOARD.md)。

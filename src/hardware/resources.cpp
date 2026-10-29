@@ -10,6 +10,8 @@ SmResources::SmResources(PipelineConfig config) : config_(config) {
         !config.integer_latency || !config.float_latency || !config.special_latency ||
         !config.integer_interval || !config.float_interval || !config.special_interval)
         throw std::runtime_error("invalid_pipeline_config");
+    if (config.scoreboard_rtl && config.register_banks > 4)
+        throw std::runtime_error("scoreboard_rtl_requires_at_most_4_banks");
     slots_.resize(config.max_warps);
 }
 

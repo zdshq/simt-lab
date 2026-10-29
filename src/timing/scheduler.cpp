@@ -17,6 +17,7 @@ TimedSm::TimedSm(const hw::PipelineConfig& config, const hw::TensorConfig& tenso
       shared({65536, 32, 2, 8, atomic.latency}),
       tmem({131072, tensor.tmem_banks, tensor.tmem_latency, 8}), array(hw::make_tensor_engine(tensor)) {
     for (uint32_t part = 0; part < config.partitions; ++part) partitions.emplace_back(config.register_banks);
+    scoreboards.resize(config.max_warps);
 }
 
 TimingMachine::TimingMachine(Machine& machine, std::shared_ptr<hw::HardwareContext> hardware)
@@ -79,7 +80,10 @@ void TimingMachine::place(uint32_t block, uint32_t sm, const hw::Residency& resi
         auto threads = std::span<Memory>(machine_.ctas_[block].local).subspan(warp * lanes);
         hardware_->physical.attach(local_base_ + block * 32 + warp, threads.first(std::min<size_t>(threads.size(), lanes)));
         const auto slot = residency.slots[warp];
+        auto& board = sms_[sm]->scoreboards[slot];
+        if (!board) board = hw::make_scoreboard_engine(machine_.config_.pipeline.scoreboard_rtl);
         warps_[block][warp].slot = slot;
+        warps_[block][warp].scoreboard = board.get();
         sms_[sm]->owners[slot] = WarpOwner{block, warp};
     }
     stats_.peak_ctas = std::max(stats_.peak_ctas, uint64_t{sms_[sm]->resources.ctas()});
@@ -152,6 +156,9 @@ bool TimingMachine::advance() {
     bool issued = false;
     for (uint32_t sm = 0; sm < sms_.size(); ++sm)
         for (uint32_t part = 0; part < sms_[sm]->partitions.size(); ++part) issued |= issue_partition(sm, part);
+    // Physical scoreboard slots persist across CTA reuse and commit once after the cycle's events.
+    // 物理 scoreboard 槽在 CTA 复用时保持实例，每拍事件结束后只提交一次。
+    for (auto& sm : sms_) for (auto& board : sm->scoreboards) if (board) board->tick();
     retire_ctas();
     if (!issued && inflight_.empty() && !background_work() && machine_.completed_ != machine_.config_.blocks && !admit())
         throw std::runtime_error(machine_.deadlock_message());

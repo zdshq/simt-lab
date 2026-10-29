@@ -261,3 +261,18 @@
 - 新增 7 项合并检查，复用原 6 项模拟监控检查，覆盖真实元数据对照、分配/释放、多会话、选择器、退出/SIGKILL、ABI、引用计数、并发查询、安装/撤销及拒绝覆盖。Debug 全量 23 套件、268 项通过（225 Python / 43 C++），Release 与 ASan/UBSan 本次各运行受影响的 2 套件、13 项且全部通过。原始日志与计数保存在 `artifacts/nvml-merged/`；没有把嵌入的 C++ 断言重复计数。
 - 使用 `Device('build-cache-rtl/simt-device', timing=True, tensor_rtl=True, cache_rtl=True, monitor_dir=...)` 完成两次 Graph GEMM，每次 96 个值通过，最大误差约 2.98e-7。随后普通 `nvidia-smi` 同时显示实卡和模拟器、保留真实进程表；7 MiB 分配、释放到 0 和退出后移除均验证。`installation.json`、`default-command.txt` 和 `gemm/` 保存原始证据。
 - 同步 NVIDIA_SMI、计划、验证、来源、README 和两份 RTL 后端文档。普通 `Device()` 仍须显式启用监控；原生二进制直接执行及其他用户的环境保持原生视图。完整目标保持 active：Tensor/缓存电路已接入，但其余 SM 电路接入、整体 RTL、实卡校准、PTX 异步矩阵协议与最终审计仍未完成。
+
+## 阶段 16 第六部分：物理 warp scoreboard 接入（2026-10-29）
+
+- 从干净的 `0679d4c` 继续；上一阶段实际实现、验证并安装用户级 nvidia-smi 合并入口，属于已完成的阶段进展。完整硬件目标仍 active，本轮处理尚由 C++ 保存的依赖状态。
+- 新增 `scoreboard_cell.sv`、`warp_scoreboard.sv`、统一 `ScoreboardEngine` 与实际 Verilator 适配器。CLI、设备进程、Python、主机启动和两个示例显式传递 `scoreboard_rtl`；能力缺失、不启用 timing、超过 4 banks 均明确失败。普通模式保留独立 C++ 参考。
+- 按 SM 物理 warp 槽持有电路，首次使用时建立宿主实例并跨 CTA 保留；不为历史 CTA 无限新增硬件槽。实际依赖、源收集释放、写回和谓词均调用电路。每拍末统一提交；查询和引脚打包无额外时钟，无软件影子写者表或读者计数。
+- 首版 16 个任意更新串联整个读者计数，实际综合 2,741,408 generic cells。根据每 bank 一读一写、源去重、每 partition 单发射，改为逐寄存器释放写者→收集读者→预约读者→预约写者；每种事件最多一次。保持 16 个输入、6 位计数和逐 lane 检查，阶段版降为 763,640 cells。合法实际路径每拍最多 13 个非空事件；更宽 bank 配置明确拒绝。
+- 新增 4 项 RTL 对照及 4 项 C++ 适配器检查，另有 2 项公开后端选择、96 项实际指令/数值/存储/同步复跑和 34 项主机/Graph 检查。原语测试与 6,400 个随机事件覆盖阶段旁路、部分非法 mask 原子拒绝、容量、复位和状态归属；引脚测试独立打包，覆盖跨 32 位字边界。
+- 早期测试修正有明确原因：失败 stream 再启动按现有语义得到 dependency_failed，改用独立 stream；测试目标生成式与 63 不互素导致第 10 个端口重复同一寄存器，改成不同目标；Verilator 新分片未进入旧 CMake 列表，显式重配后重新构建。相关失败记录保存在 `rtl-scoreboard-integrated/first-integration.log` 和 `rtl-scoreboard-phases/release-before-adapter-test-fix.log`。
+- 未门控版 Release 全部指令检查通过，但 Debug sanitizer 主机请求超过固定 30 秒，96 项执行套件还触发 600 秒总上限。保留错误日志；公开接口增加默认 30 秒、必须有限且为正的 `request_timeout`，测试可选择 180 秒。没有减少算例或关闭检测。
+- 新增实际 RTL 事件时钟门，适配器省略门关闭的无状态转换求值，常量 R63/P7 与未变化的组合查询不重复计算。分别报告输入模型拍数和有效更新边沿；低电平控制契约、尚无 ICG/FPGA 时钟映射和工艺时序结果在文档中明确。最终综合 763,658 cells / 14,368 FF 位，RTL、ASan/UBSan、重新综合后的网表均通过相同 4 项，记录在 `rtl-scoreboard-gated*`。
+- 最终默认 Debug 全量 24 套件 / 270 项通过；联合 Release 全量 33 套件 / 564 项通过；scoreboard RTL 的 Debug ASan/UBSan 全量 27 套件 / 404 项通过，96 项执行套件 101.94 秒。实际命令和计数见 VALIDATION；联合构建套件分别选择后端，不声称全部测试同时开启三个 RTL。
+- 最终 `hardware_host.py --build build-cache-rtl --tensor-rtl --cache-rtl --scoreboard-rtl --out artifacts/rtl-scoreboard-gated-host` 同时启用三类电路，四类负载各两次 Graph 重放通过。除新增后端身份外，完整输出、周期和缓存/DRAM 统计与 `rtl-banked-host` 相同，设备最终 64,500 拍。阶段文档详述源码、状态位、同拍协议、成本、复现和未完成部分。
+- 最终进一步逐份比较 8 个 kernel 报告，删除新增 scoreboard 观测字段后，完整状态和逐拍 trace 与旧后端全量相等。另启动联合 RTL GEMM 会话，由普通 nvidia-smi 验证实卡/模拟器共存、7 MiB 分配、释放和退出；10 份 kernel 报告的后端与门控时钟关系核对通过。当前 RTL 与 gate 哈希匹配四份最终工具清单，分别保存在 `backend-audit.json`、`nvidia-smi-status.txt` 和 `evidence-audit.json`。
+- 完整目标保持 active。依赖控制电路已经接入，但寄存器数据阵列、bank 仲裁、operand collector、其余 RTL 整机连接、实卡参数校准、PTX 异步矩阵协议及最终审计仍需继续。

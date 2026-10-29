@@ -4,6 +4,7 @@
 #include "simt/hardware_context.hpp"
 #include "simt/timing_tensor.hpp"
 #include "simt/timing_async.hpp"
+#include "simt/scoreboard_engine.hpp"
 #include <deque>
 
 namespace simt {
@@ -21,7 +22,7 @@ Footprint instruction_footprint(const Instruction& instruction, uint32_t mask);
 std::string timing_location(uint32_t cta, uint32_t sm, uint32_t warp, uint32_t pc);
 
 struct TimedWarp {
-    hw::Scoreboard scoreboard;
+    hw::ScoreboardEngine* scoreboard = nullptr;
     uint32_t inflight = 0, slot = 0;
     bool boundary = false, memory = false;
 };
@@ -37,6 +38,7 @@ struct TimedSm {
     hw::SmResources resources;
     std::vector<Partition> partitions;
     std::vector<std::optional<WarpOwner>> owners;
+    std::vector<std::unique_ptr<hw::ScoreboardEngine>> scoreboards;
     hw::BankedShared shared;
     hw::BankedShared constant{{65536, 1, 4, 8}};
     hw::BankedShared tmem;

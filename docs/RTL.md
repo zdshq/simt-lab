@@ -130,7 +130,7 @@ python3 tools/rtl.py --build build-sanitize --out artifacts/rtl-sanitize-final
 
 `bootstrap_rtl.py` 从系统已配置的 APT 源获取固定版本包，解包到项目内，再构建固定 commit 的 Yosys；manifest 保留 deb 的 SHA-256。其他系统可自行安装相应工具，或设置 `SIMT_VERILATOR`、`SIMT_YOSYS`、`SIMT_BERKELEY_ABC`。外部 Yosys 的门级检查还需用 `--simcells` 指向相应发行版的 `simcells.v`。
 
-当前未指定 `--module` 时也执行后续 Tensor 增量，共 32 项检查（缓存 11、scoreboard 3、仲裁 2、Tensor 16）；本页以下 14 项及 `rtl-*-final` 数值记录首批三个结构，Tensor 的独立产物和计数见 RTL_TENSOR.md。
+当前未指定 `--module` 时包含后续 Tensor 和多事件 scoreboard，共 36 项场景（缓存 11、单命令 scoreboard 3、仲裁 2、Tensor 16、多事件 scoreboard 4）；新模块的当前验证见 [RTL_SCOREBOARD.md](RTL_SCOREBOARD.md)。本页以下 14 项及 `rtl-*-final` 数值记录首批三个结构，Tensor 的独立产物和计数见 RTL_TENSOR.md。
 
 三组共 **14 项 RTL 检查**：cache 9 项、scoreboard 3 项、bank 仲裁 2 项。覆盖实际缓存字节、独立 sector、MSHR/merge/response 容量、锁定 way、LRU、byte mask、写确认、反压字段稳定、高地址、精确 hit 流水线、乱序 fill，以及 360 个混合事务与 C++ 差分。scoreboard 包含 5,000 条随机命令，bank 仲裁包含 4,000 拍随机端口对照。64 KiB 配置另外复跑同样的 9 项 cache 检查，不能把重复运行当作新增场景。
 
@@ -138,6 +138,6 @@ python3 tools/rtl.py --build build-sanitize --out artifacts/rtl-sanitize-final
 
 普通运行生成 VCD 波形、完整构建/仿真日志及工具版本。源码 hash、参数化命令、存储 inventory、generic netlist、统计 JSON 和综合脚本都在产物目录。旧 Verilator 4.038 的 VCD runtime 使用会触发 UBSan 的非对齐访问；sanitizer 模式因此执行同一设计和对照平台但关闭波形，保留 ASan/UBSan 检测并启用 `halt_on_error`。最终该模式 14 项检查全部通过，无 sanitizer 报告。普通 RTL/门级运行仍生成波形，不通过关闭 alignment sanitizer 掩盖问题。
 
-本页原阶段软件回归为 20 套件、257 项检查，RTL 检查单独统计。后续 Tensor 数值电路/乘加阵列另增 16 项检查，加上缓存新增两项后，当前 `rtl-check` 共 32 项，见 [RTL_TENSOR.md](RTL_TENSOR.md)。L1/L2 与 Tensor 的 ISA/主机接入已另行验证；仍须完成其余 RTL 单元连接、真实显卡参数校准和最终审计，见 [HARDWARE_PLAN.md](HARDWARE_PLAN.md)。
+本页原阶段软件回归为 20 套件、257 项检查，RTL 检查单独统计。后续 Tensor 数值电路/乘加阵列另增 16 项检查，加上缓存新增两项后，当时 `rtl-check` 共 32 项，见 [RTL_TENSOR.md](RTL_TENSOR.md)。后续多事件 scoreboard 新增 4 项并接入 ISA/主机路径，见 [RTL_SCOREBOARD.md](RTL_SCOREBOARD.md)。L1/L2 与 Tensor 的接入也已另行验证；仍须完成其余 RTL 单元连接、真实显卡参数校准和最终审计，见 [HARDWARE_PLAN.md](HARDWARE_PLAN.md)。
 
 工具机制参考 [Verilator 波形说明](https://veripool.org/guide/latest/faq.html) 与 [Yosys 综合与存储统计示例](https://yosyshq.readthedocs.io/projects/yosys/en/latest/getting_started/example_synth.html)；具体实现、版本差异和上述数值以本地命令及产物为证据。

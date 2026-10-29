@@ -28,8 +28,8 @@ void TimingMachine::commit(Inflight& entry) {
         if (f.destination) write_register(warp, *f.destination, lane, entry.result.r[*f.destination][lane]);
         if (f.predicate) write_predicate(warp, *f.predicate, lane, entry.result.predicates[*f.predicate] & lane_bit(lane));
     }
-    if (f.destination) timed.scoreboard.retire_write(*f.destination, f.write_mask);
-    if (f.predicate) timed.scoreboard.retire_predicate(*f.predicate, f.write_mask);
+    if (f.destination) timed.scoreboard->retire_write(*f.destination, f.write_mask);
+    if (f.predicate) timed.scoreboard->retire_predicate(*f.predicate, f.write_mask);
     if (f.pipe == Pipe::async) commit_async_instruction(entry);
     if (f.pipe == Pipe::tensor) {
         for (uint32_t lane = 0; lane < lanes; ++lane)

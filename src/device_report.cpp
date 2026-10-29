@@ -1,6 +1,7 @@
 #include "simt/device.hpp"
 #include "simt/tensor_engine.hpp"
 #include "simt/cache_engine.hpp"
+#include "simt/scoreboard_engine.hpp"
 #include <sstream>
 #include <stdexcept>
 
@@ -67,7 +68,9 @@ std::string Device::stats_json() const {
         << (hardware_ ? (tensor_rtl_ ? "rtl" : "model") : "functional")
         << "\",\"tensor_rtl_available\":" << (hw::tensor_rtl_available() ? "true" : "false")
         << ",\"cache_backend\":\"" << (hardware_ ? (cache_rtl_ ? "rtl" : "model") : "functional")
-        << "\",\"cache_rtl_available\":" << (hw::cache_rtl_available() ? "true" : "false") << ",\"hardware\":";
+        << "\",\"cache_rtl_available\":" << (hw::cache_rtl_available() ? "true" : "false")
+        << ",\"scoreboard_backend\":\"" << (hardware_ ? (scoreboard_rtl_ ? "rtl" : "model") : "functional")
+        << "\",\"scoreboard_rtl_available\":" << (hw::scoreboard_rtl_available() ? "true" : "false") << ",\"hardware\":";
     if (hardware_) hardware_->dump(out); else out << "null";
     out << '}';
     return out.str();

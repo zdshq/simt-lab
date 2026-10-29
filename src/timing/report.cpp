@@ -9,6 +9,21 @@ std::string timing_location(uint32_t cta, uint32_t sm, uint32_t warp, uint32_t p
 }
 
 namespace {
+void scoreboard_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedSm>>& sms) {
+    out << ",\"scoreboards\":[";
+    bool first = true;
+    for (uint32_t sm = 0; sm < sms.size(); ++sm)
+        for (uint32_t slot = 0; slot < sms[sm]->scoreboards.size(); ++slot) {
+            const auto& board = sms[sm]->scoreboards[slot];
+            if (!board) continue;
+            if (!first) out << ',';
+            first = false;
+            out << "{\"sm\":" << sm << ",\"slot\":" << slot << ",\"backend\":\"" << board->name()
+                << "\",\"clocks\":" << board->cycle() << ",\"active_clocks\":" << board->active_cycles() << '}';
+        }
+    out << ']';
+}
+
 void cache_stats(std::ostream& out, const hw::CachePort& cache) {
     const auto& s = cache.stats(); const auto& config = cache.config();
     out << "{\"backend\":\"" << cache.name() << "\",\"clocks\":" << cache.cycle()
@@ -95,6 +110,7 @@ void TimingMachine::dump_tensor(std::ostream& out) const {
 
 void TimingMachine::dump(std::ostream& out) const {
     dump_statistics(out);
+    scoreboard_stats(out, sms_);
     dump_memory(out);
     dump_tensor(out);
     dump_async(out);

@@ -48,7 +48,8 @@ flowchart LR
 | 时钟与 valid/ready 适配 | C++ 驱动电路引脚，不计算矩阵结果 | `src/rtl/tensor_engine.cpp` |
 | TMEM、DRAM、DMA、warp 调度与 CP | C++ 功能/时序模型 | `src/hardware/`、`src/timing/`、`src/device_*.cpp` |
 | L1/L2 | 默认 C++，可同时启用缓存 RTL | [RTL_CACHE_BACKEND.md](RTL_CACHE_BACKEND.md) |
-| scoreboard、bank 仲裁的其他 RTL | 已独立验证，尚未接入整机执行 | [RTL.md](RTL.md) |
+| scoreboard | 可选 RTL，已接入逐 lane 依赖控制 | [RTL_SCOREBOARD.md](RTL_SCOREBOARD.md) |
+| 寄存器数据 / bank 仲裁 | 当前执行仍为 C++，仲裁 RTL 仅独立验证 | [RTL.md](RTL.md) |
 
 原始数据不会先由宿主转换成 FP32 再冒充 RTL 转换。前端仍负责描述符和 scale 合法性检查；scale 是本项目的 binary32 约定。阵列的结果经原有 TMEM 端口逐次写入，最后写确认到达后 MMA 才退休。
 

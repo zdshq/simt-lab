@@ -17,7 +17,7 @@ void TimingMachine::collect_operands() {
             const auto& source = machine_.ctas_[entry.cta].warps[entry.warp].r[use->reg];
             for (uint32_t lane = 0; lane < lanes; ++lane)
                 if (use->mask & lane_bit(lane)) entry.operands.r[use->reg][lane] = source[lane];
-            warps_[entry.cta][entry.warp].scoreboard.collect_read(use->reg, use->mask);
+            warps_[entry.cta][entry.warp].scoreboard->collect_read(use->reg, use->mask);
             use = entry.unread.erase(use);
             trace(entry, "operand_read");
         }

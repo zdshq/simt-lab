@@ -2,6 +2,7 @@
 # 持久子进程持有模拟设备，每次响应一个请求。
 import json
 import os
+import math
 from pathlib import Path
 import select
 import subprocess
@@ -17,7 +18,10 @@ class Connection:
     # Keep stderr out of the response pipe and retain it for process-failure diagnostics.
     # 将 stderr 与响应管道分开保存，供进程失败诊断使用。
     def __init__(self, executable, sms, capacity, monitor_dir=None, *, timing=False, hardware_trace=False,
-                 tensor_rtl=False, cache_rtl=False):
+                 tensor_rtl=False, cache_rtl=False, scoreboard_rtl=False, request_timeout=30):
+        self.request_timeout = float(request_timeout)
+        if not math.isfinite(self.request_timeout) or self.request_timeout <= 0:
+            raise ValueError('invalid_device_transport_timeout')
         self.errors = tempfile.TemporaryFile(mode='w+t')
         self.lock = threading.Lock()
         self.closed = False
@@ -29,6 +33,7 @@ class Connection:
         if hardware_trace: command.append('--hardware-trace')
         if tensor_rtl: command.append('--tensor-rtl')
         if cache_rtl: command.append('--cache-rtl')
+        if scoreboard_rtl: command.append('--scoreboard-rtl')
         try:
             self.process = subprocess.Popen(command,
                                             stdin=subprocess.PIPE,stdout=subprocess.PIPE,
@@ -48,7 +53,7 @@ class Connection:
                 self.process.stdin.flush()
             except (BrokenPipeError,OSError) as error:
                 raise DeviceError('device_process_failed: '+self.diagnostics()) from error
-            if not select.select([self.process.stdout],[],[],30)[0]:
+            if not select.select([self.process.stdout],[],[],self.request_timeout)[0]:
                 raise DeviceError('device_transport_timeout')
             line = self.process.stdout.readline()
             if not line:

@@ -60,7 +60,7 @@ python3 examples/host_graph.py
 
 [关键模块 RTL](docs/RTL.md) 已实现 64 KiB sector 缓存的数据阵列和控制器、逐 lane scoreboard、4 bank 读写仲裁。原 14 项检查通过 RTL、sanitizer 和网表验证；缓存新增范围失效扫描后，11 项缓存检查在上述三种模式和 64 KiB 配置下通过。
 
-[Tensor RTL](docs/RTL_TENSOR.md) 新增四级 FP32 融合乘加、INT8 乘加、FP16/BF16/FP4 转换及完整 4×4 PE 网格，包含实际规格化/舍入电路、两项 FIFO、稀疏跳过和三阶段块缩放。新增 16 项 RTL、sanitizer 和综合后网表检查，加上缓存扫描增量，当前 `cmake --build build --target rtl-check` 共 32 项。
+[Tensor RTL](docs/RTL_TENSOR.md) 新增四级 FP32 融合乘加、INT8 乘加、FP16/BF16/FP4 转换及完整 4×4 PE 网格，包含实际规格化/舍入电路、两项 FIFO、稀疏跳过和三阶段块缩放。新增 16 项 RTL、sanitizer 和综合后网表检查，加上缓存扫描增量，该阶段共 32 项；后续 scoreboard 接入另增 4 项独立电路检查。
 
 [RTL 执行后端](docs/RTL_BACKEND.md) 已将该阵列接入实际 ISA/TMEM 与主机 Graph。以 `-DSIMT_TENSOR_RTL=ON` 构建后，运行 `python3 examples/hardware_host.py --build build-rtl --tensor-rtl`；每个 SM 拥有独立 RTL 实例，格式转换和乘加结果由电路产生，其余系统仍由 C++ 模拟。没有构建 RTL 却请求它会明确报错。
 
@@ -68,4 +68,6 @@ python3 examples/host_graph.py
 
 缓存 LRU 已按组实现为排名寄存器和局部比较电路，完整 256 KiB、8 路 L2 的保留存储综合、RTL 和 sanitizer 检查均通过。2/4 KiB 小配置另通过完整综合及相同网表行为检查；这些结果不等于具体 FPGA/ASIC 的存储宏映射或整 GPU 面积。
 
-当前默认 Debug 通过 23 个 CTest 套件、268 项检查（225 Python、43 C++）；本次受影响的 NVML 13 项另通过 Release 和 ASan/UBSan。此前缓存+Tensor RTL 联合构建的 28 套件、421 项有单独验收记录，独立 RTL 检查另计；未把本次监控增量描述成重新执行整套 RTL 验收。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。
+[Scoreboard RTL 后端](docs/RTL_SCOREBOARD.md) 已将逐 lane 写者、读者计数和谓词依赖接入实际指令与主机 Graph。用 `-DSIMT_SCOREBOARD_RTL=ON` 构建、`--scoreboard-rtl` 运行；可与 Tensor/L1/L2 RTL 同时启用。包含有限同拍事件、阶段旁路和事件时钟门控，报告输入时钟与有效更新边沿。寄存器数据和 bank 仲裁仍为 C++。
+
+当前默认 Debug 通过 24 套件、270 项；三种 RTL 后端可用的联合 Release 构建通过 33 套件、564 项；scoreboard RTL 的 Debug ASan/UBSan 构建通过 27 套件、404 项。不同构建包含既有场景复跑，独立 RTL 检查另计，完整范围与早期失败记录见验证文档。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。

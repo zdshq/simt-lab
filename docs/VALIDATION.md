@@ -192,10 +192,43 @@ PYTHONPATH=build-cache-sanitize/generated:python SIMT_RUNNER="$PWD/build-cache-s
 
 PCI 选择在原程序私有路径中假定所有设备都有 PCI 状态，模拟设备无法满足；启动器因此将 PCI bus ID 选择、compute/accounted-process 查询以及管理/其他模式交给原生后端。数字索引和 UUID 可合并选择，公开 NVML 的 PCI 句柄查询也已验证。没有用虚假 PCI 地址掩盖协议差异。完整命令范围、启动监控的要求和撤销方式见 [NVIDIA_SMI.md](NVIDIA_SMI.md)。
 
+## 阶段 16：Scoreboard RTL 接入实际 ISA 与主机
+
+增加 `SIMT_SCOREBOARD_RTL`、`--scoreboard-rtl` 和 Python `scoreboard_rtl=True`。物理 warp 槽持有实际电路实例，RAW/WAW/WAR、谓词写者、同拍完成/收集/预约由 RTL 状态与组合查询决定。适配器没有软件影子依赖表。每寄存器每种事件单拍最多一次，按流水线阶段处理；4-bank 配置下非空事件上界 13，接口容量 16。详细结构与剩余硬件边界见 [RTL_SCOREBOARD.md](RTL_SCOREBOARD.md)。
+
+| 最终验收命令或场景 | 实际结果 |
+|---|---|
+| `ctest --test-dir build --output-on-failure -j4` | 默认 Debug 全部 24 套件、270 项通过（227 Python / 43 C++），2.49 秒 |
+| `ctest --test-dir build-cache-rtl --output-on-failure -j4` | 三种 RTL 后端可用的 Release 构建全部 33 套件、564 项通过（507 Python / 57 C++），5.62 秒。套件分别选择各后端，不宣称每个用例都同时开启三个 RTL |
+| `UBSAN_OPTIONS=halt_on_error=1 ctest --test-dir build-scoreboard-sanitize --output-on-failure -j4` | scoreboard RTL + Debug ASan/UBSan 全部 27 套件、404 项通过（357 Python / 47 C++），101.94 秒；该构建的 Tensor 和缓存为 C++ 后端 |
+| 新增适配器与接口验证 | 4 项 C++ 适配器和 2 项 Python 选择检查；实际查询无时钟、跨字引脚打包、容量、拒绝、RMW、物理槽隔离与合法等待上限 |
+| 实际指令与主机复跑 | 96 项指令/数值/存储/同步检查、34 项主机/Graph 检查，包括独立 stream 故障恢复和状态查询不推进电路 |
+| 独立 RTL / sanitizer / 网表 | `tools/rtl.py --module warp_scoreboard` 的相同 4 项全部通过；6,400 个随机事件与独立 C++ 参考对照，另覆盖时钟门、阶段旁路、mask 原子拒绝、复位与饱和 |
+| 三个后端同时运行四类负载 | `hardware_host.py --build build-cache-rtl --tensor-rtl --cache-rtl --scoreboard-rtl --out artifacts/rtl-scoreboard-gated-host`；四类负载各两次 Graph 重放通过，全部输出/周期/缓存与 DRAM 计数与此前 `rtl-banked-host` 一致，设备最终 64,500 拍 |
+| 最终状态、trace 与监控复核 | 8 份 workload kernel 报告删除新增 scoreboard 观测项后与旧报告完全相等，包含完整状态和逐拍 trace；另 2 份监控 GEMM 报告也核对三个 RTL 后端及有效/输入时钟关系。普通 nvidia-smi 实际显示同存实卡和模拟器，7 MiB 分配、释放及退出均正确，见 `rtl-scoreboard-gated-host/{backend-audit.json,nvidia-smi-status.txt}` |
+
+上述软件日志和计数摘要保存在 `artifacts/rtl-scoreboard-gated/{debug-full,joint-release,scoreboard-sanitize}.log`、`tests.json`。独立 RTL 与当前综合网表使用同一测试平台，不能把三次复跑当成 12 项新设计。原有 32 项独立 RTL 场景没有修改，本轮新增模块单独复跑；工具的完整场景集合现在为 36 项。
+
+最终核对当前两份 RTL 的 SHA-256、实际 gate 网表 SHA-256，以及普通仿真、综合、网表仿真、独立 sanitizer 的四份清单，全部匹配；摘要为 `rtl-scoreboard-gated/evidence-audit.json`。
+
+实际完整综合从 2,741,408 cells 的通用事件链，降为按阶段更新的 763,640，再加入显式时钟门为 763,658；最终均有 14,368 个触发器位，包含 63 个寄存器子实例。阶段版与门控版都通过原 `check -assert` 和网表行为检查。最终源文件、网表及测试记录见 `rtl-scoreboard-gated/`，独立 sanitizer 在 `rtl-scoreboard-gated-sanitize/`。没有 ICG/BRAM 工艺映射、布局布线或频率结论。
+
+时钟门来自 RTL 的 `reset || |command_valid`，控制输入遵守低电平更新契约。适配器仅省略门关闭时确定没有状态变化的求值；常零 R63、常真 P7 和未变化的组合输入也避免重复求值。`clocks` 计输入模型周期，`active_clocks` 单独计有效更新边沿，不把两者混为一谈。每个 kernel 的逐拍行为和输出没有因此改变。
+
+早期失败保留而不改写成成功：
+
+- 首次主机恢复检查使用失败任务所在 stream，按原语义得到 `dependency_failed`；改用独立 stream 验证新 kernel，原失败传播行为保留。
+- 首版测试用 `(port*7+5)%63` 生成端口目标，每 9 项重复，违反最终电路同寄存器同类事件单拍一次的约束。改用互素步长生成 16 个不同目标，完整端口/掩码检查保留。
+- RTL 改动增加 Verilator 分片后，旧 CMake 文件列表导致缺失符号；显式 `cmake -S . -B <build>` 更新构建依赖后重新编译通过。
+- 未门控版本的 sanitizer 主机测试触发固定 30 秒运输等待，实际异常为 `device_transport_timeout`。公开接口增加有限正数 `request_timeout`，默认不变，RTL 主机验收选择 180 秒。
+- 同版 sanitizer 的 96 项执行套件达到 600 秒总上限；此前部分原子检查标为 ERROR，但总超时前未输出异常详情，不将其擅自归因于某个具体异常。原始日志在 `rtl-scoreboard-phases/sanitize-before-clock-gating.log`。门控及组合求值优化后，保持原完整算例、120 秒子进程上限、600 秒套件上限和所有检测，96 项全部通过，101.94 秒。
+
+当前只是 scoreboard 依赖控制的电路接入；寄存器数据、bank 仲裁与 operand collector 尚未形成完整 RTL SM。完整目标继续按硬件计划推进。
+
 ## 明确边界
 
 - 功能模式和时序模式都在 CPU 上执行；不会利用 RTX 4070 SUPER 来获得模拟 GPU 的实际吞吐。
-- 两个 SM 已有基础时序资源模型；缓存、scoreboard、bank 仲裁有独立 RTL，但未连接成两份 RTL SM。仅报告实际小模块的 generic-cell 统计，没有整卡门数、工艺频率、面积或功耗结论。
+- 两个 SM 已有基础时序资源模型；缓存、Tensor、scoreboard RTL 已接入实际执行，bank 仲裁 RTL 仍独立，尚未连接成两份完整 RTL SM。仅报告实际模块的 generic-cell 统计，没有整卡门数、工艺频率、面积或功耗结论。
 - 自定义编码不兼容 CUDA/PTX/SASS/curryGPU 私有二进制；Python Program 是指令构造接口，不是 CUDA 编译器。
 - 主机接口及 CUDA Graph 风格功能通过 Python/C++ 进程协议运行，不实现 NVIDIA `cudaGraph*` API/ABI、驱动、PCIe/MMIO 或系统可枚举的 CUDA 设备。
 - Graph 支持范围见 [主机接口规范](HOST.md)：无 child graph、host callback、条件/内存分配节点、device-side launch 或完整 capture mode；单计算引擎不支持并发 kernel。

@@ -101,7 +101,7 @@ def run_demo(options):
     from simt_lab.transformer import tiny_transformer
     options.out.mkdir(parents=True, exist_ok=True)
     with Device(options.build/'simt-device', timing=True, hardware_trace=True,
-                tensor_rtl=options.tensor_rtl, cache_rtl=options.cache_rtl) as device:
+                tensor_rtl=options.tensor_rtl, cache_rtl=options.cache_rtl, scoreboard_rtl=options.scoreboard_rtl) as device:
         summary = {'cache_reuse': cache_reuse(device), 'workloads': []}
         for factory in (vector_add, reduction, gemm, tiny_transformer):
             summary['workloads'].append(run_workload(device, factory, options.out/factory.__name__))
@@ -117,6 +117,7 @@ def parse_options():
     parser.add_argument('--out', type=Path, default=ROOT/'artifacts'/'hardware-host')
     parser.add_argument('--tensor-rtl', action='store_true')
     parser.add_argument('--cache-rtl', action='store_true')
+    parser.add_argument('--scoreboard-rtl', action='store_true')
     return parser.parse_args()
 
 
