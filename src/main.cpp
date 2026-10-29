@@ -73,6 +73,18 @@ bool tensor_option(simt::Config& config, const std::string& key, uint32_t value)
     return true;
 }
 
+// Expose finite DMA staging and transaction-table resources for controlled experiments.
+// 暴露有限 DMA 暂存和事务表资源，以便进行受控实验。
+bool async_option(simt::Config& config, const std::string& key, uint32_t value) {
+    if (key == "--async-depth") config.async.commands = value;
+    else if (key == "--async-fragments") config.async.fragments = value;
+    else if (key == "--async-chunk") config.async.chunk_bytes = value;
+    else if (key == "--mbarrier-slots") config.async.barrier_slots = value;
+    else if (key == "--mbarrier-latency") config.async.barrier_latency = value;
+    else return false;
+    return true;
+}
+
 // Keep ordinary launch options independent from research hardware parameters.
 // 将普通启动选项与研究型硬件参数分开。
 void set_option(Options& options, const std::string& key, const std::string& value) {
@@ -87,6 +99,7 @@ void set_option(Options& options, const std::string& key, const std::string& val
     if (numeric > UINT32_MAX) throw std::runtime_error("argument_out_of_range");
     if (hardware_option(config, key, static_cast<uint32_t>(numeric))) return;
     if (tensor_option(config, key, static_cast<uint32_t>(numeric))) return;
+    if (async_option(config, key, static_cast<uint32_t>(numeric))) return;
     if (key != "--sms" && key != "--blocks" && key != "--threads")
         throw std::runtime_error("unknown_option: " + key);
     if (key == "--sms") config.sms = static_cast<uint32_t>(numeric);
@@ -129,6 +142,8 @@ void print_help() {
                  "         [--sfu-latency N] [--sfu-interval N]\n"
                  "         [--tensor-rows N] [--tensor-columns N] [--tensor-latency N] [--tensor-queue N]\n"
                  "         [--tmem-banks N] [--tmem-latency N] [--tmem-columns N]\n"
+                 "         [--async-depth N] [--async-fragments N] [--async-chunk N]\n"
+                 "         [--mbarrier-slots N] [--mbarrier-latency N]\n"
                  "CPU simulator; --timing enables a partial research model, not NVIDIA timing prediction.\n";
 }
 

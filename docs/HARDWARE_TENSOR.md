@@ -86,6 +86,6 @@ python3 examples/run_workloads.py --workload gemm --timing --out artifacts/timed
 
 6 项 C++ 阵列检查验证矩形波前精确时序、FIFO/未取响应容量、scale 三段、稀疏跳过、整数绕回、输入气泡/复用和融合舍入。19 项 Python 时序检查复用五种格式的独立有理数参考，并验证多行稀疏、NaN 缺失项、TMEM 端口与容量、多 warp 重叠、完整 GEMM，以及最大 32×32×256 描述符的 262,144 次实际乘加。
 
-Debug、Release、ASan+UBSan 全部通过，整体当前为 15 个 CTest 套件、165 项检查。源码主要在 `src/hardware/tensor_array.cpp` 和 `src/timing/tensor_*.cpp`。
+本阶段的 Debug、Release、ASan+UBSan 全部通过，当时为 15 个 CTest 套件、165 项检查。后续异步增量见 [HARDWARE_ASYNC.md](HARDWARE_ASYNC.md)，当前总数见 [VALIDATION.md](VALIDATION.md)。源码主要在 `src/hardware/tensor_array.cpp` 和 `src/timing/tensor_*.cpp`。
 
-剩余完整硬件目标仍包括 local/原子/CP_ASYNC/mbarrier 时序通路、CP/copy/Graph 统一时钟与持久缓存、RTL、参数校准和最终逐项审计，见 [HARDWARE_PLAN.md](HARDWARE_PLAN.md)。
+CP_ASYNC/mbarrier 时序通路已接入，原 Transformer 可执行 DMA→shared→MMA→TMEM 路径。剩余完整硬件目标仍包括 local/原子时序通路、CP/copy/Graph 统一时钟与持久缓存、RTL、参数校准和最终逐项审计，见 [HARDWARE_PLAN.md](HARDWARE_PLAN.md)。

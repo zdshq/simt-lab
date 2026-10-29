@@ -4,6 +4,14 @@
 #include <stdexcept>
 
 namespace simt {
+namespace {
+void validate_async_config(const hw::AsyncConfig& config) {
+    if (!config.commands || config.commands > 64 || !config.fragments || config.fragments > 64 ||
+        !config.chunk_bytes || config.chunk_bytes > 128 || !config.barrier_slots || config.barrier_slots > 1024 ||
+        !config.barrier_latency) throw std::runtime_error("invalid_async_pipeline_config");
+}
+}
+
 TimedSm::TimedSm(const hw::PipelineConfig& config, const hw::TensorConfig& tensor)
     : resources(config), owners(config.max_warps),
       tmem({131072, tensor.tmem_banks, tensor.tmem_latency, 8}), array(tensor) {
@@ -13,6 +21,7 @@ TimedSm::TimedSm(const hw::PipelineConfig& config, const hw::TensorConfig& tenso
 TimingMachine::TimingMachine(Machine& machine) : machine_(machine) {
     const auto& config = machine_.config_;
     if (!config.max_cycles) throw std::runtime_error("invalid_cycle_limit");
+    validate_async_config(config.async);
     hw::SmResources probe(config.pipeline);
     if (!probe.acquire(0, config.threads, config.cta_shared_bytes))
         throw std::runtime_error("kernel_exceeds_sm_resources");
@@ -52,22 +61,32 @@ void TimingMachine::place(uint32_t block, uint32_t sm, const hw::Residency& resi
     Inflight event; event.sm = sm; event.cta = block; trace(event, "admit");
 }
 
-// EXIT does not free occupancy until every issued instruction has retired.
-// EXIT 不会立即释放占用，必须等待所有已发射指令退休。
+// Exited lanes still own their CTA while issued instructions or DMA commands are outstanding.
+// lane 退出后，只要已发射指令或 DMA 命令仍未完成，就继续持有 CTA。
+bool TimingMachine::cta_drained(const Cta& cta) const {
+    if (cta.completed || cta.warps.empty() || pending_copy(cta.block_id)) return false;
+    for (uint32_t wi = 0; wi < cta.warps.size(); ++wi) {
+        if (warps_[cta.block_id][wi].inflight) return false;
+        for (auto state : cta.warps[wi].state) if (state != LaneState::exited) return false;
+    }
+    return true;
+}
+
+// Resource credits return only after payload completion, including transaction-table entries.
+// 载荷完成后才归还资源额度，包括事务表条目。
 void TimingMachine::retire_ctas() {
     for (auto& cta : machine_.ctas_) {
-        if (cta.completed || cta.warps.empty()) continue;
-        bool done = true;
-        for (uint32_t wi = 0; wi < cta.warps.size(); ++wi) {
-            done &= warps_[cta.block_id][wi].inflight == 0;
-            for (auto state : cta.warps[wi].state) done &= state == LaneState::exited;
+        if (!cta_drained(cta)) continue;
+        for (const auto& [address, barrier] : cta.transactions) {
+            static_cast<void>(address);
+            if (barrier.bytes || barrier.issued) throw std::runtime_error("incomplete_async_transaction");
         }
-        if (!done) continue;
         auto& sm = *sms_[cta.sm_id];
         for (const auto& warp : warps_[cta.block_id]) sm.owners[warp.slot].reset();
         sm.resources.release(cta.block_id);
         sm.allocated_columns -= sm.tensor_columns[cta.block_id];
         sm.tensor_columns.erase(cta.block_id);
+        sm.barrier_entries -= static_cast<uint32_t>(cta.transactions.size());
         cta.completed = true; ++machine_.completed_;
         Inflight event; event.cta = cta.block_id; event.sm = cta.sm_id; trace(event, "cta_retire");
     }
@@ -99,12 +118,13 @@ bool TimingMachine::advance() {
     admit(); ++cycle_;
     memory_->tick();
     for (auto& sm : sms_) { sm->shared.tick(); sm->constant.tick(); sm->tmem.tick(); sm->array.tick(); }
+    progress_async_units();
     retire_results(); collect_operands(); launch_ready();
     bool issued = false;
     for (uint32_t sm = 0; sm < sms_.size(); ++sm)
         for (uint32_t part = 0; part < sms_[sm]->partitions.size(); ++part) issued |= issue_partition(sm, part);
     retire_ctas();
-    if (!issued && inflight_.empty() && machine_.completed_ != machine_.config_.blocks && !admit())
+    if (!issued && inflight_.empty() && !background_work() && machine_.completed_ != machine_.config_.blocks && !admit())
         throw std::runtime_error(machine_.deadlock_message());
     return machine_.completed_ == machine_.config_.blocks;
 }

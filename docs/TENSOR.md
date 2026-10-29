@@ -2,7 +2,7 @@
 
 实现顺序遵循“先确定数学语义，再建立数据通路”。本项目的格式、tile 范围、描述符和同步规则公开定义，不能据此声称兼容真实 Tensor Core 的指令、布局、吞吐或数值细节。
 
-本页主要描述现有**功能模式**及共同数值规则。`--timing` 已将 Tensor/TMEM 接入逐拍乘加阵列、真实内存供数和 TMEM bank 端口，见 [Tensor 硬件通路](HARDWARE_TENSOR.md)。CP_ASYNC/mbarrier 仍仅有功能实现；尚未完成完整 NVIDIA Tensor Core 电路或 PTX 异步接口。
+本页主要描述现有**功能模式**及共同数值规则。`--timing` 已将 Tensor/TMEM 接入逐拍乘加阵列、真实内存供数和 TMEM bank 端口，见 [Tensor 硬件通路](HARDWARE_TENSOR.md)。CP_ASYNC/mbarrier 也已接入有限 DMA/事务控制器，见 [异步通路](HARDWARE_ASYNC.md)；尚未完成完整 NVIDIA Tensor Core 电路或 PTX 异步接口。
 
 ## TMEM
 
@@ -63,10 +63,10 @@ MB_INIT ra, imm 在 R[ra] 指向的 shared 地址初始化 32 字节记录，地
 - CP_ASYNC ra, rb, rc, imm：从 global 的 R[ra] 搬 imm 字节到 shared 的 R[rb]，关联 R[rc] 的事务屏障；大小 1..4096 且不能超出尚未发起的预期字节。
 - MB_WAIT ra, rb：R[ra] 是屏障地址，R[rb] 是阶段令牌；该阶段尚未完成时阻塞，未来令牌报错。
 
-管理和搬运命令要求一个参与线程，WAIT 可由多个线程执行。每次搬运在发起时捕获源数据，经过三次调度循环服务机会后提交目标字节，再完成事务字节计数。这是可复现的功能事件延迟，不是三个硬件周期。即使所有线程暂时阻塞，事件仍会推进；退出后的 CTA 也会等待已发起搬运完成。
+管理和搬运命令要求一个参与线程，WAIT 可由多个线程执行。功能模式每次搬运在发起时捕获源数据，经过三次调度循环服务机会后提交目标字节，再完成事务字节计数。这是可复现的功能事件延迟，不是三个硬件周期。时序模式通过实际 global/cache 请求取得载荷，再经 shared banks 分片写入；无同步源覆盖不保证与功能快照一致。两种模式中，即使所有线程暂时阻塞，事件仍会推进；退出后的 CTA 也会等待已发起搬运完成。
 
 当到达次数和预期字节都归零，阶段编号递增，到达计数重置，等待旧阶段的线程被释放。重复阶段需传播新的令牌，例如用 SHFL 或 shared + BAR_SYNC。仅完成线程到达不会掩盖丢失的事务字节。
 
 记录中的八个 word 为 magic `0x3152424D`、phase、expected arrivals、remaining arrivals、remaining bytes、issued outstanding bytes、0、0，可通过 shared 快照审查。
 
-功能模式 MMA 在一条功能指令中同步计算；时序模式的逐拍 Tensor 单元对发起 warp 仍提供阻塞完成语义。上述异步搬运仅是功能模式实现，不声称实现 TMA descriptor、多维 DMA 或 PTX 的异步 MMA/commit 协议。
+功能模式 MMA 在一条功能指令中同步计算；时序模式的逐拍 Tensor 单元对发起 warp 仍提供阻塞完成语义。异步搬运现已有功能和时序实现，但不声称实现 TMA descriptor、多维 DMA 或 PTX 的异步 MMA/commit 协议。

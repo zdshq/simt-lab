@@ -12,6 +12,7 @@
 | [NVIDIA Blackwell Tuning Guide](https://docs.nvidia.com/cuda/blackwell-tuning-guide/) | Blackwell 各 compute capability 的资源及功能说明 | 必须区分 SM100 与 SM120；后续 Tensor 接入需核对相应 PTX 目标 |
 | [NVIDIA NVML](https://developer.nvidia.com/management-library-nvml) / 本机 `nvml.h` | 原版 nvidia-smi 底层管理接口及公开 ABI | 管理接口返回设备不代表 NVIDIA 内核驱动或 CUDA 执行兼容 |
 | [PTX ISA 9.4 Tensor Memory / tcgen05](https://docs.nvidia.com/cuda/parallel-thread-execution/#tensor-memory) §9.7.18.1/6，2026-10-29 核对 | 特定 SM100 目标的 TMEM 组织、同步/异步分类、完成与 proxy 顺序要求 | 不是乘加阵列内部电路图；本项目的 128×256 窗口、阻塞式 MMA、分配粒度及失败规则不能称为 PTX 兼容 |
+| [PTX ISA 9.4 cp.async](https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-async)，2026-10-29 核对 | 非阻塞 global→shared、4/8/16 B 大小及指定完成机制；`.ca/.cg` 缓存提示 | 本项目 1..4096 B 命令、32 B 事务记录、有限 DMA 池是自定义设计；未实现 async-group/TMA/proxy 的精确接口 |
 
 ## 首版存储单元中的设计参数
 
@@ -33,5 +34,7 @@
 SM 时序模式新增的 4 分区、4 寄存器 banks、每 bank 向量读写端口、4 个 collectors、INT/FP/SFU 延迟 4/6/16 与发射间隔 1/1/4，均属于**本项目模型假设**。48 warp/SM 和 64K 寄存器预算可与上述 Ada 官方资源上限对照，但固定每线程预留 64 寄存器、128 B shared 分配粒度、槽位 modulo 分区、控制指令排空及每 warp 单个在途访存均为本项目选择。不能从资源上限相似推导内部流水线相同。具体实现与可复现实验见 [HARDWARE_SM.md](HARDWARE_SM.md)。
 
 Tensor 模式的 4×4 输出驻留阵列、相邻 PE 每拍转发、4 拍乘加、深度 2 的输入 FIFO、每 SM 256 列预算、16 个 TMEM banks 和 modulo bank 映射同样是模型假设。块缩放复用 PE 三段执行、稀疏按逻辑 K 传输并禁用缺失项是本项目选择；不得宣称它们是 NVIDIA 的实际 datapath、稀疏吞吐或隐藏延迟。来源、差异、可观测结果见 [HARDWARE_TENSOR.md](HARDWARE_TENSOR.md)。
+
+异步模式的每 SM 8 个命令、4 个片段、每片段至多 128 B、16 个事务条目、单控制端口及 2 拍处理延迟全部是模型假设。shared 记录按端口发布、逻辑表等待发布确认、完成优先仲裁和未对齐 byte 路径是本项目选择，不是逆向得到的 NVIDIA 实现。对照实验与协议差异见 [HARDWARE_ASYNC.md](HARDWARE_ASYNC.md)。
 
 实现 CUDA pointer-chase、合并和 shared bank 微基准，记录原始结果、GPU/驱动/编译器信息、样本分布和计时开销。结果用于判断模型能否解释趋势，不通过调参强行宣称结构唯一可识别。

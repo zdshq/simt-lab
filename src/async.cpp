@@ -64,23 +64,37 @@ TransactionBarrier& transaction(Cta& cta, uint32_t address) {
     return found->second;
 }
 
-// Reflect control state in a reserved 32-byte shared-memory record.
-// 将控制状态同步到保留的 32 字节 shared 记录。
-void update_transaction(Cta& cta, uint32_t address) {
-    auto& barrier = transaction(cta, address);
+// Phase advancement is independent of the physical path that publishes its record.
+// 阶段推进与发布记录的物理路径相互独立。
+bool settle_transaction(TransactionBarrier& barrier) {
     if (!barrier.arrivals && !barrier.bytes) {
         if (barrier.phase == UINT32_MAX) throw std::runtime_error("mbarrier_phase_overflow");
         ++barrier.phase;
         barrier.arrivals = barrier.expected;
+        return true;
     }
-    const std::array<uint32_t, 8> words{0x3152424D, barrier.phase, barrier.expected,
-                                      barrier.arrivals, barrier.bytes, barrier.issued, 0, 0};
+    return false;
+}
+
+std::array<uint32_t, 8> transaction_words(const TransactionBarrier& barrier) {
+    return {0x3152424D, barrier.phase, barrier.expected, barrier.arrivals, barrier.bytes, barrier.issued, 0, 0};
+}
+
+// Functional publication is immediate; timed publication uses the shared bank ports separately.
+// 功能发布即时完成，时序发布则单独经过 shared bank 端口。
+void update_transaction(Cta& cta, uint32_t address) {
+    auto& barrier = transaction(cta, address);
+    settle_transaction(barrier);
+    const auto words = transaction_words(barrier);
     for (uint32_t index = 0; index < words.size(); ++index) cta.shared.write(address + index * 4, 4, words[index]);
 }
 
 // Protect the opaque barrier record from ordinary stores and overlapping copies.
 // 保护不透明屏障记录，禁止普通写入与重叠搬运。
 void check_shared_write(const Cta& cta, uint64_t address, uint64_t size) {
+    for (const auto at : cta.reserved_transactions)
+        if (address < uint64_t{at} + 32 && uint64_t{at} < address + size)
+            throw std::runtime_error("write_overlaps_mbarrier");
     for (const auto& [at, barrier] : cta.transactions) {
         static_cast<void>(barrier);
         if (address < uint64_t{at} + 32 && uint64_t{at} < address + size)

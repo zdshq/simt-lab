@@ -52,6 +52,16 @@ void tensor(Footprint& f, const Instruction& i, uint32_t mask) {
     if (i.op == Op::STT) source(f, i.rc, mask);
 }
 
+// DMA submission reads addresses through RF ports but does not reserve the copied payload in registers.
+// DMA 提交通过寄存器堆端口读取地址，不在寄存器中预约搬运载荷。
+void asynchronous(Footprint& f, const Instruction& i, uint32_t mask) {
+    f.pipe = Pipe::async; f.boundary = true;
+    source(f, i.ra, mask);
+    if (i.op == Op::CP_ASYNC || i.op == Op::MB_WAIT) source(f, i.rb, mask);
+    if (i.op == Op::CP_ASYNC) source(f, i.rc, mask);
+    if (i.op == Op::MB_ARRIVE) f.destination = i.rd;
+}
+
 void validate(const Footprint& f) {
     if (f.destination && *f.destination >= registers) throw std::runtime_error("register_out_of_range");
     if (f.predicate && *f.predicate >= 7) throw std::runtime_error("predicate_out_of_range");
@@ -70,6 +80,7 @@ Footprint instruction_footprint(const Instruction& i, uint32_t mask) {
     else if (i.op == Op::CVTA) { source(f, i.ra, mask); f.destination = i.rd; }
     else if (i.op >= Op::BAR_SYNC && i.op <= Op::FENCE) { f.pipe = Pipe::control; f.boundary = true; }
     else if (i.op >= Op::TMEM_ALLOC && i.op <= Op::MMA) tensor(f, i, mask);
+    else if (i.op >= Op::MB_INIT && i.op <= Op::CP_ASYNC) asynchronous(f, i, mask);
     else throw std::runtime_error(std::string("timing_unit_not_connected: ") + op_name(i.op));
     validate(f);
     return f;

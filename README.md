@@ -32,7 +32,7 @@ python3 examples/host_graph.py
 
 `host_graph.py` 验证普通提交的 4 个命令包与图重放的 1 个命令包均得到正确向量结果，并输出 `artifacts/host-graph/trace.json` 与 `validation.json`；包数量不是实际 CUDA 加速比。
 
-最终验证覆盖 Debug、Release 和 ASan/UBSan 三种构建，每种构建的九个套件、75 项测试全部通过。命令、证据映射与未实现范围见 [验证记录](docs/VALIDATION.md)。
+阶段 0–10 验收覆盖 Debug、Release 和 ASan/UBSan 三种构建，当时每种构建的九个套件、75 项测试全部通过。后续硬件增量、命令、证据映射与未实现范围见 [验证记录](docs/VALIDATION.md)。
 
 ## 路线依据
 
@@ -50,8 +50,8 @@ python3 examples/host_graph.py
 
 新增 [SM 时序执行](docs/HARDWARE_SM.md)：`simt-run --timing` 已将基础算术、控制、屏障和 load/store 接入寄存器 banks、scoreboard、有限 operand collectors、执行/写回流水线以及真实缓存；支持按资源限制多 CTA 同驻留。`python3 examples/hardware_pipeline.py` 可生成依赖链、缓存及 shared bank 实验和逐拍轨迹。
 
-[Tensor 时序通路](docs/HARDWARE_TENSOR.md) 已接入逐拍乘加阵列、有限操作数 FIFO、真实内存供数和 TMEM bank。运行 `python3 examples/run_workloads.py --workload gemm --timing --out artifacts/timed` 可验证两个 SM 上的完整 GEMM。三种构建目前通过 165 项检查；原子/local/异步、主机 CP/Graph 的时序接入、RTL 和参数校准仍未完成。
+[Tensor 时序通路](docs/HARDWARE_TENSOR.md) 已接入逐拍乘加阵列、有限操作数 FIFO、真实内存供数和 TMEM bank。[异步搬运通路](docs/HARDWARE_ASYNC.md) 已接入有限 DMA 命令/片段池、真实 global→shared 数据流和事务屏障。运行 `python3 examples/run_workloads.py --timing --out artifacts/timed` 可验证向量、规约、GEMM 与小型 Transformer；`python3 examples/hardware_async.py` 可查看容量与完成顺序实验。
 
 已验证 [原版 nvidia-smi 接入](docs/NVIDIA_SMI.md)：终端一运行 `python3 examples/nvml_device.py`，终端二运行 `python3 tools/simt_smi.py`，可查看实际模拟设备及其分配内存。专用 NVML 后端只作用于该子进程，系统默认命令仍查询真实显卡；没有 CUDA 或 PCIe 兼容。
 
-当前三种构建均通过 11 个 CTest 套件，共 81 项 Python 检查和 17 项硬件 C++ 检查。完整硬件目标仍在推进，剩余工作以硬件计划为准。
+当前三种构建均通过 16 个 CTest 套件、194 项检查（164 项 Python、30 项 C++）。原子/local、主机 CP/Graph 的时序接入、RTL 和参数校准仍未完成，完整剩余目标以硬件计划为准。

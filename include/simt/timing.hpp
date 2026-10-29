@@ -2,11 +2,12 @@
 #include "simt/machine.hpp"
 #include "simt/hardware_memory.hpp"
 #include "simt/timing_tensor.hpp"
+#include "simt/timing_async.hpp"
 #include <deque>
 
 namespace simt {
-enum class Pipe { integer, floating, special, memory, control, tensor };
-enum class Stage { collect, ready, executing, memory, tensor, writeback };
+enum class Pipe { integer, floating, special, memory, control, tensor, async };
+enum class Stage { collect, ready, executing, memory, tensor, async, writeback };
 struct Footprint {
     Pipe pipe = Pipe::integer;
     std::vector<hw::RegisterUse> reads;
@@ -27,7 +28,7 @@ struct WarpOwner { uint32_t cta, warp; };
 struct Partition {
     hw::RegisterPorts ports;
     uint32_t cursor = 0;
-    std::array<uint64_t, 6> available{};
+    std::array<uint64_t, 7> available{};
     std::optional<uint64_t> predicate_write;
     explicit Partition(uint32_t banks) : ports(banks) {}
 };
@@ -42,6 +43,10 @@ struct TimedSm {
     std::optional<uint64_t> tensor_owner;
     std::map<uint32_t, uint32_t> tensor_columns;
     uint32_t allocated_columns = 0;
+    std::deque<DmaCommand> copies;
+    std::optional<BarrierJob> barrier_job;
+    AsyncStats async_stats;
+    uint32_t copy_cursor = 0, copy_fragments = 0, barrier_entries = 0;
     explicit TimedSm(const hw::PipelineConfig& config, const hw::TensorConfig& tensor);
 };
 struct MemoryFlight {
@@ -91,9 +96,10 @@ private:
     std::map<uint64_t, std::unique_ptr<Inflight>> inflight_;
     std::deque<HardwareEvent> trace_;
     TimingStats stats_;
-    uint64_t cycle_ = 0, next_ = 1;
+    uint64_t cycle_ = 0, next_ = 1, next_copy_ = 1;
     bool admit();
     void place(uint32_t block, uint32_t sm, const hw::Residency& residency);
+    bool cta_drained(const Cta& cta) const;
     void retire_ctas();
     bool issue_partition(uint32_t sm, uint32_t partition);
     bool try_issue(uint32_t cta, uint32_t warp);
@@ -131,6 +137,28 @@ private:
     void feed_tensor(Inflight& entry);
     void drain_tensor(Inflight& entry);
     void store_tensor(Inflight& entry);
+    bool async_available(const Inflight& entry);
+    void start_async(Inflight& entry);
+    void reserve_barrier_record(const Inflight& entry, uint32_t address);
+    void check_pending_shared_writes(uint32_t cta, uint32_t address, uint32_t bytes) const;
+    void progress_async_units();
+    void progress_barrier(uint32_t sm);
+    void prepare_barrier_job(uint32_t sm, BarrierJob& job);
+    void prepare_copy_issue(BarrierJob& job, const Inflight& entry);
+    void publish_barrier_job(uint32_t sm, BarrierJob& job);
+    void finish_barrier_job(uint32_t sm, BarrierJob& job);
+    void query_async_wait(uint32_t sm, BarrierJob& job);
+    void commit_async_instruction(Inflight& entry);
+    void submit_async_copy(uint32_t sm, const BarrierJob& job);
+    void service_copy_fragments(uint32_t sm);
+    bool service_copy_fragment(DmaCommand& copy, DmaFragment& fragment);
+    void admit_copy_fragment(uint32_t sm);
+    void complete_ready_copy(uint32_t sm);
+    void finish_copy(uint32_t sm, uint64_t copy);
+    DmaCommand& find_copy(uint32_t sm, uint64_t copy);
+    bool pending_copy(uint32_t cta) const;
+    bool background_work() const;
+    void trace_copy(const DmaCommand& copy, const std::string& action);
     void retire_results();
     bool writeback_available(Inflight& entry);
     void commit(Inflight& entry);
@@ -138,6 +166,7 @@ private:
     void dump_statistics(std::ostream& out) const;
     void dump_memory(std::ostream& out) const;
     void dump_tensor(std::ostream& out) const;
+    void dump_async(std::ostream& out) const;
     void dump_trace(std::ostream& out) const;
 };
 }

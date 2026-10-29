@@ -88,6 +88,7 @@ void TimingMachine::dump(std::ostream& out) const {
     dump_statistics(out);
     dump_memory(out);
     dump_tensor(out);
+    dump_async(out);
     if (machine_.config_.hardware_trace) dump_trace(out);
     out << '}';
 }

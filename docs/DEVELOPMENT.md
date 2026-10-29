@@ -132,3 +132,16 @@
 - 验证：6 项 C++ 阵列检查覆盖精确波前时序、有限队列/响应、输入气泡、尺度三段和数值边界；19 项 Python 检查包括独立有理数参考、bank 冲突/容量、其他 warp 前进、原完整 GEMM 和最大 32×32×256 描述符。三种构建全部通过 15 套件、165 项检查，sanitizer 无错误。
 - `python3 examples/run_workloads.py --workload gemm --timing --out artifacts/timed` 实际完成两个 SM、3 CTA、96 输出，最大绝对误差约 2.98e-7，共 1,536 次乘加。4×4/2×2 阵列分别为 2,245/3,811 模型周期，命令/输入/完整轨迹保存在 artifacts/timed/gemm。
 - 仍未完成 local、原子、CP_ASYNC/mbarrier 的时序通路、CP/copy/Graph 统一时钟与跨 kernel 缓存、RTL 和校准；系统默认 nvidia-smi 视图合并也尚未实现。目标保持 active。
+
+## 阶段 15 第三部分：真实异步搬运与事务屏障（2026-10-29）
+
+- 在 `fa6556d` 后接入五条自定义异步指令。CP_ASYNC 经寄存器端口读地址，验证范围/预算，发布 issued 字节预约后入队并退休；载荷通过真实 global/coalescer/L1/L2/DRAM 读请求及 shared bank 写请求推进，没有源数据快照或功能内存旁路。
+- 每 SM 默认 8 个命令、4 个有限片段、128 B 片段上限，支持非对齐 byte 路径及尾部。控制器与普通/Tensor shared 请求竞争端口；复制完成先于新提交申请控制器，避免队列满时阻塞额度归还。
+- 事务表容量跨 CTA 共享，私有下一状态经 shared 记录写确认后才发布。到达和载荷都完成才切换 phase；WAIT 同址广播查询、不同地址串行。提前预约记录保护，并拒绝在途 DMA/普通 store 与新记录相交。
+- 指令退休不代表 DMA 完成；全部 lane 等待/退出后后台仍推进，CTA 资源回收等待载荷完成与完成记录发布。原功能模式快照规则保持不变，明确无同步源修改与时序模式可能不同。
+- 新增 29 项 Python 检查，包括原六项事务/四项组合负载、19 项时序/容量/错误检查；18 组边界载荷和 20 组固定种子随机片段逐字节比较，验证两类 store/init 竞争、多 CTA 隔离、队列饱和、复用 L1、EXIT 排空、多个 WAIT 地址及阶段先后条件。
+- `cmake --build build{,-release,-sanitize}` 与三套 `ctest --output-on-failure` 均通过 16 套件、194 项检查，ASan+UBSan 无错误。最初编译因 BarrierJob 默认成员初始化被 Werror 拒绝，修正后全部构建通过；新增测试中两处编码器调用错误也在验收前修正，没有改变模拟语义来适配它们。
+- `python3 examples/hardware_async.py` 保留机器码、输入、命令、完整 trace 和逐字节校验：4 KiB 搬运在片段池 1/4/8 时为 3356/2147/2147 模型周期；四次 256 B 拷贝在队列 1/8 时为 764/617 周期，容量不足时仍正常完成。
+- `python3 examples/run_workloads.py --timing --out artifacts/timed` 原四类负载全部运行。Transformer 实际搬运 2176 B，执行 8 个有效 MMA、2304 次乘积，32 个输出最大误差约 1.07e-7，5637 模型周期。谓词关闭指令仍计入 op_counts，不能将其中 2 次 CP/16 次 MMA 误报为有效命令数。
+- 新增 HARDWARE_ASYNC.md，核对官方 PTX 9.4 的 cp.async 大小和完成规则，所有队列/控制延迟保持“设计假设”标注。短函数与英中相邻注释约定保持，入口仅调用流程函数，没有增加样式测试。
+- 原子/local 时序通路、持久 CP/copy/Graph 时钟与缓存、RTL、校准和最终审计仍待完成；专用启动器下原版 nvidia-smi 可见能力保持通过，系统默认视图合并未实现。完整目标仍 active。

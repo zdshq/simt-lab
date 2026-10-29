@@ -8,5 +8,7 @@ void release_async_waiters(Cta& cta);
 void check_shared_write(const Cta& cta, uint64_t address, uint64_t size);
 TransactionBarrier& transaction(Cta& cta, uint32_t address);
 void update_transaction(Cta& cta, uint32_t address);
+bool settle_transaction(TransactionBarrier& barrier);
+std::array<uint32_t, 8> transaction_words(const TransactionBarrier& barrier);
 void issue_copy(const ExecutionContext& context, uint32_t lane);
 }

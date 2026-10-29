@@ -2,7 +2,7 @@
 
 `simt-run --timing` 已将基础 ISA 接入实际的 SM 流水线和存储模型。默认功能模式保持原有语义。两者都在 CPU 上执行；时序模式的 `hardware.cycles` 是本项目研究架构的时钟，未校准为 RTX 4070 SUPER、SM100 或 SM120 的周期预测。
 
-当前接入范围：整数/标量浮点、谓词、控制流/重聚、warp 集合操作、global/shared/constant 的 load/store、通用 shared 地址、CTA 屏障和 fence，以及 [Tensor/TMEM 时序通路](HARDWARE_TENSOR.md)。**CP_ASYNC/mbarrier、原子与 local memory 尚未接入时序执行**，遇到这些指令明确报错。原功能模式仍支持它们，不能把功能模式测试算作相应硬件流水线已完成。
+当前接入范围：整数/标量浮点、谓词、控制流/重聚、warp 集合操作、global/shared/constant 的 load/store、通用 shared 地址、CTA 屏障和 fence，以及 [Tensor/TMEM 时序通路](HARDWARE_TENSOR.md) 和 [CP_ASYNC/mbarrier 通路](HARDWARE_ASYNC.md)。**原子与 local memory 尚未接入时序执行**，遇到这些指令明确报错。原功能模式仍支持它们，不能把功能模式测试算作相应硬件流水线已完成。
 
 ## 从一条指令到真实结果
 
@@ -24,7 +24,7 @@ flowchart LR
 
 每个分区每拍最多发射一个可运行 PC 线程组。普通指令发射后可以继续取指，但尚未写回的数据保持不可读。操作数经过寄存器读端口进入收集器，结果在流水线延迟结束后竞争写回端口。寄存器数据、收集器中的旧值、待写回结果分别保存，不能用一份可变 Warp 对象代替三者。
 
-单拍顺序为：准入 → 推进存储单元 → 处理结果/写回 → 收集操作数 → 启动就绪执行 → 各分区发射 → 回收完成 CTA。因此本模型允许本拍写回的值被后续本拍阶段读取；不另加未声明的旁路延迟。
+单拍顺序为：准入 → 推进存储/Tensor 阵列 → 推进事务控制器/DMA → 处理结果/写回 → 收集操作数 → 启动就绪执行 → 各分区发射 → 回收完成 CTA。因此本模型允许本拍写回的值被后续本拍阶段读取；不另加未声明的旁路延迟。
 
 控制、集合和屏障指令在所属 warp 的较早指令排空后发射，提交时修改 PC/等待状态。不同 warp 可以继续前进。每 warp 当前最多一个在途访存，但不相关的 ALU 指令可以与它重叠。全局写继续采用存储层次中明确的保守排空/失效规则，未实现 NVIDIA 弱内存模型。
 
@@ -56,7 +56,7 @@ scoreboard 按寄存器和 lane 掩码记录尚未完成的写者，阻塞 RAW/W
 
 默认每 CTA 预留全部 shared，因此每 SM 仍只驻留一个 CTA。运行小 shared kernel 时可传 `--shared-bytes 256`，真实启用多个 CTA 同驻留。它同时限制 CTA 可访问的 shared 地址范围，不只是更改统计值。每个 CTA 的字节互相隔离，但共享本 SM 的 bank 仲裁和队列容量。
 
-准入先遍历各 SM，再填充额外槽位；资源不够时整体拒绝，不留下部分预约。EXIT 需等待所属 warp 在途指令完成，全部 warp 退出后才归还 CTA 的寄存器/shared/warp 槽。`--warp-policy rr|min|max` 在每个分区内选择物理 warp 槽，默认轮转；`--policy` 仍选择 warp 内的 PC 线程组。
+准入先遍历各 SM，再填充额外槽位；资源不够时整体拒绝，不留下部分预约。EXIT 需等待所属 warp 在途指令完成，全部 warp 退出且 DMA 排空后才归还 CTA 的寄存器/shared/warp 槽、TMEM 列和事务表额度。`--warp-policy rr|min|max` 在每个分区内选择物理 warp 槽，默认轮转；`--policy` 仍选择 warp 内的 PC 线程组。
 
 ## 可复现实验
 
@@ -85,7 +85,7 @@ python3 examples/hardware_pipeline.py
 ## 仍然没有完成的硬件
 
 - Tensor 阵列、分拍供数和 TMEM bank 已实现；PTX 异步 MMA/commit 协议及浮点乘加电路仍未实现。
-- local/spill、原子执行单元、异步拷贝和事务屏障的时序通路。
+- local/spill、原子执行单元的时序通路；自定义异步拷贝和事务屏障已接入，但未实现完整 PTX async-group/TMA。
 - 指令 cache、TLB/页表、跨 SM 互连网络、真实弱内存一致性协议。
 - 持久设备 CP/copy/Graph 的统一时钟与跨 kernel 缓存保留；当前 CLI 每次运行创建新的缓存，主机协议仍走功能模式。
 - 可综合 RTL、FPGA 下载、面积/频率估计及真实 GPU 参数校准。

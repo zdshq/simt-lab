@@ -6,6 +6,10 @@
 #include <vector>
 
 namespace simt::hw {
+struct AsyncConfig {
+    uint32_t commands = 8, fragments = 4, chunk_bytes = 128;
+    uint32_t barrier_slots = 16, barrier_latency = 2;
+};
 struct PipelineConfig {
     uint32_t partitions = 4, register_banks = 4, collectors = 4;
     uint32_t max_warps = 48, max_ctas = 24, register_words = 65536, shared_bytes = 65536;

@@ -21,7 +21,8 @@ add_library(simt_core src/machine.cpp src/execution.cpp src/control.cpp src/coll
     src/async.cpp src/async_copy.cpp src/timing/footprint.cpp src/timing/scheduler.cpp src/timing/issue.cpp
     src/timing/execute.cpp src/timing/memory.cpp src/timing/retire.cpp src/timing/report.cpp
     src/hardware/tensor_array.cpp src/timing/tensor_transfer.cpp src/timing/tensor_control.cpp
-    src/timing/tensor_tile.cpp src/timing/tensor_operands.cpp ${GENERATED_DIR}/isa.hpp)
+    src/timing/tensor_tile.cpp src/timing/tensor_operands.cpp src/timing/async_launch.cpp
+    src/timing/async_barrier.cpp src/timing/async_dma.cpp src/timing/async_report.cpp ${GENERATED_DIR}/isa.hpp)
 add_dependencies(simt_core generate_isa)
 target_include_directories(simt_core PUBLIC include ${GENERATED_DIR})
 target_compile_options(simt_core PRIVATE -Wall -Wextra -Wpedantic -Werror -ffp-contract=off)
@@ -103,6 +104,7 @@ endfunction()
 add_simt_test(isa_and_execution test_simulator.py)
 add_simt_test(timed_sm_execution test_timing.py)
 add_simt_test(timed_tensor_execution test_timed_tensor.py)
+add_simt_test(timed_async_execution test_timed_async.py)
 add_simt_test(control_and_collectives test_control.py)
 add_simt_test(memory_and_barriers test_memory.py)
 add_simt_test(tensor_numeric test_tensor.py)

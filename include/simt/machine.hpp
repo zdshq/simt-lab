@@ -7,6 +7,7 @@
 #include <bitset>
 #include <cstdint>
 #include <optional>
+#include <set>
 #include <map>
 #include <memory>
 #include <ostream>
@@ -41,6 +42,7 @@ struct Config {
     uint32_t cta_shared_bytes = 65536;
     hw::PipelineConfig pipeline;
     hw::TensorConfig tensor;
+    hw::AsyncConfig async;
 };
 // Store logical lane state independently from the host's CPU threads.
 // 将逻辑线程状态与宿主 CPU 线程分开保存。
@@ -87,6 +89,7 @@ struct Cta {
     std::bitset<256> tensor_columns;
     std::map<uint32_t, uint32_t> tensor_allocations;
     std::map<uint32_t, TransactionBarrier> transactions;
+    std::set<uint32_t> reserved_transactions;
     std::vector<AsyncCopy> pending_copies;
     bool completed = false;
 };

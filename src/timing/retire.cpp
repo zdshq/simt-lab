@@ -30,6 +30,7 @@ void TimingMachine::commit(Inflight& entry) {
     }
     if (f.destination) timed.scoreboard.retire_write(*f.destination, f.write_mask);
     if (f.predicate) timed.scoreboard.retire_predicate(*f.predicate, f.write_mask);
+    if (f.pipe == Pipe::async) commit_async_instruction(entry);
     if (f.pipe == Pipe::tensor) {
         for (uint32_t lane = 0; lane < lanes; ++lane)
             if (entry.group.mask & lane_bit(lane)) warp.pc[lane] = entry.group.pc + 1;
