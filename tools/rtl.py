@@ -14,8 +14,9 @@ ROOT = Path(__file__).resolve().parents[1]
 MODULES = {'cache': ('sector_cache', 'test_cache.cpp', ['sector_sram.sv', 'cache_lru.sv', 'sector_cache.sv']),
            'scoreboard': ('lane_scoreboard', 'test_scoreboard.cpp', ['lane_scoreboard.sv']),
            'operand_unit': ('register_operand_unit', 'test_operand_unit.cpp',
-                            ['register_bank.sv', 'register_file.sv', 'operand_collector.sv', 'register_operand_unit.sv']),
-           'collector': ('operand_collector', 'test_collector.cpp', ['operand_collector.sv']),
+                            ['register_bank.sv', 'register_file.sv', 'collector_dispatch.sv', 'collector_payload.sv', 'operand_collector.sv', 'register_operand_unit.sv']),
+           'collector': ('operand_collector', 'test_collector.cpp', ['collector_dispatch.sv', 'collector_payload.sv', 'operand_collector.sv']),
+           'dispatch': ('collector_dispatch', 'test_dispatch.cpp', ['collector_dispatch.sv']),
            'register_file': ('register_file', 'test_register_file.cpp', ['register_bank.sv', 'register_file.sv']),
            'warp_scoreboard': ('warp_scoreboard', 'test_warp_scoreboard.cpp', ['scoreboard_cell.sv', 'warp_scoreboard.sv']),
            'arbiter': ('register_arbiter', 'test_arbiter.cpp', ['register_arbiter.sv']),
@@ -99,7 +100,7 @@ def simulation_sources(options, name, destination):
                 str(ROOT/'tests/rtl'/test)]
     parameters = [f'-GSETS={options.sets}', f'-GWAYS={options.ways}'] if name == 'cache' else []
     if name in ('register_file', 'operand_unit'): parameters = [f'-GSLOTS={options.rf_slots}']
-    if name == 'collector': parameters = [f'-GENTRIES={options.collector_entries}']
+    if name in ('collector', 'dispatch'): parameters = [f'-GENTRIES={options.collector_entries}']
     return parameters+[str(ROOT/'rtl'/file) for file in files]+[str(ROOT/'tests/rtl'/test)]
 
 
@@ -113,11 +114,14 @@ def simulation(options, name):
     if options.gate_sim: verify_netlist(destination, files, cache_parameters(options, name))
     label, objects = ('gate', 'gate-obj') if options.gate_sim else ('simulation', 'obj')
     flags, libraries = compiler_flags(options)
-    if name == 'collector': flags += f' -DCOLLECTOR_ENTRIES={options.collector_entries}'
+    if name in ('collector', 'dispatch'): flags += f' -DCOLLECTOR_ENTRIES={options.collector_entries}'
     command = [tool('verilator'), '--cc', '--exe', '--build', '-j', str(options.jobs),
                '-Wall', '--unroll-count', '4096', '--top-module', top, '--Mdir', str(destination/objects),
                '-CFLAGS', flags, '-LDFLAGS', libraries]+simulation_sources(options, name, destination)
     if not sanitized(options): command.append('--trace')
+    # Old Verilator archives retain removed split objects; rebuild the archive from the current object list.
+    # 旧版 Verilator 归档会保留已移除的分片对象，按当前对象列表重新建立归档。
+    (destination/objects/('V'+top+'__ALL.a')).unlink(missing_ok=True)
     run(command, destination, label+'-build', environment())
     output = execute_simulation(options, destination, destination/objects/('V'+top), label)
     print(output, end='', flush=True)
@@ -147,7 +151,7 @@ def verify_netlist(destination, files, parameters):
 
 def cache_parameters(options, name):
     if name in ('register_file', 'operand_unit'): return {'SLOTS': options.rf_slots}
-    if name == 'collector': return {'ENTRIES': options.collector_entries}
+    if name in ('collector', 'dispatch'): return {'ENTRIES': options.collector_entries}
     return {'SETS': options.sets, 'WAYS': options.ways} if name == 'cache' else {}
 
 
@@ -158,7 +162,7 @@ def synthesis(options, name):
     destination = options.out/name
     destination.mkdir(parents=True, exist_ok=True)
     lines = ['read_verilog -sv '+' '.join(yosys_string(ROOT/'rtl'/file) for file in files)]
-    if name == 'collector': lines.append(f'chparam -set ENTRIES {options.collector_entries} {top}')
+    if name in ('collector', 'dispatch'): lines.append(f'chparam -set ENTRIES {options.collector_entries} {top}')
     if name in ('register_file', 'operand_unit'): lines.append(f'chparam -set SLOTS {options.rf_slots} {top}')
     if name == 'cache': lines.append(f'chparam -set SETS {options.sets} -set WAYS {options.ways} {top}')
     lines += [f'synth -top {top} -run begin:fine', 'check -assert',
@@ -234,8 +238,11 @@ def run_application():
     options = parse_options()
     names = MODULES if options.module == 'all' else [options.module]
     action = synthesis if options.synth else simulation
-    results = {name: action(options, name) for name in names}
     label = 'synthesis' if options.synth else 'gate' if options.gate_sim else 'simulation'
+    # A failed rerun must not leave a previous success manifest masquerading as the current result.
+    # 复跑失败时不能留下此前成功清单，让它冒充本次结果。
+    (options.out/(label+'.json')).unlink(missing_ok=True)
+    results = {name: action(options, name) for name in names}
     save_report(options, label, results)
 
 

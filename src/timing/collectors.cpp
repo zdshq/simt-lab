@@ -9,7 +9,7 @@ void TimingMachine::reserve_collector(Inflight& entry) {
     auto* collector = partition.registers ? partition.registers->collector() : nullptr;
     if (!collector) { entry.unread = entry.footprint.reads; return; }
     const auto warp = warps_[entry.cta][entry.warp].slot / sms_[entry.sm]->partitions.size();
-    entry.collector = collector->allocate(warp, entry.footprint.reads);
+    entry.collector = collector->allocate(warp, entry.footprint.reads, static_cast<uint32_t>(entry.footprint.pipe));
     if (partition.collector_owners[*entry.collector]) throw std::runtime_error("collector_slot_already_owned");
     partition.collector_owners[*entry.collector] = entry.id;
 }
@@ -32,6 +32,27 @@ void TimingMachine::collect_rtl_operands() {
         for (uint32_t index = 0; index < partition.collector_owners.size(); ++index)
             if (partition.collector_owners[index] && collector->ready(index))
                 inflight_.at(*partition.collector_owners[index])->stage = Stage::ready;
+    }
+}
+
+// External unit eligibility is separate from the collector's hardware age and port selection.
+// 外部单元准入条件与收集器的硬件年龄及端口选择分离。
+bool TimingMachine::async_dispatch_eligible(const Inflight& entry) const {
+    if (entry.footprint.pipe != Pipe::async || !entry.mask) return true;
+    const auto& sm = *sms_[entry.sm];
+    return !sm.barrier_job && (entry.instruction.op != Op::CP_ASYNC ||
+                              sm.copies.size() < machine_.config_.async.commands);
+}
+
+void TimingMachine::dispatch_collector_operands() {
+    for (auto& sm : sms_) for (auto& partition : sm->partitions) {
+        auto* collector = partition.registers ? partition.registers->collector() : nullptr;
+        if (!collector) continue;
+        uint32_t eligible = 0;
+        for (uint32_t index = 0; index < partition.collector_owners.size(); ++index)
+            if (partition.collector_owners[index] && async_dispatch_eligible(*inflight_.at(*partition.collector_owners[index])))
+                eligible |= 1u << index;
+        collector->dispatch(eligible);
     }
 }
 

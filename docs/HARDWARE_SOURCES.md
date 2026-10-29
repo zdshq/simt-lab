@@ -59,3 +59,5 @@ Tensor RTL 的四级 FP32 FMA、77 位对齐通路、完整次正规数和最近
 寄存器数据后端的四个物理 bank、32 个固定 64-register warp 槽、逐 lane 有效位、异步读/边沿写、写回旁路和 1/2/4 端口共享组也是本项目设计选择。并未用公开微基准证明 NVIDIA 使用相同存储组织或清零方式。RTL 存储推断、门级小配置、控制输入低电平更新约定与执行接入边界见 [RTL_REGISTERS.md](RTL_REGISTERS.md)。
 
 操作数收集器的 32 个物理条目、三个去重源、32 lane 锁存、年龄优先读仲裁、同拍最后源旁路与释放复用均为本项目设计选择。相对年龄压缩解决有限时间戳回绕；该实现不是公开研究已确认的 NVIDIA collector 拓扑。默认四条目额度与物理 32 条目容量分开报告，具体状态位和验证见 [RTL_COLLECTOR.md](RTL_COLLECTOR.md)。
+
+七类执行端口、每条目 3 位 pipe 字段、年龄优先选择及候选/确认协议是本项目设计选择，详见 [RTL_DISPATCH.md](RTL_DISPATCH.md)。不从 NVIDIA 指令类别推断其物理端口数量，也不把本项目综合成本当作 NVIDIA 芯片数据。

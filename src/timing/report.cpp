@@ -45,6 +45,7 @@ void collector_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedS
             out << "{\"sm\":" << sm << ",\"partition\":" << part << ",\"backend\":\"rtl\",\"physical_entries\":32,\"limit\":" << collector->limit()
                 << ",\"occupancy\":" << collector->occupancy() << ",\"clocks\":" << s.clocks << ",\"active_clocks\":" << s.active_clocks
                 << ",\"allocated\":" << s.allocated << ",\"released\":" << s.released
+                << ",\"dispatch_ports\":7,\"dispatches\":" << s.dispatches << ",\"dispatch_waits\":" << s.dispatch_waits
                 << ",\"reads\":" << s.reads << ",\"bank_stalls\":" << s.bank_stalls << '}';
         }
     out << ']';

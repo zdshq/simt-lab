@@ -10,10 +10,11 @@ namespace {
 constexpr uint32_t count = COLLECTOR_ENTRIES, index_bits = std::countr_zero(count);
 using Vector = std::array<uint32_t,32>;
 struct Source { uint32_t reg, mask; Vector values{}; bool waiting = true; };
-struct Entry { bool occupied = false; uint64_t age = 0; uint32_t warp = 0; std::vector<Source> sources; };
+struct Entry { bool occupied = false; uint64_t age = 0; uint32_t warp = 0, pipe = 0; std::vector<Source> sources; };
 class TestBench : public Bench<Voperand_collector> {
 public:
     explicit TestBench(const char* name) : Bench(name) {
+        dut.allocate_pipe = 0; dut.dispatch_enable = 0; dut.dispatch_accept = 0;
         dut.entry_limit = count; dut.port_groups = 4; dut.eval();
     }
 };
@@ -24,11 +25,11 @@ template<class Bits> bool bit(const Bits& bits, uint32_t index) {
 }
 
 void commit(TestBench& b) {
-    b.tick(); b.dut.collect_enable = 0; b.dut.allocate_valid = 0; b.dut.release_entries = 0; b.dut.eval();
+    b.tick(); b.dut.collect_enable = 0; b.dut.allocate_valid = 0; b.dut.release_entries = 0; b.dut.dispatch_accept = 0; b.dut.dispatch_enable = 0; b.dut.eval();
 }
 
-uint32_t allocate(TestBench& b, uint32_t warp, const std::vector<Source>& sources) {
-    b.dut.allocate_warp = warp; b.dut.allocate_count = sources.size(); b.dut.allocate_registers = 0;
+uint32_t allocate(TestBench& b, uint32_t warp, const std::vector<Source>& sources, uint32_t pipe = 0) {
+    b.dut.allocate_pipe = pipe; b.dut.allocate_warp = warp; b.dut.allocate_count = sources.size(); b.dut.allocate_registers = 0;
     for (uint32_t source = 0; source < sources.size(); ++source) {
         b.dut.allocate_registers |= sources[source].reg << (source*6);
         b.dut.allocate_masks[source] = sources[source].mask;
@@ -192,7 +193,80 @@ void random_lifetimes_and_reuse() {
     }
 }
 
+uint32_t dispatch_entry(const TestBench& b, uint32_t port) {
+    return (b.dut.dispatch_entries >> (port*index_bits)) & (count-1);
+}
+
+void physical_ports_and_acceptance() {
+    TestBench b(nullptr); const auto ports = std::min(count,7u);
+    std::array<uint32_t,7> ids{};
+    for (uint32_t port = 0; port < ports; ++port) {
+        ids[port] = allocate(b,port%8,{{port,1u<<port}},port); commit(b);
+    }
+    for (uint32_t round = 0; round < 2; ++round) {
+        b.dut.collect_enable = 1; b.dut.eval();
+        for (uint32_t bank = 0; bank < 4; ++bank) set_bank(b,bank,round*100+bank*32);
+        commit(b);
+    }
+    b.dut.dispatch_enable = 1; b.dut.dispatch_eligible = (uint32_t{1}<<(count-1))-1u;
+    b.dut.dispatch_eligible |= uint32_t{1}<<(count-1); b.dut.eval();
+    require(b.dut.dispatch_valid == (1u<<ports)-1, "physical independent ports missing");
+    for (uint32_t port = 0; port < ports; ++port) {
+        require(dispatch_entry(b,port) == ids[port], "port selected wrong collector");
+        const auto expected = port/4*100+port%4*32+port;
+        for (uint32_t lane = 0; lane < 32; ++lane)
+            require(b.dut.dispatch_data[port*96+lane] == (lane == port ? expected : 0), "physical output lane data differs");
+    }
+    const auto before = b.dut.dispatch_entries;
+    b.dut.dispatch_accept = (1u<<ports)-1; b.dut.eval();
+    require(!b.dut.dispatch_error && b.dut.dispatch_entries == before, "ack changed same-cycle ownership");
+    require(std::popcount(uint32_t{b.dut.dispatch_releases}) == ports, "parallel acknowledgements lost");
+    require(b.dut.allocate_ready, "ack failed to return same-cycle capacity"); commit(b);
+    require(!b.dut.occupancy, "acknowledged entries remained occupied");
+    b.dut.dispatch_accept = 1; b.dut.eval(); require(b.dut.dispatch_error == 1, "invalid port ack accepted"); commit(b);
+    b.dut.allocate_valid = 1; b.dut.allocate_pipe = 7; b.dut.eval();
+    require(b.dut.allocate_error && !b.dut.allocate_ready, "invalid execution pipe accepted");
+}
+
+// Dispatch uses independent unbounded ages and verifies payloads before acknowledging random ports.
+// 分派参考采用独立不回绕年龄，并在随机确认端口前验证载荷。
+void random_dispatch_lifetimes() {
+    TestBench b(nullptr); std::vector<Entry> entries(count); std::mt19937 random(20261102);
+    for (uint32_t cycle = 0; cycle < 1500; ++cycle) {
+        service(b,entries,cycle); b.dut.dispatch_enable = 1; b.dut.dispatch_eligible = random(); b.dut.eval();
+        uint32_t valid = 0;
+        for (uint32_t port = 0; port < 7; ++port) {
+            uint32_t chosen = count; uint64_t age = UINT64_MAX;
+            for (uint32_t index = 0; index < count; ++index)
+                if (ready(entries[index]) && entries[index].pipe == port && (b.dut.dispatch_eligible & (1u<<index)) && entries[index].age < age) {
+                    chosen = index; age = entries[index].age;
+                }
+            if (chosen == count) continue;
+            valid |= 1u<<port; require(dispatch_entry(b,port) == chosen, "random dispatch age differs");
+            for (uint32_t source = 0; source < entries[chosen].sources.size(); ++source)
+                for (uint32_t lane = 0; lane < 32; ++lane)
+                    require(b.dut.dispatch_data[port*96+source*32+lane] == entries[chosen].sources[source].values[lane],
+                            "random execution payload differs from collected value");
+            if (random()%3 != 0) { b.dut.dispatch_accept |= 1u<<port; entries[chosen].occupied = false; }
+        }
+        require(b.dut.dispatch_valid == valid, "random execution valid mask differs");
+        b.dut.eval(); require(!b.dut.dispatch_error, "random valid ack rejected");
+        if (b.dut.allocate_ready && random()%5 != 0) {
+            Entry entry; entry.occupied = true; entry.age = cycle; entry.warp = random()%8; entry.pipe = random()%7;
+            const auto size = random()%4, base = random()%60;
+            for (uint32_t source = 0; source < size; ++source) entry.sources.push_back({base+source,uint32_t(random())|1u});
+            const auto index = allocate(b,entry.warp,entry.sources,entry.pipe);
+            require(!entries[index].occupied, "dispatch reuse overwrote live entry"); entries[index] = entry;
+        }
+        commit(b); uint32_t occupied = 0;
+        for (const auto& entry : entries) occupied += entry.occupied;
+        require(b.dut.occupancy == occupied, "random dispatch capacity differs");
+    }
+}
+
 void run_cases() {
+    run_case("collector physical execution ports and acceptance",physical_ports_and_acceptance);
+    run_case("collector 1500-cycle independent dispatch differential",random_dispatch_lifetimes);
     run_case("collector masks retained values and edge ownership",retention_mask_and_clock);
     run_case("collector finite capacity reuse reset and invalid descriptors",capacity_reuse_and_invalid_descriptors);
     run_case("collector age order and shared bank arbitration",age_order_and_port_groups);

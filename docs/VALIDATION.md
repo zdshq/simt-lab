@@ -277,10 +277,40 @@ PCI 选择在原程序私有路径中假定所有设备都有 PCI 状态，模�
 
 当前还有 C++ 执行锁存器、发射调度、谓词值和写回请求仲裁。collector 的组合输出查询在宿主低电平阶段可顺序读取多个条目，尚非多执行单元的物理输出端口网络。综合结果只描述列出的模块，未作工艺宏映射、物理时序、整 SM 或整 GPU 门数结论。
 
+## 阶段 16：七个执行输出端口与条目载荷电路（2026-10-29—30）
+
+从 `81bed63` 接续，把 collector 的诊断查询交接改成七条实际执行输出总线。RTL 保存每条目的 pipe 编号，分别选择最老的就绪/准入条目，确认驱动槽位释放；C++ 不选择分区内各端口的获胜条目，也不回填向量。数据存储与旁路通过每条目的 `collector_payload.sv` 实例实现，完整结构和外部控制边界见 [RTL_DISPATCH.md](RTL_DISPATCH.md)。
+
+| 验证 | 最终结果与范围 |
+|---|---|
+| 默认 Debug | `ctest --test-dir build --output-on-failure -j6`：26 套件、274 项运行（231 Python / 43 C++），272 通过、2 跳过；2.44 秒。后续修改仅涉及可选 RTL 与工具，不重复运行此构建 |
+| 联合 Release | `ctest --test-dir build-cache-rtl --output-on-failure -j6`：41 套件、835 项（771 Python / 64 C++）全部通过，7.19 秒；套件按目的选择后端，不是每项都同时启用五种 RTL |
+| Debug ASan/UBSan | `UBSAN_OPTIONS=halt_on_error=1 ctest --test-dir build-register-sanitize --output-on-failure -j3`：32 套件、541 项（491 Python / 50 C++）全部通过，445.41 秒；此构建启用寄存器/collector RTL，其余后端为 C++ |
+| 独立选择器 | `tools/rtl.py --module dispatch`：32 条目，3 项通过，包含 5,000 组随机排列；同三项 sanitizer 和综合网表也通过 |
+| 完整 collector RTL | `--module collector`：32 条目，7 项通过，含七端口并行数据、1,500 拍分派对照及原 1,200 拍收集生命周期；相同 7 项 sanitizer 通过 |
+| 寄存器直连 RTL | `--module operand_unit`：3 项通过，包含实际 RF 同拍写回→最高编号执行端口旁路及跨 pipe 槽复用；相同 3 项 sanitizer 通过 |
+| 完整选择器综合 | `--module dispatch --synth`：8,835 generic cells，组合逻辑；`check -assert` 及同 3 项 `--gate-sim` 通过，产物 `rtl-dispatch-final` |
+| 4 条目 collector 综合与网表 | `--module collector --collector-entries 4 --synth`：279,821 generic cells / 12,816 FF 位；同 7 项 `--gate-sim` 通过，产物 `rtl-dispatch-collector-gates`；七个 pipe 编号都参与测试，但 4 条目配置不能同时占满七个输出 |
+| 完整 32 条目保留存储综合 | `--module collector --synth --infer-only`：7 个元数据数组共 4,192 位、98,336 个已推断 FF 位，其中载荷寄存器 98,304 位、occupied 32 位；`check -assert` 通过，产物 `rtl-dispatch-collector-full` |
+| 完整直连顶层保留存储综合 | `--module operand_unit --synth --infer-only`：8 warp 槽 RF + 32 collectors；按实例层次计 135 个数组 / 528,480 存储位，以及 114,720 FF 位；`check -assert` 通过，产物 `rtl-dispatch-unit-full` |
+| 实际主机与监控 | `hardware_host.py --build build-cache-rtl --register-rtl --collector-rtl --scoreboard-rtl --cache-rtl --tensor-rtl --out artifacts/rtl-dispatch-host`：四负载各两次 Graph 重放；另两次监控 GEMM。十份报告确认后端、端口确认数、释放数及完整状态/trace；原版 nvidia-smi 经桥接层确认实卡共存、7 MiB 分配、释放与退出 |
+
+独立工具当前共 53 项，本次运行受影响的 13 项（选择器 3 / collector 7 / 直连 3）；其余 40 项独立工具场景未全部重跑。不同构建与网表复跑不重复计为新场景。最终十二份清单的 RTL 哈希与两份实际网表哈希核对一致，见 `artifacts/rtl-dispatch-final/evidence-audit.json`。CTest 原始日志及计数在同目录的 `debug.log`、`joint-release.log`、`register-collector-sanitize.log` 与 `tests.json`。未运行当前版本完整 32 条目 collector 的通用门展开/门级仿真，不能沿用旧版本的 840,085 cells 或旧网表成功记录。
+
+完整 collector 的推断位数按状态种类相加：98,304 个数据 FF + 32 occupied FF + 4,192 元数据数组位 = 102,528 位。直连顶层还包含寄存器堆的 524,288 数据数组位和 16,384 有效位 FF。多端口元数据不是现成 SRAM 宏；层次统计按每个实例展开，不能只计一次共享 `collector_payload` 定义。没有工艺布局布线或真实频率结论。
+
+早期失败和修正均保留在 `rtl-dispatch-history`：适配器首次编译因小整数提升后的窄化转换被 `-Werror` 拒绝，改成明确的无符号转换；初版 4/32 条目综合都达到 600 秒，粗网表显示 24 个 4096→1024 位可变截取，改成固定 bank 选择。随后独立条目准备减少重复逻辑，4 条目成本由 851,890 降至 354,937；但摊平结构的完整综合与 sanitizer 96 项套件仍达到 600 秒，日志完整保留。最终采用可复用载荷子模块、只复制所选条目的选择逻辑，4 条目为 279,821，完整容量推断综合与原 96 项检查通过。没有缩小容量、矩阵形状或断言；120 秒子进程、600 秒套件及综合限制全部保留。诊断后的旧综合作业曾主动终止，记录与超时区分，没有把终止算成通过。
+
+最终网表第一次链接还触发旧 Verilator 的归档残留：已经移除的生成分片留在 `__ALL.a` 中，造成重复符号。工具现在构建前重建该归档，并在复跑开始时移除旧成功清单，防止失败后读取过时结果；相同最终网表随后 7 项全部通过，失败日志保存在 `stale-gate-archive-link-error.log`。
+
+最终十份 kernel 报告删除新增 `dispatch_ports/dispatches/dispatch_waits` 字段后，与 `rtl-collector-host-final` 的完整架构状态、逐拍 trace、周期和其他统计全量相等，主机验证汇总也相等。证据为 `rtl-dispatch-host/backend-audit.json`、`nvidia-smi-status.txt` 及运行脚本 `check_monitor.py`。监控依然是 NVML 管理面接入，不是 CUDA 驱动枚举。
+
+这一阶段完成执行输出端口选择、数据路由和确认，但执行锁存器、跨分区共享单元归属、写回仲裁与完整 SM 控制仍有 C++，完整硬件目标保持未完成。
+
 ## 明确边界
 
 - 功能模式和时序模式都在 CPU 上执行；不会利用 RTX 4070 SUPER 来获得模拟 GPU 的实际吞吐。
-- 两个 SM 已有基础时序资源模型；缓存、Tensor、scoreboard、寄存器数据和 collector/读请求年龄仲裁 RTL 已接入实际执行，早期循环 bank 仲裁 RTL 仍独立，尚未连接成两份完整 RTL SM。仅报告实际模块的 generic-cell 统计，没有整卡门数、工艺频率、面积或功耗结论。
+- 两个 SM 已有基础时序资源模型；缓存、Tensor、scoreboard、寄存器数据、collector/读请求年龄仲裁和七执行端口 RTL 已接入实际执行，早期循环 bank 仲裁 RTL 仍独立，尚未连接成两份完整 RTL SM。仅报告实际模块的 generic-cell 统计，没有整卡门数、工艺频率、面积或功耗结论。
 - 自定义编码不兼容 CUDA/PTX/SASS/curryGPU 私有二进制；Python Program 是指令构造接口，不是 CUDA 编译器。
 - 主机接口及 CUDA Graph 风格功能通过 Python/C++ 进程协议运行，不实现 NVIDIA `cudaGraph*` API/ABI、驱动、PCIe/MMIO 或系统可枚举的 CUDA 设备。
 - Graph 支持范围见 [主机接口规范](HOST.md)：无 child graph、host callback、条件/内存分配节点、device-side launch 或完整 capture mode；单计算引擎不支持并发 kernel。

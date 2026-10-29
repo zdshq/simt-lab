@@ -21,6 +21,7 @@ module register_operand_unit #(
     input wire allocate_valid,
     input wire [SLOT_BITS-1:0] allocate_warp,
     input wire [1:0] allocate_count,
+    input wire [2:0] allocate_pipe,
     input wire [17:0] allocate_registers,
     input wire [95:0] allocate_masks,
     output wire allocate_ready, allocate_error,
@@ -37,7 +38,16 @@ module register_operand_unit #(
     input wire [4:0] query_entry,
     output wire [1:0] query_count,
     output wire [17:0] query_registers,
-    output wire [3071:0] query_data
+    output wire [3071:0] query_data,
+    input wire dispatch_enable,
+    input wire [31:0] dispatch_eligible,
+    input wire [6:0] dispatch_accept,
+    output wire [6:0] dispatch_valid, dispatch_error,
+    output wire [34:0] dispatch_entries,
+    output wire [31:0] dispatch_releases,
+    output wire [13:0] dispatch_counts,
+    output wire [125:0] dispatch_registers,
+    output wire [21503:0] dispatch_data
 );
     wire [3:0] collector_reads;
     wire [4*ROW_BITS-1:0] collector_rows;
@@ -51,12 +61,16 @@ module register_operand_unit #(
     );
     operand_collector #(.SLOTS(SLOTS)) collectors (
         .clk(clk), .reset(reset), .collect_enable(collect_enable), .entry_limit(entry_limit), .port_groups(port_groups),
-        .allocate_valid(allocate_valid), .allocate_warp(allocate_warp), .allocate_count(allocate_count),
+        .allocate_valid(allocate_valid), .allocate_warp(allocate_warp), .allocate_count(allocate_count), .allocate_pipe(allocate_pipe),
         .allocate_registers(allocate_registers), .allocate_masks(allocate_masks), .allocate_ready(allocate_ready),
         .allocate_error(allocate_error), .allocate_index(allocate_index), .release_entries(release_entries),
         .release_error(release_error), .ready_entries(ready_entries), .waiting_sources(waiting_sources), .occupancy(occupancy),
         .clock_enable(collector_clock_enable), .read_valid(collector_reads), .read_rows(collector_rows),
         .grant_entries(grant_entries), .grant_sources(grant_sources), .grant_registers(grant_registers), .grant_masks(grant_masks),
-        .read_data(read_data), .query_entry(query_entry), .query_count(query_count), .query_registers(query_registers), .query_data(query_data)
+        .read_data(read_data), .query_entry(query_entry), .query_count(query_count), .query_registers(query_registers), .query_data(query_data),
+        .dispatch_enable(dispatch_enable), .dispatch_eligible(dispatch_eligible), .dispatch_accept(dispatch_accept),
+        .dispatch_valid(dispatch_valid), .dispatch_error(dispatch_error), .dispatch_entries(dispatch_entries),
+        .dispatch_releases(dispatch_releases), .dispatch_counts(dispatch_counts),
+        .dispatch_registers(dispatch_registers), .dispatch_data(dispatch_data)
     );
 endmodule

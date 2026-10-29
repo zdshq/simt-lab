@@ -8,6 +8,7 @@ namespace simt::hw {
 struct CollectorGrant { uint32_t entry, source, reg, mask; };
 struct CollectedOperand { uint32_t reg; RegisterVector values; };
 struct CollectorStats {
+    uint64_t dispatches = 0, dispatch_waits = 0;
     uint64_t clocks = 0, active_clocks = 0, allocated = 0, released = 0, reads = 0, bank_stalls = 0;
 };
 
@@ -17,9 +18,11 @@ class OperandCollector {
 public:
     virtual ~OperandCollector() = default;
     virtual bool available() = 0;
-    virtual uint32_t allocate(uint32_t warp, std::span<const RegisterUse> sources) = 0;
+    virtual uint32_t allocate(uint32_t warp, std::span<const RegisterUse> sources, uint32_t pipe = 0) = 0;
     virtual std::vector<CollectorGrant> collect() = 0;
     virtual bool ready(uint32_t entry) = 0;
+    virtual void dispatch(uint32_t eligible) = 0;
+    virtual bool selected(uint32_t entry) const = 0;
     virtual std::vector<CollectedOperand> take(uint32_t entry) = 0;
     virtual uint32_t occupancy() const = 0;
     virtual uint32_t limit() const = 0;

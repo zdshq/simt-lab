@@ -130,7 +130,7 @@ python3 tools/rtl.py --build build-sanitize --out artifacts/rtl-sanitize-final
 
 `bootstrap_rtl.py` 从系统已配置的 APT 源获取固定版本包，解包到项目内，再构建固定 commit 的 Yosys；manifest 保留 deb 的 SHA-256。其他系统可自行安装相应工具，或设置 `SIMT_VERILATOR`、`SIMT_YOSYS`、`SIMT_BERKELEY_ABC`。外部 Yosys 的门级检查还需用 `--simcells` 指向相应发行版的 `simcells.v`。
 
-当前未指定 `--module` 时包含后续 Tensor 和多事件 scoreboard，共 47 项场景（缓存 11、单命令 scoreboard 3、仲裁 2、Tensor 16、多事件 scoreboard 4、寄存器数据 4、collector 5、寄存器/collector 直连 2）；新模块的当前验证见 [RTL_SCOREBOARD.md](RTL_SCOREBOARD.md) 和 [RTL_REGISTERS.md](RTL_REGISTERS.md)。本页以下 14 项及 `rtl-*-final` 数值记录首批三个结构，Tensor 的独立产物和计数见 RTL_TENSOR.md。
+当前未指定 `--module` 时包含后续 Tensor 和多事件 scoreboard，共 53 项场景（缓存 11、单命令 scoreboard 3、仲裁 2、Tensor 16、多事件 scoreboard 4、寄存器数据 4、collector 7、寄存器/collector 直连 3、执行端口选择器 3）；新模块的当前验证见 [RTL_SCOREBOARD.md](RTL_SCOREBOARD.md)、[RTL_REGISTERS.md](RTL_REGISTERS.md) 和 [RTL_DISPATCH.md](RTL_DISPATCH.md)。本页以下 14 项及 `rtl-*-final` 数值记录首批三个结构，Tensor 的独立产物和计数见 RTL_TENSOR.md。
 
 三组共 **14 项 RTL 检查**：cache 9 项、scoreboard 3 项、bank 仲裁 2 项。覆盖实际缓存字节、独立 sector、MSHR/merge/response 容量、锁定 way、LRU、byte mask、写确认、反压字段稳定、高地址、精确 hit 流水线、乱序 fill，以及 360 个混合事务与 C++ 差分。scoreboard 包含 5,000 条随机命令，bank 仲裁包含 4,000 拍随机端口对照。64 KiB 配置另外复跑同样的 9 项 cache 检查，不能把重复运行当作新增场景。
 

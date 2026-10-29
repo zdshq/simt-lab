@@ -124,6 +124,8 @@ private:
     void reserve(Inflight& entry);
     void collect_operands();
     void collect_rtl_operands();
+    void dispatch_collector_operands();
+    bool async_dispatch_eligible(const Inflight& entry) const;
     void reserve_collector(Inflight& entry);
     void take_collector(Inflight& entry);
     bool collect_operand(Inflight& entry, const hw::RegisterUse& use);

@@ -13,6 +13,7 @@ module operand_collector #(
     input wire allocate_valid,
     input wire [SLOT_BITS-1:0] allocate_warp,
     input wire [1:0] allocate_count,
+    input wire [2:0] allocate_pipe,
     input wire [17:0] allocate_registers,
     input wire [95:0] allocate_masks,
     output reg allocate_ready, allocate_error,
@@ -33,18 +34,30 @@ module operand_collector #(
     input wire [ENTRY_BITS-1:0] query_entry,
     output reg [1:0] query_count,
     output reg [17:0] query_registers,
-    output reg [3071:0] query_data
+    output reg [3071:0] query_data,
+    input wire dispatch_enable,
+    input wire [ENTRIES-1:0] dispatch_eligible,
+    input wire [6:0] dispatch_accept,
+    output wire [6:0] dispatch_valid, dispatch_error,
+    output wire [7*ENTRY_BITS-1:0] dispatch_entries,
+    output wire [ENTRIES-1:0] dispatch_releases,
+    output wire [13:0] dispatch_counts,
+    output wire [125:0] dispatch_registers,
+    output wire [21503:0] dispatch_data
 );
     reg [ENTRIES-1:0] occupied;
     reg [2:0] waiting [0:ENTRIES-1];
     reg [5:0] rank [0:ENTRIES-1];
+    reg [2:0] pipe [0:ENTRIES-1];
+    wire [ENTRIES*6-1:0] packed_ranks;
+    wire [ENTRIES*3-1:0] packed_pipes;
     reg [SLOT_BITS-1:0] warp [0:ENTRIES-1];
     reg [1:0] source_count [0:ENTRIES-1];
     reg [17:0] source_registers [0:ENTRIES-1];
     reg [95:0] source_masks [0:ENTRIES-1];
-    reg [1023:0] values [0:ENTRIES*3-1];
+    wire [3071:0] prepared [0:ENTRIES-1];
     reg [2:0] granted [0:ENTRIES-1];
-    wire [ENTRIES-1:0] releases = release_entries & ready_entries;
+    wire [ENTRIES-1:0] releases = (release_entries & ready_entries) | dispatch_releases;
     wire allocation = allocate_valid && allocate_ready;
     wire geometry = port_groups == 1 || port_groups == 2 || port_groups == 4;
     integer group_index, entry_index, source_index, bank_index;
@@ -94,17 +107,19 @@ module operand_collector #(
 
     genvar entry;
     generate for (entry = 0; entry < ENTRIES; entry = entry+1) begin: status
+        assign packed_ranks[entry*6+:6] = rank[entry];
+        assign packed_pipes[entry*3+:3] = pipe[entry];
         assign waiting_sources[entry*3+:3] = occupied[entry] ? waiting[entry] : 3'b0;
         assign ready_entries[entry] = !reset && occupied[entry] && (waiting[entry] & ~granted[entry]) == 0;
     end endgenerate
     assign release_error = release_entries & ~ready_entries;
-    assign clock_enable = reset || allocate_valid || (|release_entries) || collect_enable;
+    assign clock_enable = reset || allocate_valid || (|release_entries) || collect_enable || (|dispatch_accept);
     wire state_clock = clk && clock_enable;
     integer free_index, check_source, check_other;
     reg found_free;
     reg [5:0] remaining;
     always @* begin
-        occupancy = 0; remaining = 0; allocate_index = 0; found_free = 0; allocate_error = 0;
+        occupancy = 0; remaining = 0; allocate_index = 0; found_free = 0; allocate_error = allocate_valid && allocate_pipe == 7;
         for (free_index = 0; free_index < ENTRIES; free_index = free_index+1) begin
             occupancy = occupancy + 6'(occupied[free_index]);
             remaining = remaining + 6'(occupied[free_index] && !releases[free_index]);
@@ -122,23 +137,58 @@ module operand_collector #(
             remaining < entry_limit && !allocate_error;
     end
 
-    integer query_source, query_lane, query_bank;
-    reg [1023:0] selected_value;
-    always @* begin
-        query_count = 0; query_registers = 0; query_data = 0; selected_value = 0; query_bank = 0;
-        if (ready_entries[query_entry]) begin
-            query_count = source_count[query_entry]; query_registers = source_registers[query_entry];
-            for (query_source = 0; query_source < 3; query_source = query_source+1) begin
-                query_bank = 32'(source_registers[query_entry][query_source*6+:6])%4;
-                selected_value = granted[query_entry][query_source] ? read_data[query_bank*1024+:1024] : values[32'(query_entry)*3+query_source];
-                for (query_lane = 0; query_lane < 32; query_lane = query_lane+1)
-                    if (query_source < 32'(query_count) && source_masks[query_entry][query_source*32+query_lane])
-                        query_data[query_source*1024+query_lane*32+:32] = selected_value[query_lane*32+:32];
-            end
+    // Seven physical vector buses replace serial host queries in the execution path.
+    // 执行路径用七条物理向量总线替代宿主串行查询。
+    collector_dispatch #(.ENTRIES(ENTRIES)) dispatch (
+        .enable(dispatch_enable && !reset), .ready_entries(ready_entries), .eligible_entries(dispatch_eligible),
+        .pipes(packed_pipes), .ranks(packed_ranks), .valid(dispatch_valid), .entries(dispatch_entries)
+    );
+    assign dispatch_error = dispatch_accept & ~dispatch_valid;
+    genvar port_index, release_index;
+    generate for (release_index = 0; release_index < ENTRIES; release_index = release_index+1) begin: accept_entry
+        wire [6:0] accepted;
+        for (port_index = 0; port_index < 7; port_index = port_index+1) begin: from_port
+            assign accepted[port_index] = dispatch_accept[port_index] && dispatch_valid[port_index] &&
+                dispatch_entries[port_index*ENTRY_BITS+:ENTRY_BITS] == ENTRY_BITS'(release_index);
         end
-    end
+        assign dispatch_releases[release_index] = |accepted;
+    end endgenerate
 
-    integer update_entry, update_source, update_bank;
+    // Repeated entries instantiate one payload design instead of flattening every lane's storage logic.
+    // 重复条目实例化同一载荷电路，不将全部 lane 存储逻辑摊入顶层。
+    genvar payload_entry;
+    generate for (payload_entry = 0; payload_entry < ENTRIES; payload_entry = payload_entry+1) begin: payload
+        collector_payload storage (
+            .clk(state_clock), .capture(granted[payload_entry]),
+            .banks({source_registers[payload_entry][12+:2],source_registers[payload_entry][6+:2],source_registers[payload_entry][0+:2]}),
+            .source_count(source_count[payload_entry]), .masks(source_masks[payload_entry]),
+            .bank_data(read_data), .data(prepared[payload_entry])
+        );
+    end endgenerate
+
+    function [3071:0] operand_data(input [ENTRY_BITS-1:0] selected_entry);
+        integer candidate;
+        begin
+            operand_data = 0;
+            if (ready_entries[selected_entry] && source_count[selected_entry] != 0)
+                for (candidate = 0; candidate < ENTRIES; candidate = candidate+1)
+                    if (selected_entry == ENTRY_BITS'(candidate)) operand_data = prepared[candidate];
+        end
+    endfunction
+
+    always @* begin
+        query_count = ready_entries[query_entry] ? source_count[query_entry] : 2'b0;
+        query_registers = ready_entries[query_entry] ? source_registers[query_entry] : 18'b0;
+        query_data = operand_data(query_entry);
+    end
+    generate for (port_index = 0; port_index < 7; port_index = port_index+1) begin: execution_port
+        wire [ENTRY_BITS-1:0] selected_entry = dispatch_entries[port_index*ENTRY_BITS+:ENTRY_BITS];
+        assign dispatch_counts[port_index*2+:2] = dispatch_valid[port_index] ? source_count[selected_entry] : 2'b0;
+        assign dispatch_registers[port_index*18+:18] = dispatch_valid[port_index] ? source_registers[selected_entry] : 18'b0;
+        assign dispatch_data[port_index*3072+:3072] = dispatch_valid[port_index] ? operand_data(selected_entry) : 3072'b0;
+    end endgenerate
+
+    integer update_entry, update_source;
     always @(posedge state_clock) begin
         if (reset) occupied <= 0;
         else begin
@@ -149,11 +199,9 @@ module operand_collector #(
                     waiting[update_entry] <= waiting[update_entry] & ~granted[update_entry];
                 end
             end
-            for (update_bank = 0; update_bank < 4; update_bank = update_bank+1)
-                if (read_valid[update_bank])
-                    values[32'(grant_entries[update_bank*ENTRY_BITS+:ENTRY_BITS])*3+32'(grant_sources[update_bank*2+:2])] <= read_data[update_bank*1024+:1024];
             if (allocation) begin
                 occupied[allocate_index] <= 1; rank[allocate_index] <= remaining;
+                pipe[allocate_index] <= allocate_pipe;
                 warp[allocate_index] <= allocate_warp; source_count[allocate_index] <= allocate_count;
                 source_registers[allocate_index] <= allocate_registers; source_masks[allocate_index] <= allocate_masks;
                 for (update_source = 0; update_source < 3; update_source = update_source+1)

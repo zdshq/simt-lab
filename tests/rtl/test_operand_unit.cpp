@@ -6,13 +6,14 @@ namespace {
 class TestBench : public Bench<Vregister_operand_unit> {
 public:
     explicit TestBench(const char* name) : Bench(name) {
+        dut.allocate_pipe = 0; dut.dispatch_enable = 0; dut.dispatch_accept = 0;
         dut.port_groups = 4; dut.entry_limit = 4; dut.eval();
     }
 };
 
 void commit(TestBench& b) {
     b.tick(); b.dut.write_valid = 0; b.dut.clear_slots = 0;
-    b.dut.allocate_valid = 0; b.dut.release_entries = 0; b.dut.collect_enable = 0; b.dut.eval();
+    b.dut.allocate_valid = 0; b.dut.release_entries = 0; b.dut.collect_enable = 0; b.dut.dispatch_enable = 0; b.dut.dispatch_accept = 0; b.dut.eval();
 }
 
 void write(TestBench& b, uint32_t slot, uint32_t reg, uint32_t value) {
@@ -68,7 +69,31 @@ void same_cycle_writeback_forwarding_and_slot_isolation() {
     }
 }
 
+// The highest execution port receives RF bypass data and reuses the entry for a different pipe.
+// 最高编号执行端口接收寄存器旁路数据，并将条目复用到另一流水线。
+void physical_execution_bus_bypass_and_reuse() {
+    TestBench b("operand-unit-dispatch.vcd");
+    write(b,0,1,700); commit(b); b.dut.allocate_pipe = 6;
+    const auto id = allocate(b,0,1,2); commit(b);
+    write(b,0,2,42); b.dut.collect_enable = 1;
+    b.dut.dispatch_enable = 1; b.dut.dispatch_eligible = UINT32_MAX; b.dut.eval();
+    require(b.dut.dispatch_valid == 64 && ((b.dut.dispatch_entries>>30)&31) == id,
+            "highest physical execution port lost entry identity");
+    require(((b.dut.dispatch_counts>>12)&3) == 2, "execution source count differs");
+    for (uint32_t lane = 0; lane < 32; ++lane) {
+        require(b.dut.dispatch_data[6*96+lane] == 700+lane, "execution bus did not carry retained RF value");
+        require(b.dut.dispatch_data[6*96+32+lane] == 42+lane, "execution bus lost same-cycle writeback bypass");
+    }
+    b.dut.dispatch_accept = 64; b.dut.eval(); require(!b.dut.dispatch_error, "valid execution handshake rejected");
+    b.dut.allocate_pipe = 1; require(allocate(b,1,1,2) == id, "execution acceptance failed to return slot"); commit(b);
+    b.dut.collect_enable = 1; b.dut.dispatch_enable = 1; b.dut.eval();
+    require(b.dut.dispatch_valid == 2, "reused slot retained previous execution pipe");
+    for (uint32_t word = 0; word < 96; ++word)
+        require(b.dut.dispatch_data[96+word] == 0, "reused execution bus leaked another warp's data");
+}
+
 void run_cases() {
+    run_case("connected RF physical dispatch bypass and pipe reuse",physical_execution_bus_bypass_and_reuse);
     run_case("connected RF collector old values and slot-clear isolation",direct_storage_and_collector_retention);
     run_case("connected RF collector writeback bypass and same-cycle reuse",same_cycle_writeback_forwarding_and_slot_isolation);
 }

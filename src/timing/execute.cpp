@@ -59,6 +59,9 @@ void TimingMachine::launch(Inflight& entry) {
         pipe == Pipe::floating ? config.float_latency : pipe == Pipe::special ? config.special_latency : 1;
     const uint32_t interval = pipe == Pipe::integer ? config.integer_interval :
         pipe == Pipe::floating ? config.float_interval : pipe == Pipe::special ? config.special_interval : 1;
+    if (entry.collector && !partition.registers->collector()->selected(*entry.collector)) {
+        ++stats_.unit_stalls; return;
+    }
     take_collector(entry);
     partition.available[index] = cycle_ + interval;
     if (pipe == Pipe::async) start_async(entry);
@@ -73,6 +76,7 @@ void TimingMachine::launch(Inflight& entry) {
 }
 
 void TimingMachine::launch_ready() {
+    dispatch_collector_operands();
     for (auto& [id, entry] : inflight_) {
         static_cast<void>(id);
         if (entry->stage != Stage::ready) continue;
