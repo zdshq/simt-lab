@@ -66,4 +66,6 @@ python3 examples/host_graph.py
 
 [L1/L2 RTL 后端](docs/RTL_CACHE_BACKEND.md) 已接入每 SM 64 KiB L1 和共享 256 KiB L2。额外以 `-DSIMT_CACHE_RTL=ON` 构建，通过 `--cache-rtl` 或 `Device(timing=True, cache_rtl=True)` 启用，可与 Tensor RTL 同时使用。实际 tag/data、缺失合并和返回来自电路，DRAM、调度及一致性协调仍为 C++。
 
+缓存 LRU 已按组实现为排名寄存器和局部比较电路，完整 256 KiB、8 路 L2 的保留存储综合、RTL 和 sanitizer 检查均通过。2/4 KiB 小配置另通过完整综合及相同网表行为检查；这些结果不等于具体 FPGA/ASIC 的存储宏映射或整 GPU 面积。
+
 当前默认 Debug 通过 22 个 CTest 套件、261 项检查；缓存+Tensor RTL 的 Release 与 ASan/UBSan 均验证通过 28 套件、421 项检查（368 项 Python、53 项 C++），独立 RTL 检查另计。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。

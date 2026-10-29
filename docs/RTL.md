@@ -10,6 +10,7 @@
 |---|---|---|
 | `sector_sram.sv` | 256 位宽数据阵列、同步读输出寄存器、同步 fill 写端口；数据阵列无复位 | 缓存命中必须返回此阵列中的字节 |
 | `sector_cache.sv` | line tag/present、逐 sector valid、有限 LRU rank、MSHR、等待者 bitmap、响应槽、下游寄存端口 | 与 C++ `SectorCache` 比较字节、命中/未命中及替换决策 |
+| `cache_lru.sv` | 每组独立排名寄存器、组内 rank 比较和写使能、所选组输出 mux | 保持精确 LRU；4/8 路缓存执行相同替换及随机差分检查 |
 | `lane_scoreboard.sv` | 64×32 writer 位、8×32 predicate 位、64×32×3 reader 计数位 | 与 C++ `Scoreboard` 比较合法状态转换和逐 lane RAW/WAW/WAR |
 | `register_arbiter.sv` | 每 bank 独立读/写循环优先游标，以及组合授权网络 | 授权与 C++ `RegisterPorts` 的端口容量一致；额外验证公平性 |
 
@@ -39,7 +40,7 @@ flowchart LR
 
 Yosys 对默认容量实际识别出 **2,048×256 = 524,288 存储位、一个读端口和一个写端口**。这是可进一步映射的存储描述，尚不是某家工艺的 SRAM macro，也没有映射到具体 FPGA 的 BRAM。
 
-控制元数据使用寄存器或后续映射为寄存器的数组。LRU rank 显式标记为触发器数组：一次命中/预约要比较并更新同组多个 way，不适合伪装成简单单端口 SRAM。复位清除 line present、队列归属和 LRU rank；tag 与 sector valid 不复位，由 present 屏蔽旧内容，首次分配新行时设置 tag 并清除 sector valid。这样避免为每个 tag/valid 项增加独立复位写端口。
+控制元数据使用寄存器或后续映射为寄存器的数组。`cache_lru.sv` 为每个组生成独立排名触发器和组内比较器；一次命中/预约只更新对应组，不将 LRU 描述成单端口 SRAM。L1 的排名共 1,024 位，8 路 L2 为 6,144 位，具体更新规则见 [缓存后端说明](RTL_CACHE_BACKEND.md)。复位清除 line present 和队列归属，将每组 rank 初始化为 way 编号；tag 与 sector valid 不复位，由 present 屏蔽旧内容，首次分配新行时设置 tag 并清除 sector valid。这样避免为每个 tag/valid 项增加独立复位写端口。
 
 ## 缺失、替换和端口时序
 
@@ -86,7 +87,7 @@ bank 仲裁器支持 4 个请求者、4 个 bank，bank 映射为寄存器编号
 
 工具为 Verilator 4.038、Yosys 0.40（`a1bb0255d654ffd0d8503577274f24b349a42995`）及 Ubuntu 的 Berkeley ABC。工具位于项目忽略目录 `.tools/rtl`，没有使用 sudo 或修改系统库。
 
-下表保留 2026-10-29 首次综合的历史结果。新增范围扫描和观测端口后，当前 2 KiB 缓存为 55,212 个 generic cells / 22,083 个触发器位，综合及 11 项网表检查位于 `artifacts/rtl-cache-integrated`。
+下表保留 2026-10-29 首次综合的历史结果。新增范围扫描和观测端口后为 55,212 / 22,083；再将 LRU 改成组内电路后，当前 2 KiB 缓存为 54,770 个 generic cells / 22,083 个触发器位，综合及 11 项网表检查位于 `artifacts/rtl-cache-banked`。8 路、4 KiB 小配置另为 92,501 / 39,528，也通过相同 11 项网表检查，见 `artifacts/rtl-cache8-banked`。
 
 原 `artifacts/rtl-synth-final/` 的实际 generic-cell 统计：
 
@@ -100,7 +101,7 @@ bank 仲裁器支持 4 个请求者、4 个 bank，bank 映射为寄存器编号
 
 “通用单元”包括 mux、AND、OR、XOR、带使能/复位的触发器等不同单元，**不是等价 NAND2 门数**。没有提供工艺 Liberty、布局布线或延迟回标，因此没有面积 μm²、最高频率或功耗结论，更不能乘上两个 SM 就声称是整卡门数。
 
-64 KiB 配置执行了实际 RTL 仿真和保留存储的综合检查；此阶段没有把该大配置全部展开到 generic gates。存储报告中的多端口 metadata `$mem_v2` 是 Yosys 中间表示，很多端口来自复位展开，不能把它们解释为已经设计出的物理多端口 SRAM。2 KiB 的完整映射用来检查这一逻辑能落到触发器/门并保持行为。
+64 KiB L1 和 256 KiB、8 路 L2 都已执行实际 RTL 仿真和保留存储的综合检查；没有把这两个大配置全部展开到 generic gates。L2 数据阵列识别为 8,192×256 位、单读/单写；tag 仍保存 57 位完整 line 地址，推断为 2,048 项、9 读/1 写端口，valid 为 2,048×4 位、1 读/2 写端口。多端口 metadata `$mem_v2` 是 Yosys 中间表示，不能解释为已经映射的物理 SRAM；后续还需处理具体存储宏的端口约束。2/4 KiB 小配置的完整映射用来检查控制逻辑能落到触发器/门并保持行为。
 
 综合过程启用 `check -assert`，发现组合环、冲突驱动或未驱动的被使用信号会失败。早期 LRU rank 的存储推断在资源共享后触发组合环检查，改为明确触发器阵列后通过。门级导出使用 `splitnets` 拆开内部位网，并清理无用调试别名，避免旧 Verilator 将同一向量中不同 bit 的依赖误报为环；没有关闭组合环或未驱动检查来掩盖问题。
 
@@ -114,6 +115,10 @@ cmake --build build --target rtl-check
 # 实际 64 KiB 配置的 RTL 仿真和存储推断。
 python3 tools/rtl.py --module cache --sets 128 --out artifacts/rtl-full
 python3 tools/rtl.py --synth --infer-only --module cache --sets 128 --out artifacts/rtl-synth-full
+
+# 实际 256 KiB、8 路 L2 的 RTL 仿真和保留存储综合。
+python3 tools/rtl.py --module cache --sets 256 --ways 8 --out artifacts/rtl-l2-banked
+python3 tools/rtl.py --module cache --sets 256 --ways 8 --synth --infer-only --out artifacts/rtl-l2-banked-inference
 
 # 当前全部模块的完整综合与门级行为检查，缓存使用小配置。
 python3 tools/rtl.py --synth --out artifacts/rtl-synth-final
@@ -129,7 +134,7 @@ python3 tools/rtl.py --build build-sanitize --out artifacts/rtl-sanitize-final
 
 三组共 **14 项 RTL 检查**：cache 9 项、scoreboard 3 项、bank 仲裁 2 项。覆盖实际缓存字节、独立 sector、MSHR/merge/response 容量、锁定 way、LRU、byte mask、写确认、反压字段稳定、高地址、精确 hit 流水线、乱序 fill，以及 360 个混合事务与 C++ 差分。scoreboard 包含 5,000 条随机命令，bank 仲裁包含 4,000 拍随机端口对照。64 KiB 配置另外复跑同样的 9 项 cache 检查，不能把重复运行当作新增场景。
 
-综合后网表执行同样 14 项检查。这是有覆盖范围的门级仿真，不是全输入形式等价证明。`netlist.json` 保留 RTL 源码和导出网表哈希；源码或网表改变后，门级检查会拒绝使用旧产物。
+综合后网表执行同样 14 项检查。这是有覆盖范围的门级仿真，不是全输入形式等价证明。`netlist.json` 保留 RTL 源码、缓存参数和导出网表哈希；源码、参数或网表不匹配时，门级检查会拒绝使用旧产物。4 路网表配 8 路测试平台的负例已实际验证，不能用源码相同掩盖不同几何配置。
 
 普通运行生成 VCD 波形、完整构建/仿真日志及工具版本。源码 hash、参数化命令、存储 inventory、generic netlist、统计 JSON 和综合脚本都在产物目录。旧 Verilator 4.038 的 VCD runtime 使用会触发 UBSan 的非对齐访问；sanitizer 模式因此执行同一设计和对照平台但关闭波形，保留 ASan/UBSan 检测并启用 `halt_on_error`。最终该模式 14 项检查全部通过，无 sanitizer 报告。普通 RTL/门级运行仍生成波形，不通过关闭 alignment sanitizer 掩盖问题。
 

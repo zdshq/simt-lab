@@ -47,6 +47,8 @@ local 的具体字交错物理布局、global 原子 8 banks/8 请求/4 拍 ALU�
 
 L1/L2 RTL 现已接入 ISA 和主机链路；L2 选择 256 sets/8 ways、256 KiB，同样使用单请求端口与 4 个 MSHR。整体/范围失效每拍扫描一条 tag，L1/L2 分别 512/2048 拍；64 项维护队列和 C++ 全局写顺序同样是设计假设。没有将其描述为 NVIDIA 缓存失效延迟、bank hash 或一致性协议的逆向结果，见 [RTL_CACHE_BACKEND.md](RTL_CACHE_BACKEND.md)。
 
+LRU 的每组独立 rank 寄存器、局部更新 mux 和组写使能是本项目为完整 L2 综合实现的电路组织，保留原精确 LRU 策略。L1/L2 的 1,024/6,144 个 rank 状态位已由 Yosys 中间网表核对，不能据此声称 NVIDIA 使用同样的替换算法或布局。数据 SRAM 的单读/单写推断已验证；多读口 tag 等元数据尚未映射到具体 SRAM/BRAM。
+
 Tensor RTL 的四级 FP32 FMA、77 位对齐通路、完整次正规数和最近偶数舍入、独立 INT8 流水线、两项 FIFO、16 个 PE 及反馈旁路都是项目自己的电路设计。它们实现既定数值约定，不是 NVIDIA 内部电路、精度模式或延迟的逆向结论。当前已通过可选 [RTL 后端](RTL_BACKEND.md) 接入 ISA/TMEM/主机 Graph，前端和存储层次仍是 C++。加入事件观测端口后的完整阵列为 217,928 个 generic cells，来自实际 Yosys/ABC 层次统计，不能用于声称整 SM 或显卡门数，见 [RTL_TENSOR.md](RTL_TENSOR.md)。
 
 仍需实现 CUDA pointer-chase、合并和 shared bank 微基准，记录原始结果、GPU/驱动/编译器信息、样本分布和计时开销。结果用于判断模型能否解释趋势，不通过调参强行宣称结构唯一可识别。

@@ -146,6 +146,32 @@ Verilator 4.038 和 Yosys 0.40 的实际产物、命令及源码哈希保存在 
 
 失效检查覆盖精确的一行/拍扫描、非目标 sector 保留、目标 MSHR 拒绝失效、同一行的无关 fill 与失效同拍，以及主机范围清零前的在途访问排斥。新增诊断向量曾触发旧 Verilator 的位依赖误报，拆为标量输出后通过，未关闭组合环检查。
 
+## 阶段 16：组内 LRU 与完整 L2 综合
+
+用 `cache_lru.sv` 的每组独立寄存器/局部比较器替代平坦数组的动态更新。缓存容量、精确 LRU、接口和流水线不变；完整 L2 保留存储综合已通过，解决上一阶段两次 600 秒超时。Yosys 中间网表还直接确认 L1/L2 分别有 512×2 / 2,048×3 位 LRU 状态。
+
+| 验收 | 当前源码的实际结果 |
+|---|---|
+| 完整 L1/L2 保留存储综合 | `rtl-l1-banked-inference` / `rtl-l2-banked-inference`，均通过 `check -assert`；数据阵列分别 524,288 / 2,097,152 位、单读/单写 |
+| 小配置完整综合 | `rtl-cache-banked` 的 2 KiB/4 路：54,770 cells / 22,083 FF 位；`rtl-cache8-banked` 的 4 KiB/8 路：92,501 / 39,528；含层次内全部实例及展开数据存储 |
+| 综合后网表行为 | 上述两个小配置分别通过相同 11 项检查，不算 22 项独立测试设计 |
+| 完整容量 RTL | `rtl-l1-banked` 的 64 KiB/4 路、`rtl-l2-banked` 的 256 KiB/8 路均通过相同 11 项；360 次随机流在大配置也实际制造跨组冲突和替换 |
+| 独立 sanitizer | `rtl-cache-banked-sanitize`、`rtl-l2-banked-sanitize` 的同样 11 项通过，检测保留，旧波形运行库关闭 |
+| 联合 RTL Release | `ctest --test-dir build-cache-rtl --output-on-failure -j4`，28 套件 / 421 项全部通过，包括实际原版 nvidia-smi 六项检查，无跳过 |
+| 受影响的主机/ISA sanitizer | 四套件中后端选择、C++ 适配器、35 项主机检查通过；执行套件 60 项通过，最大矩阵超过 180 秒。将进程上限改为 420 秒后，单独重跑完整 32×32×256 用例通过，308.877 秒，无 sanitizer 报告；保留 1,024 个输出与 262,144 次有效乘积断言 |
+| 网表配置保护 | 实际拒绝用 4 路网表运行 8 路平台；清单同时校验 SETS/WAYS、RTL 源码和网表哈希 |
+| 完整主机负载 | `hardware_host.py --build build-cache-rtl --tensor-rtl --cache-rtl --out artifacts/rtl-banked-host` 四类负载各两次通过；与重构前 `rtl-cache-host/validation.json` 全量相等，输出、设备/kernel 周期和 cache/DRAM 计数均一致 |
+
+所有综合仍使用原 `synth -run begin:fine` 和 `check -assert`，没有缩小完整 L2 容量、关闭检查或改用较弱替换策略。小配置通用单元数不是 NAND2 等效门数；完整容量只保留存储描述，仍没有工艺 SRAM/FPGA BRAM 映射或布局布线。
+
+本阶段首次 sanitizer 受影响回归总耗时 318.78 秒，不能算作全部通过；原日志保存在 `artifacts/rtl-banked-sanitize/ctest-before-timeout-change.log`。失败项重跑日志为 `maximum-matrix.log`，使用如下实际命令，默认 Debug 编译与 ASan/UBSan 均保留。其余已通过项未重复跑，合起来覆盖全部受影响检查。
+
+```sh
+PYTHONPATH=build-cache-sanitize/generated:python SIMT_RUNNER="$PWD/build-cache-sanitize/simt-run" UBSAN_OPTIONS=halt_on_error=1 python3 tests/test_rtl_cache_execution.py CacheTensorPipeline.test_maximum_descriptor_shape
+```
+
+最终核对 11 份本阶段仿真/综合/网表清单中的 RTL 哈希、SETS/WAYS 和两份实际网表哈希，与当前文件一致；摘要保存在 `artifacts/rtl-banked-evidence.json`。Release 日志重新计数为 368 项 Python 与 53 项 C++，没有跳过。此次未重复无改动的默认软件构建及其余独立 RTL 模块，前阶段证据保留各自范围。
+
 ## 明确边界
 
 - 功能模式和时序模式都在 CPU 上执行；不会利用 RTX 4070 SUPER 来获得模拟 GPU 的实际吞吐。

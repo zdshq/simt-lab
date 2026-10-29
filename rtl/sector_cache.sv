@@ -63,9 +63,6 @@ module sector_cache #(
     reg [TAG_BITS-1:0] tags [0:LINES-1];
     reg [LINES-1:0] present;
     reg [SECTORS-1:0] valid [0:LINES-1];
-    // Rank updates touch all ways together; implement this metadata as flip-flops, not a multiport SRAM.
-    // 排名更新同时触及所有 way；该元数据使用触发器实现，而非多端口 SRAM。
-    (* mem2reg *) reg [RANK_BITS-1:0] rank [0:LINES-1];
     reg [MSHRS-1:0] occupied, sent, store, has_line;
     reg [ADDRESS_BITS-1:0] address [0:MSHRS-1];
     reg [255:0] payload [0:MSHRS-1];
@@ -85,7 +82,7 @@ module sector_cache #(
     integer ready_response, next_memory, merge_count, locked, best_rank;
     integer lookup_way, lookup_miss, lookup_response, lookup_offset, lookup_candidate;
     integer lookup_index, select_response, select_memory;
-    integer update_line, update_miss, update_response, invalidate_sector, invalidate_miss;
+    integer update_miss, update_response, invalidate_sector, invalidate_miss;
     reg [LINE_BITS-1:0] invalidate_cursor;
     reg [ADDRESS_BITS-1:5] first_sector, last_sector;
     reg clear_all, invalidate_conflict;
@@ -99,6 +96,15 @@ module sector_cache #(
     wire [DATA_BITS-1:0] write_index = DATA_BITS'(32'(line[fill_id])*SECTORS+
                                                      32'(address[fill_id][5+:SECTOR_BITS]));
     wire [255:0] ram_data;
+    wire [WAYS*RANK_BITS-1:0] lookup_ranks;
+
+    // Reads and matching writes touch one set; merged requests and write misses leave ranks unchanged.
+    // 读取及命中行的写入更新一个组；合并请求和写未命中不改变排名。
+    cache_lru #(.SETS(SETS), .WAYS(WAYS)) replacement (
+        .clk(clk), .reset(reset), .lookup_set(req_address[5+SECTOR_BITS+:$clog2(SETS)]),
+        .touch(accept && same_miss < 0 && (match_line >= 0 || !req_write)),
+        .touch_way(RANK_BITS'(match_line >= 0 ? match_line : chosen_line)), .lookup_ranks(lookup_ranks)
+    );
 
     sector_sram #(.WORDS(LINES*SECTORS)) data_array (
         .clk(clk), .read_enable(hit_accept), .read_index(read_index), .read_data(ram_data),
@@ -119,9 +125,9 @@ module sector_cache #(
                 if (occupied[lookup_miss] && has_line[lookup_miss] &&
                     32'(line[lookup_miss]) == lookup_index+lookup_way) locked = 1;
             if (locked == 0 && (best_rank < 0 || !present[lookup_index+lookup_way] ||
-                               32'(rank[lookup_index+lookup_way]) > 32'(best_rank))) begin
+                               32'(lookup_ranks[lookup_way*RANK_BITS+:RANK_BITS]) > 32'(best_rank))) begin
                 if (best_rank < WAYS) chosen_line = lookup_index+lookup_way;
-                best_rank = present[lookup_index+lookup_way] ? 32'(rank[lookup_index+lookup_way]) : WAYS;
+                best_rank = present[lookup_index+lookup_way] ? 32'(lookup_ranks[lookup_way*RANK_BITS+:RANK_BITS]) : WAYS;
             end
         end
     end
@@ -203,18 +209,6 @@ module sector_cache #(
         end
     end
 
-    // Exact finite LRU ranks avoid unbounded timestamps and retain ordering among unlocked ways.
-    // 精确的有限 LRU 排名避免无限时间戳，并保留未锁定 way 的相对顺序。
-    task touch_line(input integer selected);
-        integer way_at, base_at;
-        begin
-            base_at = (selected/WAYS)*WAYS;
-            for (way_at = 0; way_at < WAYS; way_at = way_at+1)
-                if (rank[base_at+way_at] < rank[selected]) rank[base_at+way_at] <= rank[base_at+way_at]+1'b1;
-            rank[selected] <= 0;
-        end
-    endtask
-
     task allocate_miss;
         integer selected;
         begin
@@ -229,7 +223,6 @@ module sector_cache #(
                     if (present[selected]) evictions <= evictions+1'b1;
                     present[selected] <= 1; tags[selected] <= tag; valid[selected] <= 0;
                 end else if (req_write) valid[selected][sector] <= 0;
-                touch_line(selected);
             end
         end
     endtask
@@ -244,7 +237,7 @@ module sector_cache #(
                 waiters[same_miss][free_response] <= 1; merges <= merges+1'b1;
             end else if (hit_accept) begin
                 read_slot <= RESPONSE_BITS'(free_response); state <= READ_WAIT;
-                touch_line(match_line); hits <= hits+1'b1;
+                hits <= hits+1'b1;
             end else allocate_miss();
         end
     endtask
@@ -272,9 +265,6 @@ module sector_cache #(
             state <= LOOKUP; read_slot <= 0; mem_valid <= 0; memory_cursor <= 0;
             mem_address <= 0; mem_write <= 0; mem_data <= 0; mem_mask <= 0; mem_id <= 0;
             hits <= 0; misses <= 0; merges <= 0; evictions <= 0;
-            for (update_line = 0; update_line < LINES; update_line = update_line+1) begin
-                rank[update_line] <= RANK_BITS'(update_line%WAYS);
-            end
             for (update_miss = 0; update_miss < MSHRS; update_miss = update_miss+1) begin
                 address[update_miss] <= 0; payload[update_miss] <= 0; byte_mask[update_miss] <= 0;
                 line[update_miss] <= 0; waiters[update_miss] <= 0;

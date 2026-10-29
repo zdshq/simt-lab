@@ -10,10 +10,10 @@ function(simt_enable_cache_rtl)
     set(VERILATOR_BIN ${launcher})
     add_library(simt_cache_circuit STATIC)
     verilate(simt_cache_circuit TOP_MODULE sector_cache PREFIX Vsimt_l1
-        SOURCES rtl/sector_sram.sv rtl/sector_cache.sv
+        SOURCES rtl/sector_sram.sv rtl/cache_lru.sv rtl/sector_cache.sv
         VERILATOR_ARGS -Wall --unroll-count 4096 -GSETS=128 -GWAYS=4)
     verilate(simt_cache_circuit TOP_MODULE sector_cache PREFIX Vsimt_l2
-        SOURCES rtl/sector_sram.sv rtl/sector_cache.sv
+        SOURCES rtl/sector_sram.sv rtl/cache_lru.sv rtl/sector_cache.sv
         VERILATOR_ARGS -Wall --unroll-count 4096 --unroll-stmts 100000 -GSETS=256 -GWAYS=8)
     target_compile_options(simt_cache_circuit PRIVATE ${VERILATOR_CFLAGS})
     get_target_property(circuit_includes simt_cache_circuit INTERFACE_INCLUDE_DIRECTORIES)

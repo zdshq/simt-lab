@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-MODULES = {'cache': ('sector_cache', 'test_cache.cpp', ['sector_sram.sv', 'sector_cache.sv']),
+MODULES = {'cache': ('sector_cache', 'test_cache.cpp', ['sector_sram.sv', 'cache_lru.sv', 'sector_cache.sv']),
            'scoreboard': ('lane_scoreboard', 'test_scoreboard.cpp', ['lane_scoreboard.sv']),
            'arbiter': ('register_arbiter', 'test_arbiter.cpp', ['register_arbiter.sv']),
            'fma': ('fp32_fma', 'test_fma.cpp', ['fp32_fma.sv']),
@@ -60,6 +60,7 @@ def source_hashes(paths):
 
 def compiler_flags(options):
     includes = f'-std=c++20 -I{ROOT / "include"} -I{ROOT / "tests/rtl"} -I{options.build / "generated"} -DSIMT_RTL_SETS={options.sets}'
+    includes += f' -DSIMT_RTL_WAYS={options.ways}'
     libraries = ' '.join(str(options.build/name) for name in ('libsimt_core.a', 'libsimt_hardware.a', 'libsimt_storage.a'))
     if 'SIMT_TENSOR_RTL:BOOL=ON' in (options.build/'CMakeCache.txt').read_text():
         libraries += ' '+str(options.build/'libsimt_tensor_circuit.a')
@@ -87,7 +88,7 @@ def simulation_sources(options, name, destination):
     if options.gate_sim:
         return ['-Wno-DECLFILENAME', '-Wno-UNUSED', str(destination/'gates.v'), str(options.simcells),
                 str(ROOT/'tests/rtl'/test)]
-    parameters = [f'-GSETS={options.sets}'] if name == 'cache' else []
+    parameters = [f'-GSETS={options.sets}', f'-GWAYS={options.ways}'] if name == 'cache' else []
     return parameters+[str(ROOT/'rtl'/file) for file in files]+[str(ROOT/'tests/rtl'/test)]
 
 
@@ -98,7 +99,7 @@ def simulation(options, name):
     if name == 'fma':
         run([sys.executable, str(ROOT/'tests/rtl/fma_vectors.py'), '--out', str(destination/'reference.txt')],
             destination, 'reference')
-    if options.gate_sim: verify_netlist(destination, files)
+    if options.gate_sim: verify_netlist(destination, files, cache_parameters(options, name))
     label, objects = ('gate', 'gate-obj') if options.gate_sim else ('simulation', 'obj')
     flags, libraries = compiler_flags(options)
     command = [tool('verilator'), '--cc', '--exe', '--build', '-j', str(options.jobs),
@@ -109,7 +110,8 @@ def simulation(options, name):
     output = execute_simulation(options, destination, destination/objects/('V'+top), label)
     print(output, end='', flush=True)
     return {'checks': len([line for line in output.splitlines() if line.startswith('PASS ')]),
-            'command': command, 'sources': source_hashes([ROOT/'rtl'/file for file in files]),
+            'command': command, 'parameters': cache_parameters(options, name),
+            'sources': source_hashes([ROOT/'rtl'/file for file in files]),
             'waveforms': [] if sanitized(options) else sorted(path.name for path in destination.glob('*.vcd'))}
 
 
@@ -119,14 +121,20 @@ def yosys_string(value):
 
 # Gate tests must use a netlist generated from the current RTL, not a stale successful artifact.
 # 门级测试必须使用当前 RTL 生成的网表，不能沿用陈旧的成功产物。
-def verify_netlist(destination, files):
+def verify_netlist(destination, files, parameters):
     manifest = destination/'netlist.json'
     if not manifest.is_file(): raise RuntimeError('Run --synth before --gate-sim.')
     record = json.loads(manifest.read_text())
+    if record.get('parameters', {}) != parameters:
+        raise RuntimeError('Gate geometry differs from requested parameters; rerun --synth.')
     if record['sources'] != source_hashes([ROOT/'rtl'/file for file in files]):
         raise RuntimeError('RTL changed since synthesis; rerun --synth.')
     digest = hashlib.sha256((destination/'gates.v').read_bytes()).hexdigest()
     if digest != record['gate_sha256']: raise RuntimeError('Gate netlist differs from synthesis manifest.')
+
+
+def cache_parameters(options, name):
+    return {'SETS': options.sets, 'WAYS': options.ways} if name == 'cache' else {}
 
 
 # Retain memory macros for storage accounting before mapping the small configuration to generic gates.
@@ -149,7 +157,8 @@ def synthesis(options, name):
     run([tool('yosys'), '-Q', '-T', '-s', str(script)], destination, 'synthesis')
     inferred = json.loads((destination/'inferred.json').read_text())
     memories = memory_inventory(inferred)
-    result = {'top': top, 'memories': memories, 'inferred_stat': 'inferred-stat.json',
+    result = {'top': top, 'parameters': cache_parameters(options, name),
+              'memories': memories, 'inferred_stat': 'inferred-stat.json',
               'sources': source_hashes([ROOT/'rtl'/file for file in files])}
     if not options.infer_only:
         result['gate_stat'] = 'gates-stat.json'
@@ -196,8 +205,8 @@ def parse_options():
     options.simcells = options.simcells.resolve()
     if options.sets < 2 or options.sets > 256 or options.sets & (options.sets-1):
         parser.error('--sets must be a power of two in [2, 256]')
-    if options.ways != 4 and not (options.module == 'cache' and options.synth and options.infer_only):
-        parser.error('--ways 8 is supported for cache storage inference; full L2 execution is checked by CTest')
+    if options.ways != 4 and options.module != 'cache':
+        parser.error('--ways 8 requires --module cache')
     if options.infer_only and not options.synth: parser.error('--infer-only requires --synth')
     if options.gate_sim and options.synth: parser.error('--gate-sim and --synth are separate steps')
     return options

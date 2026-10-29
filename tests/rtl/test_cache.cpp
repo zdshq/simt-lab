@@ -2,6 +2,7 @@
 #include "simt/hardware_memory.hpp"
 #include <filesystem>
 #include <random>
+#include <set>
 
 namespace {
 constexpr uint64_t conflict_stride = SIMT_RTL_SETS*128;
@@ -45,8 +46,9 @@ void locked_ways_and_lru_replacement() {
     for (uint32_t way = 0; way < 4; ++way) send(b, way, {way*conflict_stride});
     require(!b.submit(9, {4*conflict_stride}), "full MSHRs admitted request");
     b.send_fill = true; for (uint32_t way = 0; way < 4; ++way) b.wait(way);
+    for (uint32_t way = 4; way < SIMT_RTL_WAYS; ++way) { send(b, way, {way*conflict_stride}); b.wait(way); }
     send(b, 10, {0}); b.wait(10);
-    send(b, 11, {4*conflict_stride}); b.wait(11);
+    send(b, 11, {SIMT_RTL_WAYS*conflict_stride}); b.wait(11);
     const auto reads = b.reads;
     send(b, 12, {0}); b.wait(12); require(b.reads == reads, "MRU evicted");
     send(b, 13, {conflict_stride}); b.wait(13); require(b.reads == reads+1, "LRU victim incorrect");
@@ -72,14 +74,17 @@ void byte_masked_write_order_and_no_allocate() {
 // With free MSHR capacity, a younger completed way must be evicted ahead of older locked ways.
 // MSHR 容量可用时，必须先替换较新的已完成 way，而不能替换较旧的锁定 way。
 void reservation_overrides_lru_with_free_mshr() {
-    CacheBench b("cache-reservations.vcd"); b.delay = 200;
+    CacheBench b("cache-reservations.vcd");
+    for (uint32_t way = 4; way < SIMT_RTL_WAYS; ++way) { send(b, way+100, {way*conflict_stride}); b.wait(way+100); }
+    b.delay = 200; const auto start = b.cycle;
     for (uint32_t way = 0; way < 4; ++way) b.backing.write(way*conflict_stride, 4, way+11);
     for (uint32_t way = 0; way < 3; ++way) send(b, way, {way*conflict_stride});
-    while (b.reads < 3 && b.cycle < 30) b.step();
-    require(b.reads == 3, "older misses not accepted downstream");
+    while (b.reads < SIMT_RTL_WAYS-1 && b.cycle-start < 30) b.step();
+    require(b.reads == SIMT_RTL_WAYS-1, "older misses not accepted downstream");
     b.delay = 1; send(b, 3, {3*conflict_stride});
-    require(b.wait(3)[0] == 14 && b.cycle < 100, "last way did not complete first");
-    send(b, 4, {4*conflict_stride}); b.wait(4);
+    require(b.wait(3)[0] == 14 && b.cycle-start < 100, "last way did not complete first");
+    for (uint32_t way = 4; way < SIMT_RTL_WAYS; ++way) { send(b, way+200, {way*conflict_stride}); b.wait(way+200); }
+    send(b, 4, {SIMT_RTL_WAYS*conflict_stride}); b.wait(4);
     for (uint32_t way = 0; way < 3; ++way) require(b.wait(way)[0] == way+11, "locked owner overwritten");
     const auto reads = b.reads;
     for (uint32_t way = 0; way < 3; ++way) { send(b, way+5, {way*conflict_stride}); b.wait(way+5); }
@@ -130,10 +135,13 @@ void cpp_model_differential_random_stream() {
     CacheBench b("cache-differential.vcd"); b.random_stalls = true;
     simt::Memory reference;
     simt::hw::Dram dram(reference);
-    simt::hw::SectorCache cache(dram, {SIMT_RTL_SETS*4*128, 128, 4, 4, 2, 4, 4, 8});
+    simt::hw::SectorCache cache(dram, {SIMT_RTL_SETS*SIMT_RTL_WAYS*128, 128, SIMT_RTL_WAYS, 4, 2, 4, 4, 8});
     std::mt19937 rng(20261029);
+    std::set<uint64_t> addresses;
     for (uint32_t id = 0; id < 360; ++id) {
-        Packet p{(rng()%128)*32, rng()%3 == 0}; p.byte_mask = rng();
+        const auto line = (rng()%(SIMT_RTL_WAYS+4))*SIMT_RTL_SETS + rng()%std::min(4, SIMT_RTL_SETS);
+        Packet p{uint64_t(line)*128+(rng()%4)*32, rng()%3 == 0}; p.byte_mask = rng();
+        addresses.insert(p.address);
         for (auto& byte : p.data) byte = uint8_t(rng());
         const auto ticket = cache.submit(p); require(ticket.has_value(), "C++ sequential backpressure");
         send(b, id, p); const auto actual = b.wait(id);
@@ -146,8 +154,8 @@ void cpp_model_differential_random_stream() {
         require(b.dut.hits == cache.stats().hits && b.dut.misses == cache.stats().sector_misses &&
                 b.dut.evictions == cache.stats().evictions, "RTL and C++ tag decisions differ");
     }
-    for (uint32_t byte = 0; byte < 4096; ++byte)
-        require(b.backing.read(byte, 1) == reference.read(byte, 1), "final backing bytes differ");
+    for (const auto address : addresses) for (uint32_t byte = 0; byte < 32; ++byte)
+        require(b.backing.read(address+byte, 1) == reference.read(address+byte, 1), "final backing bytes differ");
 }
 
 // An unaligned range clears intersecting sectors and retains neighboring data in the same line.
@@ -163,8 +171,8 @@ void range_invalidation_and_scan_clocks() {
     b.step(); b.dut.invalidate_valid = 0; b.dut.eval();
     require(b.dut.invalidate_busy && !b.dut.req_ready, "scan did not block admission");
     const auto start = b.cycle;
-    while (b.dut.invalidate_busy && b.cycle-start < SIMT_RTL_SETS*4+1) b.step();
-    require(b.dut.invalidate_done && b.cycle-start == SIMT_RTL_SETS*4, "scan must visit one line per clock");
+    while (b.dut.invalidate_busy && b.cycle-start < SIMT_RTL_SETS*SIMT_RTL_WAYS+1) b.step();
+    require(b.dut.invalidate_done && b.cycle-start == SIMT_RTL_SETS*SIMT_RTL_WAYS, "scan must visit one line per clock");
     send(b, 3, {64}); require(b.wait(3)[0] == 33 && b.reads == reads, "unrelated sector was discarded");
     send(b, 4, {0}); require(b.wait(4)[0] == 77, "first sector stale");
     send(b, 5, {32}); require(b.wait(5)[0] == 88, "last sector stale");

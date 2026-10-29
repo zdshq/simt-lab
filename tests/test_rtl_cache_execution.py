@@ -7,9 +7,9 @@ import test_rtl_tensor as tensor
 
 
 class RtlCaches:
-    # The largest matrix clocks two cache RTL levels as well as instrumented Tensor arithmetic.
-    # 最大矩阵同时推进两级缓存 RTL 和经过插桩的 Tensor 算术。
-    execution_timeout = 180
+    # Unoptimized sanitizer code evaluates every physical LRU register as well as Tensor arithmetic.
+    # 未优化的 sanitizer 代码同时求值全部物理 LRU 寄存器和 Tensor 算术。
+    execution_timeout = 420
 
     def execute(self, program, *options, **kwargs):
         report = super().execute(program, '--timing', '--cache-rtl', *options, **kwargs)

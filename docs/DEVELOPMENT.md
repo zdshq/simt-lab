@@ -236,3 +236,18 @@
 - 最终 `python3 examples/hardware_host.py --build build-cache-rtl --tensor-rtl --cache-rtl --out artifacts/rtl-cache-host` 四类负载各两次 Graph 重放通过。冷/热只读分别 40/18 模型周期且热读取无新增 DRAM 请求；GEMM 96 输出最大误差约 2.98e-7，Transformer 32 输出约 1.07e-7。两种后端身份、机器码、下载值和统计均保存，不作为 4070 SUPER 性能预测。
 - 实际完成两级缓存和 Tensor RTL GEMM 的活会话经原版 nvidia-smi 显示模拟器及 64/7/57 MiB，关闭后无设备；系统默认仍显示真实 4070 SUPER。记录在 `artifacts/rtl-cache-host/nvidia-smi-status.txt`，没有 CUDA/PCIe 枚举或默认合并结论。
 - 新增 `RTL_CACHE_BACKEND.md` 并同步架构、来源、计划及验证文档。当前是 CPU 上运行的混合仿真，非 NVIDIA 内部电路复刻。L2 综合、其余 SM 单元的 RTL 接入、整机连接、实卡校准、PTX 异步矩阵协议、系统默认 SMI 视图合并及最终审计仍未完成，完整目标继续 active。
+
+## 阶段 16 第五部分：组内 LRU 与完整 L2 综合（2026-10-29）
+
+- 继续前核对干净仓库和上一阶段提交 `c2bcafd`，上一轮属于有实现、验证与提交的实际进展。确认先前 L2 综合进程已经终止，日志最后为 `OPT_CLEAN`；本轮在改变电路后启动新综合，没有因观察超时重复启动仍存活任务。
+- 平坦 `mem2reg` rank 数组的动态读写生成大量跨全缓存的选择逻辑。新增 `cache_lru.sv`，按组实例化排名寄存器、局部选中 rank mux、比较和写使能；输出只选择所查询组。保持精确 LRU、无效行优先、锁定 way 过滤及原流水线。读取和命中行写入准入时更新，合并、写未命中、fill 和未接受请求不更新。
+- L1 为 128×4×2 = 1,024 位 rank，L2 为 256×8×3 = 6,144 位；除从源码推导，还核对 Yosys 中间网表对应 512/2,048 个 2/3 位寄存器。数据、tag、MSHR 和维护接口未改为简化模型，没有缩小 L2 或换用随机替换。
+- `tools/rtl.py` 的实际仿真和网表检查支持 `--ways 8`。既有 11 项缓存检查参数化容量/扫描长度，锁定替换用例在 8 路下也填满全部 way；360 次随机请求跨多组反复制造相联冲突，大容量下也检查真实替换。所有访问过的 sector 最终逐字节与独立 backing 比较。检查数量未因配置复跑增加。
+- 综合和仿真清单增加 SETS/WAYS；门级检查除源码和网表哈希外还检查几何。实际负例验证 4 路网表无法配 8 路平台。新模块接入两份 CMake 后端；旧 Ninja 图在自动重配之前仍用原源文件列表，首次构建提示缺少 cache_lru，显式执行 `cmake -S . -B <build>` 后两套构建均成功。
+- `python3 tools/rtl.py --module cache --sets 256 --ways 8 --synth --infer-only --out artifacts/rtl-l2-banked-inference` 通过原完整 coarse 流程和 `check -assert`，数据阵列 8,192×256 = 2,097,152 位、单读/单写。相应 `--sets 128` 的 L1 推断在 `rtl-l1-banked-inference` 通过，524,288 位、单读/单写。没有改动 600 秒工具上限或跳过优化来获得成功。
+- `--module cache --out artifacts/rtl-cache-banked`、`--sets 128 --out artifacts/rtl-l1-banked`、`--sets 256 --ways 8 --out artifacts/rtl-l2-banked` 三种容量均通过相同 11 项 RTL 检查。用 `--build build-cache-sanitize` 在 `rtl-cache-banked-sanitize` 与 `rtl-l2-banked-sanitize` 重跑 4/8 路，全部通过；保留 ASan/UBSan，按既有规则只关闭旧 VCD 运行库。
+- 2 KiB/4 路 `rtl-cache-banked` 和 4 KiB/8 路 `rtl-cache8-banked` 均执行 `--synth`、`--gate-sim`，严格综合及同样 11 项网表检查通过。层次总计分别为 54,770 / 22,083 和 92,501 / 39,528（generic cells / FF 位）；2 KiB 比上版少 442 个组合单元。大容量只保留存储推断，未声称物理 SRAM、FPGA 映射、面积或全 GPU 门数。
+- 联合 RTL Release 的 `ctest --test-dir build-cache-rtl --output-on-failure -j4` 再次通过全部 28 套件 / 421 项，日志重新核对为 368 Python、53 C++，包括原版 nvidia-smi 六项，无跳过。默认软件和其他独立 RTL 模块无行为改动，本轮未无故复跑全部历史检查。
+- `UBSAN_OPTIONS=halt_on_error=1 ctest --test-dir build-cache-sanitize --output-on-failure -j2 -R '^(cache_backend_selection|rtl_cache_engine|rtl_cache_execution|rtl_cache_host)$'` 首次三套件及执行套件 60 项通过，完整最大矩阵超过 180 秒。组内显式寄存器增加未优化插桩代码求值开销，将缓存执行进程上限改为 420 秒，保留 Debug 编译、原算例、全部断言和检测。单独重跑 `CacheTensorPipeline.test_maximum_descriptor_shape` 通过，308.877 秒，1,024 个输出和 262,144 次有效乘积正确，无 sanitizer 报告。失败与重跑日志分别在 `artifacts/rtl-banked-sanitize/ctest-before-timeout-change.log` / `maximum-matrix.log`。
+- `python3 examples/hardware_host.py --build build-cache-rtl --tensor-rtl --cache-rtl --out artifacts/rtl-banked-host` 四类负载各两次 Graph 重放通过。新旧 `validation.json` 全量比较相等，包括输出误差、所有 kernel/设备周期、缓存与 DRAM 累计计数；冷/热仍为 40/18 模型周期，设备最终 64,500 拍。这是重构前后可观察行为对照，不是实卡性能校准。
+- 最终 11 份本轮仿真/综合/网表清单的源码、参数和两份网表哈希核对通过，摘要保留于 `artifacts/rtl-banked-evidence.json`。更新 RTL、缓存后端、来源、验证、README 和整体计划，保留历史超时而不覆盖成成功记录。完整目标继续 active：其余 SM 电路接入、整机连接、实卡校准、PTX 异步矩阵协议、系统默认 SMI 合并与最终审计仍待完成。

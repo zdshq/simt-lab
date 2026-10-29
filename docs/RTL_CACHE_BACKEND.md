@@ -37,6 +37,16 @@ flowchart LR
 
 请求可能已在适配器预留，但下一拍 fill 优先导致 `req_ready` 降低；此时请求引脚保持，之后只握手一次。下游票据也只在 lower 接受时记录，不会因为 `mem_valid` 保持高电平而重复发出。同一个共享 L2 入口自然对多个 L1、copy 和 atomic 施加反压。
 
+## LRU 电路如何组织
+
+`cache_lru.sv` 按 cache set 生成排名寄存器组，而不是用一个覆盖全部缓存行的可变索引数组处理所有更新。L1 的每组有 4 个 2 位 rank，共 `128×4×2 = 1,024` 个状态位；L2 每组有 8 个 3 位 rank，共 `256×8×3 = 6,144` 位。复位将 rank 置为对应 way 编号，0 表示最近使用。
+
+请求地址选择一个组，该组的所有 rank 送入原有 victim 查找。接受读取或命中行的写入时，设被访问 way 的旧排名为 r：该 way 的 rank 写 0；同组其他 rank 小于 r 的加 1，其余保持。比较全部使用边沿前的值，因此排名始终是 0..WAYS−1 的排列，不会溢出。合并请求、写未命中、反压未接受的请求以及单纯 fill 都不改变排名。
+
+每组有独立写使能和组内选中 rank 的小型 mux，只有选中组更新。输出仍需选择所查询组；这里没有声称省去所有 mux，也没有引入时钟门控或额外查询周期。锁定 way 的过滤、无效行优先和失效扫描仍由原缓存控制器处理，LRU 模块仅维护相对顺序。
+
+原平坦触发器数组的动态读写在完整 L2 综合中生成大量中间选择逻辑，两次超过 600 秒。改成组内连接后，相同容量、精确 LRU 和相同综合流程通过了 `check -assert`；没有改成随机替换、缩小容量或省略严格检查。4/8 路的独立测试使用相同的 11 项契约，随机流改为跨多个组反复制造容量冲突，使 64/256 KiB 配置也实际发生替换，而非仅测试落在容量以内的地址。
+
 ## 失效控制器如何工作
 
 原独立缓存只支持排空后的整体失效。接入主机分配和释放需要保留无关缓存及在途填充，因此新增以下实际状态：`invalidate_cursor`、首尾 sector 地址、整体/范围模式位、busy/done 握手。
@@ -71,9 +81,11 @@ kernel 快照的 `hardware.l1[]` 和 `hardware.l2` 报告实际后端、绝对�
 - 61 项复用的端到端检查：local、原子、DMA、Tensor 数值和时序。包括高位 local 物理地址、跨 CTA 生命周期、稀疏/缩放及 32×32×256 最大矩阵。
 - 35 项主机检查：Graph/capture/重放、上传下载、缓存保留、重新分配、故障排空、查询不推进电路，以及四类完整工作负载。
 
-默认构建的软件检查不启用 RTL；测试后端身份和真实事件是上述 RTL 套件的断言。sanitizer 对适配器、L1/L2 和 Tensor 生成代码都插桩。完整最大矩阵首次超过 60 秒进程上限，现设 180 秒，不缩小算例或关闭检测。
+默认构建的软件检查不启用 RTL；测试后端身份和真实事件是上述 RTL 套件的断言。sanitizer 对适配器、L1/L2 和 Tensor 生成代码都插桩。完整最大矩阵最初超过 60 秒进程上限，缓存接入阶段曾设为 180 秒。组内 LRU 生成了更多显式寄存器求值，未优化 sanitizer 构建的相同算例再次超时；当前进程上限为 420 秒，不缩小算例、优化掉电路状态或关闭检测。每次实际重跑结果分别记录于 [VALIDATION.md](VALIDATION.md)。
 
 第一次完整 sanitizer 验证除该超时外的 27 套件已通过，延长时限后，61 项缓存执行套件在 139.05 秒内通过；并非将超时当作成功。后续删除冗余 tag/valid 复位并重建后，受影响的四个缓存后端套件在 Release 与 ASan/UBSan 下再次全部通过；最终 61 项执行套件耗时 139.22 秒。独立 RTL、sanitizer 和网表也重新验证，具体结果记录于 [VALIDATION.md](VALIDATION.md)。
+
+随后组内 LRU 版本再次通过完整 Release 的 421 项检查。sanitizer 受影响回归除最大矩阵超时外全部通过；保留 Debug 编译与完整检测、提高进程时限后，最大矩阵单独重跑通过，耗时 308.877 秒。它仍验证 1,024 个输出和 262,144 次有效乘积。这里区分整套首次执行与单项重跑，不把超时记录改写为一次完整通过。
 
 ```sh
 cmake -S . -B build-cache-sanitize -G Ninja -DCMAKE_BUILD_TYPE=Debug -DSIMT_SANITIZE=ON -DSIMT_CACHE_RTL=ON -DSIMT_TENSOR_RTL=ON
@@ -87,15 +99,19 @@ python3 tools/rtl.py --build build-cache-sanitize --module cache --out artifacts
 
 独立缓存 RTL 现有 11 项（原 9 项加范围扫描与并发 fill 两项），小配置 RTL、sanitizer、综合后网表均通过；64 KiB 配置也执行相同检查。新增诊断输出曾触发旧 Verilator 对向量位依赖的组合环误报，改为独立标量输出后通过；没有禁用 UNOPT 或综合 `check -assert`。
 
-新 2 KiB 小配置的实际综合为 55,212 个 generic cells，其中触发器 22,083 位。数据阵列在这个统计中全部展开，不是 SRAM 宏成本、NAND2 等效门数或整卡面积。64 KiB L1 的保留存储综合识别出 524,288 数据位和单读/单写端口。
+组内 LRU 版本的 2 KiB 小配置综合为 54,770 个 generic cells，其中触发器 22,083 位；较上一版少 442 个组合单元。8 路、4 KiB 小配置为 92,501 / 39,528，二者各通过同样 11 项综合网表检查。计数包括完整层次和展开的数据阵列，不是 SRAM 宏成本、NAND2 等效门数或整卡面积。
 
 最初 256 KiB L2 的综合优化超过 600 秒。删除冗余 tag/valid 复位后，64 KiB L1 的 tag 推断写端口降为 1 个、valid 为 2 个；这不是跳过复位检查，而是用已有 present 位保护无效行，并保留新行初始化。工具日志改为实时写入文件，超时也保留部分诊断。
 
-修改后的 256 KiB L2 综合仍在 600 秒时限内未完成，日志最后位于 Yosys `OPT_CLEAN` 优化阶段；因此本阶段没有 L2 综合通过或存储推断完成的结论。下面的 L2 命令用于复现该未完成检查，日志在 `artifacts/rtl-l2-integrated-inference/cache/synthesis.log`。完整 L2 已通过实际 Verilator 执行与 sanitizer 检查，但不能据此替代综合验收。
+删除冗余复位后的第二次 L2 综合仍在 `OPT_CLEAN` 超时；历史失败日志保留于 `artifacts/rtl-l2-integrated-inference/cache/synthesis.log`。随后按组重构 LRU 才解决该问题。当前 L1/L2 的保留存储综合都完成，分别识别出 524,288 / 2,097,152 个数据位，均为单读/单写端口；完整 256 KiB、8 路配置也通过独立 11 项 RTL 与 sanitizer 检查。未执行完整容量的通用门展开、工艺映射或布局布线。
 
 ```sh
-python3 tools/rtl.py --module cache --sets 128 --synth --infer-only --out artifacts/rtl-cache-integrated-full
-python3 tools/rtl.py --module cache --sets 256 --ways 8 --synth --infer-only --out artifacts/rtl-l2-integrated-inference
+python3 tools/rtl.py --module cache --sets 128 --synth --infer-only --out artifacts/rtl-l1-banked-inference
+python3 tools/rtl.py --module cache --sets 256 --ways 8 --synth --infer-only --out artifacts/rtl-l2-banked-inference
+python3 tools/rtl.py --module cache --sets 256 --ways 8 --out artifacts/rtl-l2-banked
+python3 tools/rtl.py --build build-cache-sanitize --module cache --sets 256 --ways 8 --out artifacts/rtl-l2-banked-sanitize
+python3 tools/rtl.py --module cache --ways 8 --synth --out artifacts/rtl-cache8-banked
+python3 tools/rtl.py --module cache --ways 8 --gate-sim --out artifacts/rtl-cache8-banked
 ```
 
 主机演示的四种负载均完成两次重放：GEMM 96 输出最大误差约 2.98e-7，Transformer 32 输出约 1.07e-7。相邻的只读 kernel 冷/热分别 40/18 模型周期，热读取不增加 DRAM 请求。维护扫描、缓存状态和输入到达时间会影响各次重放周期；这些不是 RTX 4070 SUPER 性能预测。机器码、镜像、下载字节和 kernel/设备快照保存在 `artifacts/rtl-cache-host`。
