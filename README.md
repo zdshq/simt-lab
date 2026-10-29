@@ -43,3 +43,9 @@ python3 examples/host_graph.py
 - [MMA](https://zhuanlan.zhihu.com/p/2056027770405270973)：矩阵语义、TMEM、稀疏元数据与块缩放。
 
 本目录是独立 Git 仓库。上级目录保存的网页和讨论文档不加入此仓库。
+
+## 进行中的硬件模型扩展
+
+用户要求进一步实现内部硬件结构和原版 nvidia-smi 集成，完整目标与剩余验收见 [硬件计划](docs/HARDWARE_PLAN.md)。已新增 [逐周期存储单元](docs/HARDWARE_MEMORY.md)：真实 sector cache 数据、MSHR/反压、shared banks、DRAM bank/row 时序及双 SM 存储层次，三种构建下 17 项新增检查通过。
+
+这些单元目前由独立测试驱动，尚未接入上面的功能执行器；SM/Tensor 流水线、RTL 和 NVML 仍在后续工作中。这里的阶段进展不等于已经完成硬件复刻或系统设备识别。

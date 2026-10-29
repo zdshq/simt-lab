@@ -29,6 +29,11 @@ target_compile_options(simt_host PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_executable(simt-device src/device_main.cpp)
 target_link_libraries(simt-device PRIVATE simt_host)
 target_compile_options(simt-device PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_library(simt_hardware src/hardware/port.cpp src/hardware/dram.cpp src/hardware/cache_tags.cpp
+    src/hardware/cache_request.cpp src/hardware/cache_fill.cpp src/hardware/coalescer.cpp src/hardware/shared.cpp
+    src/hardware/hierarchy.cpp)
+target_link_libraries(simt_hardware PUBLIC simt_core)
+target_compile_options(simt_hardware PRIVATE -Wall -Wextra -Wpedantic -Werror)
 option(SIMT_SANITIZE "Enable address and undefined behavior sanitizers" OFF)
 if(SIMT_SANITIZE)
     target_compile_options(simt_core PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
@@ -36,6 +41,11 @@ if(SIMT_SANITIZE)
 endif()
 
 enable_testing()
+add_executable(test-hardware-memory tests/test_hardware_memory.cpp)
+target_link_libraries(test-hardware-memory PRIVATE simt_hardware)
+target_compile_options(test-hardware-memory PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME hardware_memory_units COMMAND test-hardware-memory)
+set_tests_properties(hardware_memory_units PROPERTIES TIMEOUT 90)
 function(add_simt_test name script)
     add_test(NAME ${name} COMMAND ${CMAKE_COMMAND} -E env
         "PYTHONPATH=${GENERATED_DIR}:${CMAKE_CURRENT_SOURCE_DIR}/python"

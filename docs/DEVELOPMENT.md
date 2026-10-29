@@ -90,3 +90,12 @@
 - 复核短函数和中英文逐行配对注释。按含声明与结束行统计，最长 C++ 函数 25 行，Python 22 行；没有增加样式测试。
 - README、HOST.md、HOST_PLAN.md 与 VALIDATION.md 已包含运行方法、支持项、未实现的 CUDA 兼容部分和证据映射。
 - 保留阶段 7、8、9 的独立 Git 提交与本阶段验收记录；构建产物和实际 trace/验证 JSON 留在本地忽略目录中。
+
+## 阶段 11–12 开始：微架构来源与存储单元（2026-10-29）
+
+- 新目标要求内部硬件细节和原版 nvidia-smi 可见。新增 HARDWARE_PLAN.md/HARDWARE_SOURCES.md，保留完整剩余目标，不将功能 ISS 的完成状态沿用到硬件目标。
+- 阅读官方 Ada/Blackwell 与 CUDA 访存文档、Turing/Hopper/Blackwell 逆向论文。明确已知行为与设计假设；记录逆向资料的代际混淆和数值不一致，避免直接抄作硬件事实。
+- 实现可组合的真实数据 sector cache、有限 MSHR/等待者/返回容量、预约 way、LRU、bank 端口与 fill 端口、write-through，配合 bank/row/总线时序 DRAM 控制器。
+- 实现 warp 合并器、逐拍 shared bank/广播，以及两个 SM 独立 L1/共享 L2 的数据层次结构；全局写采用明确但保守的排空/失效协议。
+- 验证：17 项 C++ 硬件单元/组合检查，包含 320 请求随机字节差分；三种构建的十个 CTest 套件全部通过，即原 75 项加新 17 项检查。ASan+UBSan 无错误。
+- 当前硬件单元尚未接入 Machine/CP，且 RTL、Tensor 流水线和 NVML 仍未完成。详细结构和可复现实验见 HARDWARE_MEMORY.md。
