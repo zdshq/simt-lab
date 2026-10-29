@@ -307,10 +307,38 @@ PCI 选择在原程序私有路径中假定所有设备都有 PCI 状态，模�
 
 这一阶段完成执行输出端口选择、数据路由和确认，但执行锁存器、跨分区共享单元归属、写回仲裁与完整 SM 控制仍有 C++，完整硬件目标保持未完成。
 
+## 阶段 16：完成存储、写回年龄仲裁与 RF 直连（2026-10-30）
+
+从 `6ef824f` 接续。每分区 32 个完成槽在发射时预约，七类执行端口各每拍接收一个结果；实际载荷、归属、完成位和年龄存入 RTL。四个 RF bank 按 1/2/4 端口组仲裁，另有一个谓词端口；无写入指令仍占预约槽。确认驱动直接 RF 写入、同拍 collector 旁路、scoreboard 释放和容量归还。启用 collector 后端即启用这条通路，见 [RTL_WRITEBACK.md](RTL_WRITEBACK.md)。
+
+| 验证 | 实际结果与范围 |
+|---|---|
+| 默认 Debug | `ctest --test-dir build --output-on-failure -j4`：26 套件、274 项（231 Python / 43 C++），272 通过、2 跳过，2.52 秒 |
+| 联合 Release | `ctest --test-dir build-cache-rtl --output-on-failure -j4`：42 套件、839 项（772 Python / 67 C++）全部通过，7.57 秒 |
+| 最终 Debug ASan/UBSan 全量 | `UBSAN_OPTIONS=halt_on_error=1 ctest --test-dir build-register-sanitize --output-on-failure -j3`：33 套件、545 项（492 Python / 53 C++）全部通过，532.11 秒；软件时序套件 98.64 秒，97 项 RTL 指令套件 532.11 秒；实际配置包含寄存器/collector/写回 RTL，其余为 C++ |
+| 首次寄存器/collector/写回 Debug ASan/UBSan | 33 套件中 32 通过，556.12 秒；97 项 RTL 指令套件和三个写回适配器检查通过，原软件 `timed_sm_execution` 达到 90 秒；没有把超时计为成功 |
+| 软件时序套件定向复跑 | 仅对上述构建将套件总限时改为 180 秒后，35 项软件时序检查在 95.64 秒全部通过；三个写回适配器检查再通过，复跑总计 96.70 秒；记录 `rtl-writeback-final/sanitize-rerun.log` |
+| 完整 32 槽写回 RTL / sanitizer | 相同五项通过：保存/旁路、容量/年龄/复位、拒绝非法输入、七生产端口并行、3,000 拍独立随机参考；产物 `rtl-writeback` / `rtl-writeback-sanitize` |
+| 完整 32 槽综合及网表 | `--module writeback --synth`：739,485 generic cells / 34,496 FF 位；`check -assert` 和同五项实际 `--gate-sim` 通过，产物 `rtl-writeback-full-gates` |
+| 4 槽综合及网表 | `--collector-entries 4 --synth`：88,869 cells / 4,312 FF 位；同五项网表检查通过，四槽配置并行检查四个生产端口，完整 32 槽检查全部七个 |
+| 完整 RF/collector/写回连接 | `--module operand_unit` 普通及 sanitizer 均四项通过；新增检查同时要求同拍旁路和下一拍仍能从 RF 读取结果，产物 `rtl-writeback-connected` / `rtl-writeback-connected-sanitize` |
+| 完整组合顶层存储综合 | 8 warp 槽、32 collector、32 完成槽的 `--infer-only` 通过；按实例展开为 141 个数组 / 530,144 数组位，加 147,552 FF 位；没有宣称这一完整组合顶层已经做通用门网表仿真 |
+| 主机、Graph 与监控 | `hardware_host.py --build build-cache-rtl --register-rtl --collector-rtl --scoreboard-rtl --cache-rtl --tensor-rtl --out artifacts/rtl-writeback-host`：四负载各两次重放；另两次监控 GEMM。十份报告检查写回 RTL 身份、预约/完成/退休数等于 issued、占用归零以及无隐藏时钟；实际 `nvidia-smi` 确认实卡共存、7 MiB 分配、释放与退出 |
+
+首次联调的组合门控时钟会在写回控制状态更新时撤掉 RF 写入：同拍旁路正确，但下一拍读取错误。改为集成 RF 与写回共用源时钟、每 lane 显式写使能后，原失败套件全部通过。早期日志在 `rtl-writeback-history/before-shared-clock-tests.log`；旧 CMake 生成规则缺少新模块时的构建失败也保留为 `stale-build-graph.log`，显式重新配置后解决。
+
+软件时序套件在 sanitizer 下全量和单独运行均达到原 90 秒；已完成场景没有数值或 sanitizer 报告。只将 `SIMT_REGISTER_RTL && SIMT_SANITIZE` 下此套件的总限时改为 180 秒，保留全部场景及 8 秒子进程限制；其他构建仍为 90 秒，RTL 执行套件仍为 600 秒、单次 120 秒。两次超时记录、后续复跑及最终计数保存在 `rtl-writeback-history` 和 `rtl-writeback-final`。首次调整属性时放在测试注册前的 CMake 错误也保留，已移到注册后。
+
+主机验证保留了实际变化：十份报告的架构状态、总周期与其他统计相等；规约两次重放各增加 3 次完成端口等待，三条与同分区另一条 LDS 同拍返回的 LDS 晚一拍退休。其余八份报告的事件和时钟按同拍归组相等；两份向量报告的原始 trace 相等。先汇集全部结果再仲裁会改变其他同拍事件的记录顺序，因此不能声称所有原始 trace 不变。`backend-audit.json` 和 `rtl-writeback-history/host-state-differences.json` 保留逐条差异。
+
+工具集合由 53 增至 59 个独立场景，本次运行直接受影响的九个（写回 5、组合顶层 4），没有声称重跑全部独立模块。十份当前 RTL 源码清单与两份实际网表 SHA-256 核对一致，见 `rtl-writeback-final/evidence-audit.json`。综合网表检查是同一场景的复跑，不增加独立场景数；generic cells 不等于 NAND2 门数、工艺面积或整 GPU 成本。
+
+目标仍未完成：执行流水线与各生产端口的输入选择、完整谓词值存储、跨分区共享资源仲裁和其他整机 RTL 连接仍有 C++，还需实卡参数校准、PTX 异步矩阵协议与最终要求审计。
+
 ## 明确边界
 
 - 功能模式和时序模式都在 CPU 上执行；不会利用 RTX 4070 SUPER 来获得模拟 GPU 的实际吞吐。
-- 两个 SM 已有基础时序资源模型；缓存、Tensor、scoreboard、寄存器数据、collector/读请求年龄仲裁和七执行端口 RTL 已接入实际执行，早期循环 bank 仲裁 RTL 仍独立，尚未连接成两份完整 RTL SM。仅报告实际模块的 generic-cell 统计，没有整卡门数、工艺频率、面积或功耗结论。
+- 两个 SM 已有基础时序资源模型；缓存、Tensor、scoreboard、寄存器数据、collector/读请求年龄仲裁、七执行端口与完成存储/写回仲裁 RTL 已接入实际执行，早期循环 bank 仲裁 RTL 仍独立，尚未连接成两份完整 RTL SM。仅报告实际模块的 generic-cell 统计，没有整卡门数、工艺频率、面积或功耗结论。
 - 自定义编码不兼容 CUDA/PTX/SASS/curryGPU 私有二进制；Python Program 是指令构造接口，不是 CUDA 编译器。
 - 主机接口及 CUDA Graph 风格功能通过 Python/C++ 进程协议运行，不实现 NVIDIA `cudaGraph*` API/ABI、驱动、PCIe/MMIO 或系统可枚举的 CUDA 设备。
 - Graph 支持范围见 [主机接口规范](HOST.md)：无 child graph、host callback、条件/内存分配节点、device-side launch 或完整 capture mode；单计算引擎不支持并发 kernel。

@@ -7,6 +7,7 @@
 #include "simt/scoreboard_engine.hpp"
 #include "simt/register_file.hpp"
 #include "simt/operand_collector.hpp"
+#include "simt/writeback.hpp"
 #include <deque>
 
 namespace simt {
@@ -75,13 +76,15 @@ struct Inflight {
     Warp operands, result;
     std::vector<hw::RegisterUse> unread;
     std::optional<uint32_t> collector;
+    std::optional<uint32_t> completion;
+    bool result_submitted = false, collective_result = false;
     std::vector<MemoryFlight> memory;
     std::optional<TensorFlight> tensor;
 };
 struct TimingStats {
     uint64_t issued = 0, retired = 0, scoreboard_stalls = 0, boundary_stalls = 0;
     uint64_t collector_stalls = 0, register_stalls = 0, unit_stalls = 0, writeback_stalls = 0;
-    uint64_t memory_order_stalls = 0, peak_ctas = 0, dropped_trace = 0;
+    uint64_t memory_order_stalls = 0, completion_stalls = 0, peak_ctas = 0, dropped_trace = 0;
 };
 struct HardwareEvent {
     uint64_t cycle, instruction;
@@ -130,6 +133,12 @@ private:
     void take_collector(Inflight& entry);
     bool collect_operand(Inflight& entry, const hw::RegisterUse& use);
     void commit_register_data(Inflight& entry);
+    void write_result(const Inflight& entry, Warp& warp) const;
+    void reserve_writeback(Inflight& entry);
+    void prepare_writebacks();
+    void poll_result(Inflight& entry);
+    void submit_writeback(Inflight& entry);
+    bool take_writeback(Inflight& entry);
     void launch_ready();
     void launch(Inflight& entry);
     void evaluate_scalar(Inflight& entry);

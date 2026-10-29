@@ -77,4 +77,6 @@ python3 tools/rtl.py --module register_file --rf-slots 2 --gate-sim --out artifa
 
 首轮 96 项指令复跑中，原 CAS 替换操作数检查使用单 bank 端口配置，首次固定四 bank 接口拒绝了该配置。保留原测试和失败日志，增加真实 RTL 端口共享授权后继续验证，没有删除 WAR/旧替换值检查。
 
-完整目标仍按 [HARDWARE_PLAN.md](HARDWARE_PLAN.md) 推进：collector/读仲裁已经有可选直连后端；写回仲裁与整体 SM 连接、其余存储/控制单元、实卡参数校准、PTX 异步矩阵协议和最终硬件审计尚未完成。
+后续 [写回 RTL](RTL_WRITEBACK.md) 已在 collector 后端中接入完成存储与写回年龄仲裁。集成 RF 使用 `SHARED_CLOCK=1` 和逐 lane 写使能，保证内部写回信号在源时钟边沿被可靠采样；独立 RF 保留原宿主引脚门控方式。本页早期综合清单对应当时源码，新组合顶层的当前综合范围见写回文档。
+
+完整目标仍按 [HARDWARE_PLAN.md](HARDWARE_PLAN.md) 推进：执行流水线和整体 SM 连接、其余存储/控制单元、实卡参数校准、PTX 异步矩阵协议和最终硬件审计尚未完成。

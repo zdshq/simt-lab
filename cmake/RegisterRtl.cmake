@@ -14,7 +14,7 @@ function(simt_enable_register_rtl)
             SOURCES rtl/register_bank.sv rtl/register_file.sv
             VERILATOR_ARGS -Wall --unroll-count 4096 -GSLOTS=${slots})
         verilate(simt_register_circuit TOP_MODULE register_operand_unit PREFIX Vsimt_operands${slots}
-            SOURCES rtl/register_bank.sv rtl/register_file.sv rtl/collector_dispatch.sv rtl/collector_payload.sv rtl/operand_collector.sv rtl/register_operand_unit.sv
+            SOURCES rtl/register_bank.sv rtl/register_file.sv rtl/collector_dispatch.sv rtl/collector_payload.sv rtl/operand_collector.sv rtl/writeback_payload.sv rtl/writeback_unit.sv rtl/register_operand_unit.sv
             VERILATOR_ARGS -Wall --unroll-count 4096 -GSLOTS=${slots})
     endforeach()
     target_compile_options(simt_register_circuit PRIVATE ${VERILATOR_CFLAGS})

@@ -6,6 +6,7 @@ namespace simt {
 // Result readiness does not bypass register-file write bandwidth or predicate write ports.
 // 结果就绪不能绕过寄存器堆写带宽和谓词写端口。
 bool TimingMachine::writeback_available(Inflight& entry) {
+    if (entry.completion) return take_writeback(entry);
     auto& partition = sms_[entry.sm]->partitions[entry.partition];
     const auto& f = entry.footprint;
     if (!f.write_mask) return true;
@@ -25,11 +26,7 @@ void TimingMachine::commit(Inflight& entry) {
     auto& warp = machine_.ctas_[entry.cta].warps[entry.warp];
     auto& timed = warps_[entry.cta][entry.warp];
     if (f.pipe == Pipe::control) commit_control(entry);
-    else for (uint32_t lane = 0; lane < lanes; ++lane) {
-        if (!(f.write_mask & lane_bit(lane))) continue;
-        if (f.destination) write_register(warp, *f.destination, lane, entry.result.r[*f.destination][lane]);
-        if (f.predicate) write_predicate(warp, *f.predicate, lane, entry.result.predicates[*f.predicate] & lane_bit(lane));
-    }
+    else write_result(entry, warp);
     commit_register_data(entry);
     if (f.destination) timed.scoreboard->retire_write(*f.destination, f.write_mask);
     if (f.predicate) timed.scoreboard->retire_predicate(*f.predicate, f.write_mask);
@@ -46,12 +43,11 @@ void TimingMachine::commit(Inflight& entry) {
 }
 
 void TimingMachine::retire_results() {
+    prepare_writebacks();
     auto at = inflight_.begin();
     while (at != inflight_.end()) {
         auto& entry = *at->second;
-        if (entry.stage == Stage::memory) poll_memory(entry);
-        if (entry.stage == Stage::tensor) poll_tensor(entry);
-        if (entry.stage == Stage::executing && entry.due <= cycle_) entry.stage = Stage::writeback;
+        if (!entry.completion) poll_result(entry);
         if (entry.stage != Stage::writeback || !writeback_available(entry)) { ++at; continue; }
         try { commit(entry); }
         catch (const std::exception& error) {

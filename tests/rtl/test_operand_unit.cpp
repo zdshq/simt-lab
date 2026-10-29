@@ -13,6 +13,7 @@ public:
 
 void commit(TestBench& b) {
     b.tick(); b.dut.write_valid = 0; b.dut.clear_slots = 0;
+    b.dut.wb_reserve_valid = 0; b.dut.wb_complete_valid = 0; b.dut.wb_acknowledge = 0;
     b.dut.allocate_valid = 0; b.dut.release_entries = 0; b.dut.collect_enable = 0; b.dut.dispatch_enable = 0; b.dut.dispatch_accept = 0; b.dut.eval();
 }
 
@@ -92,7 +93,33 @@ void physical_execution_bus_bypass_and_reuse() {
         require(b.dut.dispatch_data[96+word] == 0, "reused execution bus leaked another warp's data");
 }
 
+// A retirement grant must both forward now and persist across the same source-clock edge.
+// 退休授权必须既能立即旁路，又能跨越同一源时钟边沿持久保存。
+void writeback_to_rf_and_collector() {
+    TestBench b("operand-unit-writeback.vcd"); auto& d = b.dut;
+    d.wb_reserve_warp = 1; d.wb_reserve_pipe = 6; d.wb_reserve_kind = 1;
+    d.wb_reserve_register = 2; d.wb_reserve_mask = 0x80000001; d.wb_reserve_valid = 1; d.eval();
+    require(d.wb_reserve_ready,"connected completion reservation refused");
+    const auto completion = d.wb_reserve_index;
+    const auto reader = allocate(b,1,2,3); commit(b);
+    d.wb_complete_entries = uint64_t{completion}<<30;
+    for (uint32_t lane = 0; lane < 32; ++lane) d.wb_complete_data[6*32+lane] = 42+lane;
+    d.wb_complete_valid = 64; d.eval();
+    require(d.wb_complete_accept == 64 && d.wb_retire_ready == (1u<<completion),"connected completion lost");
+    d.wb_acknowledge = 1u<<completion; d.collect_enable = 1; d.query_entry = reader; d.eval();
+    require(d.write_events == 4 && d.query_data[0] == 42 && d.query_data[31] == 73,
+            "physical writeback did not forward to collector");
+    require(d.query_data[1] == 0,"physical writeback ignored lane mask");
+    d.release_entries = 1u<<reader; d.eval(); commit(b);
+    require(d.wb_occupancy == 0 && !d.write_events,"retired result retained a write port");
+    const auto later = allocate(b,1,2,3); commit(b);
+    d.collect_enable = 1; d.query_entry = later; d.eval();
+    require(d.query_data[0] == 42 && d.query_data[31] == 73 && d.query_data[1] == 0,
+            "writeback forwarded but did not persist across the RF clock edge");
+}
+
 void run_cases() {
+    run_case("connected writeback physical RF storage and collector bypass",writeback_to_rf_and_collector);
     run_case("connected RF physical dispatch bypass and pipe reuse",physical_execution_bus_bypass_and_reuse);
     run_case("connected RF collector old values and slot-clear isolation",direct_storage_and_collector_retention);
     run_case("connected RF collector writeback bypass and same-cycle reuse",same_cycle_writeback_forwarding_and_slot_isolation);

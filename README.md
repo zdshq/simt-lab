@@ -74,4 +74,6 @@ python3 examples/host_graph.py
 
 [操作数收集器 RTL](docs/RTL_COLLECTOR.md) 通过 `--register-rtl --collector-rtl` 或 Python `register_rtl=True, collector_rtl=True` 启用。每分区 32 个物理条目保存三个源向量、待收集位和相对年龄；读请求由电路仲裁，寄存器数据直接连入收集器，执行接收后才传给 C++ 执行锁存器。现已有 [七个物理执行输出端口](docs/RTL_DISPATCH.md)，由电路按年龄选择候选，同端口每拍最多确认一次。
 
-当前默认 Debug 运行 26 套件、274 项（272 通过，2 项未构建 RTL 而跳过）；五种 RTL 后端可用的联合 Release 构建通过 41 套件、835 项；寄存器与 collector RTL 的 Debug ASan/UBSan 构建通过 32 套件、541 项。不同构建包含既有场景复跑，独立 RTL 检查另计，各套件按其目的选择后端，并非全部同时启用五种 RTL。完整范围与早期失败记录见验证文档。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。
+[写回 RTL](docs/RTL_WRITEBACK.md) 现随 collector 后端启用。每分区 32 个完成槽在发射时预约，接收七类执行结果，按年龄竞争有限写端口，直接驱动寄存器堆。满槽阻止继续发射，等待结果由电路保存；执行流水线和部分控制仍由 C++ 提供。完整 32 槽写回模块的综合和五项网表检查通过。
+
+当前默认 Debug 运行 26 套件、274 项（272 通过，2 项未构建 RTL 而跳过）；联合 Release 构建通过 42 套件、839 项；寄存器/collector/写回 RTL 的 Debug ASan/UBSan 构建最终通过 33 套件、545 项。构建范围、早期套件超时与复跑记录见 [验证记录](docs/VALIDATION.md)。不同构建包含既有场景复跑，独立 RTL 检查另计，各套件按其目的选择后端，并非全部同时启用所有 RTL。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。

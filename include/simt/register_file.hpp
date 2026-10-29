@@ -6,6 +6,7 @@
 
 namespace simt::hw {
 class OperandCollector;
+class Writeback;
 using RegisterVector = std::array<uint32_t, 32>;
 struct RegisterFileStats {
     uint64_t clocks = 0, active_clocks = 0, reads = 0, writes = 0, cleared_slots = 0;
@@ -17,6 +18,7 @@ class RegisterFile {
 public:
     virtual ~RegisterFile() = default;
     virtual OperandCollector* collector() { return nullptr; }
+    virtual Writeback* writeback() { return nullptr; }
     virtual void clear(uint32_t slot) = 0;
     virtual std::optional<RegisterVector> read(uint32_t slot, uint32_t reg) = 0;
     virtual bool writable(uint32_t reg) = 0;

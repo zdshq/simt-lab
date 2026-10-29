@@ -33,6 +33,10 @@ protected:
         if constexpr (requires { dut_.read_events; }) return dut_.read_events;
         return dut_.read_valid;
     }
+    uint32_t write_events() const {
+        if constexpr (requires { dut_.write_events; }) return dut_.write_events;
+        return dut_.write_valid;
+    }
     bool storage_clock_enabled() const {
         if constexpr (requires { dut_.register_clock_enable; }) return dut_.register_clock_enable;
         return dut_.clock_enable;
@@ -94,7 +98,7 @@ template<class C, uint32_t S> void RtlRegisterFile<C,S>::write(uint32_t slot, ui
 template<class C, uint32_t S> void RtlRegisterFile<C,S>::tick() {
     ++stats_.clocks;
     stats_.reads += std::popcount(read_events());
-    stats_.writes += std::popcount(uint32_t{dut_.write_valid});
+    stats_.writes += std::popcount(write_events());
     stats_.cleared_slots += std::popcount(uint32_t{dut_.clear_slots});
     if (storage_clock_enabled()) ++stats_.active_clocks;
     if (dut_.clock_enable) edge();

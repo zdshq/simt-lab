@@ -66,6 +66,26 @@ void scoreboard_stats(std::ostream& out, const std::vector<std::unique_ptr<Timed
     out << ']';
 }
 
+// Completion storage and retirement counts come from the shared-clock RTL handshakes.
+// 完成存储与退休计数来自共用时钟的 RTL 握手。
+void writeback_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedSm>>& sms) {
+    out << ",\"writeback_units\":[";
+    bool first = true;
+    for (uint32_t sm = 0; sm < sms.size(); ++sm)
+        for (uint32_t part = 0; part < sms[sm]->partitions.size(); ++part) {
+            const auto& file = sms[sm]->partitions[part].registers;
+            auto* unit = file ? file->writeback() : nullptr;
+            if (!unit) continue;
+            if (!first) out << ',';
+            first = false;
+            const auto& s = unit->writeback_stats();
+            out << "{\"sm\":" << sm << ",\"partition\":" << part << ",\"backend\":\"rtl\",\"entries\":32,\"completion_ports\":7"
+                << ",\"occupancy\":" << unit->occupancy() << ",\"clocks\":" << s.clocks << ",\"active_clocks\":" << s.active_clocks
+                << ",\"reserved\":" << s.reserved << ",\"completed\":" << s.completed << ",\"retired\":" << s.retired << '}';
+        }
+    out << ']';
+}
+
 void cache_stats(std::ostream& out, const hw::CachePort& cache) {
     const auto& s = cache.stats(); const auto& config = cache.config();
     out << "{\"backend\":\"" << cache.name() << "\",\"clocks\":" << cache.cycle()
@@ -93,6 +113,7 @@ void TimingMachine::dump_statistics(std::ostream& out) const {
         << ",\"scoreboard_stalls\":" << stats_.scoreboard_stalls << ",\"boundary_stalls\":" << stats_.boundary_stalls
         << ",\"collector_stalls\":" << stats_.collector_stalls << ",\"register_bank_stalls\":" << stats_.register_stalls
         << ",\"unit_stalls\":" << stats_.unit_stalls << ",\"writeback_stalls\":" << stats_.writeback_stalls
+        << ",\"completion_stalls\":" << stats_.completion_stalls
         << ",\"memory_order_stalls\":" << stats_.memory_order_stalls << ",\"peak_ctas_per_sm\":" << stats_.peak_ctas
         << ",\"dropped_trace\":" << stats_.dropped_trace;
 }
@@ -155,6 +176,7 @@ void TimingMachine::dump(std::ostream& out) const {
     scoreboard_stats(out, sms_);
     register_stats(out, sms_);
     collector_stats(out, sms_);
+    writeback_stats(out, sms_);
     dump_memory(out);
     dump_tensor(out);
     dump_async(out);

@@ -14,6 +14,9 @@ bool TimingMachine::dependencies(uint32_t cta, uint32_t warp, Group group, const
 
 bool TimingMachine::capacity(uint32_t sm, uint32_t partition) {
     auto& file = sms_[sm]->partitions[partition].registers;
+    if (file && file->writeback() && !file->writeback()->available()) {
+        ++stats_.completion_stalls; return false;
+    }
     if (file && file->collector()) {
         if (file->collector()->available()) return true;
         ++stats_.collector_stalls; return false;
@@ -82,6 +85,7 @@ void TimingMachine::enqueue(uint32_t cta_id, uint32_t wi, Group group, uint32_t 
     entry->group = group; entry->mask = mask; entry->instruction = machine_.module_.code[group.pc];
     entry->footprint = std::move(footprint);
     reserve_collector(*entry);
+    reserve_writeback(*entry);
     entry->operands.predicates = warp.predicates; entry->operands.valid_mask = warp.valid_mask;
     reserve(*entry); resume_yielded(warp);
     if (!entry->footprint.boundary)

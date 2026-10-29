@@ -40,7 +40,8 @@ void TimingMachine::commit_control(Inflight& entry) {
         if (entry.group.mask & lane_bit(lane)) next.pc[lane] = entry.group.pc + 1;
     const ExecutionContext context{entry.instruction, cta, entry.operands, next, machine_.config_,
                                    entry.warp, *machine_.global_, machine_.constant_};
-    if (!execute_control(context, entry.group, entry.mask, machine_.module_) &&
+    if (entry.collective_result) write_result(entry, next);
+    else if (!execute_control(context, entry.group, entry.mask, machine_.module_) &&
         !execute_collective(context, entry.group, entry.mask) && !execute_barrier(context, entry.mask) &&
         !execute_memory(context, entry.mask)) throw std::runtime_error("unhandled_timing_control");
     warp = std::move(next);
@@ -70,6 +71,11 @@ void TimingMachine::launch(Inflight& entry) {
     } else if (pipe == Pipe::memory) { prepare_memory(entry); entry.stage = Stage::memory; }
     else {
         if (!entry.footprint.boundary) evaluate_scalar(entry);
+        else if (entry.completion && pipe == Pipe::control) {
+            const ExecutionContext context{entry.instruction, machine_.ctas_[entry.cta], entry.operands, entry.result,
+                machine_.config_, entry.warp, *machine_.global_, machine_.constant_};
+            entry.collective_result = execute_collective(context, entry.group, entry.mask);
+        }
         entry.stage = Stage::executing; entry.due = cycle_ + latency;
     }
     trace(entry, "execute");

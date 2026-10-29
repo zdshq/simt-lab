@@ -19,7 +19,7 @@ add_library(simt_core src/machine.cpp src/execution.cpp src/control.cpp src/coll
     src/dump.cpp src/module.cpp src/memory_execution.cpp src/barrier.cpp
     src/diagnostics.cpp src/tensor.cpp src/tensor_numeric.cpp src/matrix.cpp src/matrix_descriptor.cpp
     src/async.cpp src/async_copy.cpp src/timing/footprint.cpp src/timing/scheduler.cpp src/timing/issue.cpp
-    src/timing/execute.cpp src/timing/registers.cpp src/timing/collectors.cpp src/timing/memory.cpp src/timing/retire.cpp src/timing/report.cpp
+    src/timing/execute.cpp src/timing/registers.cpp src/timing/collectors.cpp src/timing/writeback.cpp src/timing/memory.cpp src/timing/retire.cpp src/timing/report.cpp
     src/hardware/tensor_array.cpp src/hardware/tensor_engine.cpp src/timing/tensor_transfer.cpp src/timing/tensor_control.cpp
     src/timing/tensor_tile.cpp src/timing/tensor_operands.cpp src/timing/async_launch.cpp
     src/timing/async_barrier.cpp src/timing/async_dma.cpp src/timing/async_report.cpp src/timing/atomic.cpp ${GENERATED_DIR}/isa.hpp)
@@ -165,6 +165,15 @@ add_simt_test(scoreboard_backend_selection test_scoreboard_backend.py)
 add_simt_test(register_backend_selection test_register_backend.py)
 add_simt_test(collector_backend_selection test_collector_backend.py)
 if(SIMT_REGISTER_RTL)
+    # This suite repeatedly starts the large sanitized RTL executable; per-process limits remain unchanged.
+    # 此套件反复启动较大的 RTL sanitizer 可执行文件；单次进程限时保持不变。
+    if(SIMT_SANITIZE)
+        set_tests_properties(timed_sm_execution PROPERTIES TIMEOUT 180)
+    endif()
+    add_executable(test-rtl-writeback tests/test_rtl_writeback.cpp)
+    target_link_libraries(test-rtl-writeback PRIVATE simt_hardware)
+    target_compile_options(test-rtl-writeback PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    add_test(NAME rtl_writeback_adapter COMMAND test-rtl-writeback)
     add_executable(test-rtl-collector tests/test_rtl_collector.cpp)
     target_link_libraries(test-rtl-collector PRIVATE simt_hardware)
     target_compile_options(test-rtl-collector PRIVATE -Wall -Wextra -Wpedantic -Werror)

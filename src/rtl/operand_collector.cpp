@@ -4,6 +4,7 @@
 #include "Vsimt_operands16.h"
 #include "Vsimt_operands32.h"
 #include "register_file_impl.hpp"
+#include "writeback_impl.hpp"
 
 namespace simt::hw {
 namespace {
@@ -12,13 +13,14 @@ class RtlOperandUnit final : public detail::RtlRegisterFile<Circuit, Slots>, pub
     using Base = detail::RtlRegisterFile<Circuit, Slots>;
     using Base::dut_;
 public:
-    RtlOperandUnit(uint32_t banks, uint32_t collectors) : Base(banks) {
+    RtlOperandUnit(uint32_t banks, uint32_t collectors) : Base(banks), writeback_(dut_) {
         if (!collectors || collectors > 32) throw std::runtime_error("invalid_collector_limit");
         dut_.entry_limit = collectors; dut_.collect_enable = 0;
         dut_.allocate_valid = 0; dut_.release_entries = 0;
         dut_.dispatch_enable = 0; dut_.dispatch_accept = 0; dut_.dispatch_eligible = 0; dut_.eval();
     }
     OperandCollector* collector() override { return this; }
+    Writeback* writeback() override { return &writeback_; }
     bool available() override { return !dut_.allocate_valid && dut_.allocate_ready; }
     uint32_t allocate(uint32_t warp, std::span<const RegisterUse> sources, uint32_t pipe) override;
     std::vector<CollectorGrant> collect() override;
@@ -31,6 +33,8 @@ public:
     uint32_t limit() const override { return dut_.entry_limit; }
     const CollectorStats& collector_stats() const override { return stats_; }
     void write(uint32_t slot, uint32_t reg, uint32_t mask, const RegisterVector& values) override {
+        if ((writeback_.occupancy() || dut_.wb_reserve_valid) && reg != 63 && mask)
+            throw std::runtime_error("writeback_owns_register_write_ports");
         if (serviced_ && reg != 63 && mask) throw std::runtime_error("register_write_after_operand_collection");
         Base::write(slot, reg, mask, values);
     }
@@ -43,6 +47,7 @@ public:
     }
 private:
     CollectorStats stats_;
+    detail::RtlWriteback<Circuit, Slots> writeback_;
     bool serviced_ = false, dispatched_ = false;
     std::optional<uint32_t> selected_port(uint32_t entry) const;
     uint32_t pending_count() const;
@@ -77,6 +82,7 @@ template<class C, uint32_t S> uint32_t RtlOperandUnit<C,S>::pending_count() cons
 template<class C, uint32_t S> std::vector<CollectorGrant> RtlOperandUnit<C,S>::collect() {
     if (serviced_) throw std::runtime_error("collector_already_serviced");
     if (dut_.allocate_valid) throw std::runtime_error("collector_collection_after_allocation");
+    writeback_.close_retirement();
     serviced_ = true;
     // Circuit pending bits prove that an empty request set needs no arbitration or data capture.
     // 电路待处理位证明空请求集合不需要仲裁或捕获数据。
@@ -143,7 +149,9 @@ template<class C, uint32_t S> void RtlOperandUnit<C,S>::tick() {
     stats_.dispatches += std::popcount(static_cast<uint32_t>(dut_.dispatch_accept & dut_.dispatch_valid));
     stats_.dispatch_waits += std::popcount(uint32_t{dut_.ready_entries & ~dut_.dispatch_releases});
     stats_.reads += std::popcount(uint32_t{dut_.read_events});
+    writeback_.sample();
     Base::tick();
+    writeback_.clear();
     if (dut_.allocate_valid || dut_.release_entries || dut_.collect_enable || dut_.dispatch_enable || dut_.dispatch_accept) {
         dut_.allocate_valid = 0; dut_.release_entries = 0; dut_.collect_enable = 0;
         dut_.dispatch_enable = 0; dut_.dispatch_accept = 0; dut_.eval();

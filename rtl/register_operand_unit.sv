@@ -47,17 +47,62 @@ module register_operand_unit #(
     output wire [31:0] dispatch_releases,
     output wire [13:0] dispatch_counts,
     output wire [125:0] dispatch_registers,
-    output wire [21503:0] dispatch_data
+    output wire [21503:0] dispatch_data,
+    input wire wb_reserve_valid,
+    input wire [SLOT_BITS-1:0] wb_reserve_warp,
+    input wire [2:0] wb_reserve_pipe,
+    input wire [1:0] wb_reserve_kind,
+    input wire [5:0] wb_reserve_register,
+    input wire [31:0] wb_reserve_mask,
+    output wire wb_reserve_ready, wb_reserve_error,
+    output wire [4:0] wb_reserve_index,
+    input wire [6:0] wb_complete_valid,
+    input wire [34:0] wb_complete_entries,
+    input wire [7167:0] wb_complete_data,
+    output wire [6:0] wb_complete_accept, wb_complete_error,
+    input wire [31:0] wb_acknowledge,
+    output wire [31:0] wb_retire_ready, wb_acknowledge_error,
+    output wire [4:0] wb_retire_valid,
+    output wire [24:0] wb_retire_entries,
+    output wire [5119:0] wb_retire_data,
+    output wire [5:0] wb_occupancy,
+    output wire wb_clock_enable,
+    output wire [3:0] write_events
 );
     wire [3:0] collector_reads;
     wire [4*ROW_BITS-1:0] collector_rows;
     assign read_events = collect_enable ? collector_reads : read_valid;
-    assign clock_enable = register_clock_enable || collector_clock_enable;
-    register_file #(.SLOTS(SLOTS)) registers (
+    wire [3:0] wb_writes;
+    wire [4*ROW_BITS-1:0] wb_rows;
+    wire [127:0] wb_masks;
+    wire [4095:0] wb_data;
+    assign write_events = write_valid | wb_writes;
+    assign clock_enable = register_clock_enable || collector_clock_enable || wb_clock_enable;
+    wire [4*ROW_BITS-1:0] actual_rows;
+    wire [127:0] actual_masks;
+    wire [4095:0] actual_data;
+    genvar bank;
+    generate for (bank = 0; bank < 4; bank = bank+1) begin: write_ports
+        assign actual_rows[bank*ROW_BITS+:ROW_BITS] = wb_writes[bank] ? wb_rows[bank*ROW_BITS+:ROW_BITS] : write_rows[bank*ROW_BITS+:ROW_BITS];
+        assign actual_masks[bank*32+:32] = wb_writes[bank] ? wb_masks[bank*32+:32] : write_masks[bank*32+:32];
+        assign actual_data[bank*1024+:1024] = wb_writes[bank] ? wb_data[bank*1024+:1024] : write_data[bank*1024+:1024];
+    end endgenerate
+    register_file #(.SLOTS(SLOTS), .SHARED_CLOCK(1)) registers (
         .clk(clk), .reset(reset), .clear_slots(clear_slots), .query_register(query_register), .port_groups(port_groups),
         .read_available(read_available), .write_available(write_available), .clock_enable(register_clock_enable), .slot_count(slot_count),
-        .read_valid(read_events), .write_valid(write_valid), .read_rows(collect_enable ? collector_rows : read_rows),
-        .write_rows(write_rows), .write_masks(write_masks), .write_data(write_data), .read_data(read_data)
+        .read_valid(read_events), .write_valid(write_events), .read_rows(collect_enable ? collector_rows : read_rows),
+        .write_rows(actual_rows), .write_masks(actual_masks), .write_data(actual_data), .read_data(read_data)
+    );
+    writeback_unit #(.SLOTS(SLOTS)) completions (
+        .clk(clk), .reset(reset), .port_groups(port_groups),
+        .reserve_valid(wb_reserve_valid), .reserve_warp(wb_reserve_warp), .reserve_pipe(wb_reserve_pipe),
+        .reserve_kind(wb_reserve_kind), .reserve_register(wb_reserve_register), .reserve_mask(wb_reserve_mask),
+        .reserve_ready(wb_reserve_ready), .reserve_error(wb_reserve_error), .reserve_index(wb_reserve_index),
+        .complete_valid(wb_complete_valid), .complete_entries(wb_complete_entries), .complete_data(wb_complete_data),
+        .complete_accept(wb_complete_accept), .complete_error(wb_complete_error), .acknowledge(wb_acknowledge),
+        .retire_ready(wb_retire_ready), .acknowledge_error(wb_acknowledge_error), .retire_valid(wb_retire_valid),
+        .retire_entries(wb_retire_entries), .retire_data(wb_retire_data), .write_valid(wb_writes),
+        .write_rows(wb_rows), .write_masks(wb_masks), .write_data(wb_data), .occupancy(wb_occupancy), .clock_enable(wb_clock_enable)
     );
     operand_collector #(.SLOTS(SLOTS)) collectors (
         .clk(clk), .reset(reset), .collect_enable(collect_enable), .entry_limit(entry_limit), .port_groups(port_groups),

@@ -2,6 +2,7 @@
 // 四个独立向量读写 bank 向发射适配层暴露已接受的端口预约。
 module register_file #(
     parameter integer SLOTS = 8,
+    parameter integer SHARED_CLOCK = 0,
     parameter integer SLOT_BITS = $clog2(SLOTS),
     parameter integer ROW_BITS = SLOT_BITS+4
 ) (
@@ -25,10 +26,10 @@ module register_file #(
     wire valid_geometry = port_groups == 1 || port_groups == 2 || port_groups == 4;
     assign read_available = !reset && valid_geometry && (query_register == 63 || !(|(read_valid & group_mask)));
     assign write_available = !reset && valid_geometry && (query_register == 63 || !(|(write_valid & group_mask)));
-    // Controls change only while clk is low; reads are combinational and do not open the storage gate.
-    // 控制信号仅在 clk 低电平改变；读取为组合逻辑，不打开存储时钟门。
+    // Standalone host pins stay stable while high; internal RTL producers instead share the source clock.
+    // 独立宿主引脚在高电平保持稳定；内部 RTL 生产者则使用共同的源时钟。
     assign clock_enable = reset || (|clear_slots) || (|write_valid);
-    wire storage_clock = clk && clock_enable;
+    wire storage_clock = SHARED_CLOCK != 0 ? clk : clk && clock_enable;
     genvar bank;
     generate for (bank = 0; bank < 4; bank = bank+1) begin: banks
         register_bank #(.SLOTS(SLOTS)) storage (
