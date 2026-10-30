@@ -36,7 +36,7 @@ bool TimingMachine::poll_tensor_transfers(Inflight& entry) {
 bool TimingMachine::service_tensor_transfer(Inflight& entry, TensorTransfer& part) {
     if (part.done) return true;
     auto& sm = *sms_[entry.sm]; auto& cta = machine_.ctas_[entry.cta];
-    auto& port = part.space == 1 ? sm.shared : sm.tmem;
+    auto& port = part.space == 1 ? *sm.shared : static_cast<hw::SharedPort&>(sm.tmem);
     auto& backing = part.space == 1 ? cta.shared : cta.tmem;
     if (!part.ticket) {
         part.ticket = part.space == 0 ? submit_memory(entry.sm, part.access) : port.submit(part.access, &backing);

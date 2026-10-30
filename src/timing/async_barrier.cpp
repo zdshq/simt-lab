@@ -51,9 +51,9 @@ void TimingMachine::publish_barrier_job(uint32_t sm_id, BarrierJob& job) {
         const auto words = transaction_words(job.next);
         hw::WarpAccess access; access.mask = 0xFF; access.write = true;
         for (uint32_t lane = 0; lane < words.size(); ++lane) { access.address[lane] = job.address + lane * 4; access.value[lane] = words[lane]; }
-        job.ticket = sm.shared.submit(access, &cta.shared);
+        job.ticket = sm.shared->submit(access, &cta.shared);
     }
-    if (!job.ticket || !sm.shared.take(*job.ticket)) return;
+    if (!job.ticket || !sm.shared->take(*job.ticket)) return;
     finish_barrier_job(sm_id, job);
 }
 

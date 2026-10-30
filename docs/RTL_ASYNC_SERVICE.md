@@ -2,7 +2,7 @@
 
 `--timing --register-rtl --collector-rtl` 为每个 SM 启用一个 `async_service`。事务表由三种来源共享：前台 MB/CP_ASYNC 指令、DMA 完成发布、CTA 记录回收。当前所有者、等待计数与回收轮转游标由 RTL 保存；C++ 不再用 `transaction_retiring`、`transaction_released` 或任务到期时间决定 RTL 路径的准入和延迟。
 
-这是项目自定义的单控制端口，不是 NVIDIA 内部服务调度器的逆向结果。它连接已有事务表和 DMA 电路，但没有把全部 shared bank、访存互联和 CTA 资源管理写成硬件。
+这是项目自定义的单控制端口，不是 NVIDIA 内部服务调度器的逆向结果。它连接已有事务表和 DMA 电路；shared bank 与数据存储已由后续 [shared RTL](RTL_SHARED.md) 接管，访存互联和 CTA 资源管理仍有 C++。
 
 ## 状态和选择规则
 
@@ -39,7 +39,7 @@ C++ 适配器提供请求连线、读出授权并路由事务表命令；查询�
 
 - 根据 CTA 的线程结束、在途指令、DMA 生命周期和已有记录生成可回收掩码。
 - 保存指令操作数与错误/trace 描述符，分组 MB_WAIT 中的不同屏障地址。
-- 连接事务表发布与 shared bank 请求，以及 DMA 外部读写票据和返回选择。
+- 将事务表发布连接到 shared RTL 请求端口，以及处理 DMA 外部读写票据和返回选择。
 - 管理 CTA 的实际资源归还、跨模块信号调用、故障取消与排空。
 
 因此本阶段完成的是事务服务的归属、延迟和来源仲裁，尚未形成完整 SM 顶层。C++ 默认后端继续使用原模型。完整硬件、参数校准和 PTX 异步矩阵协议的剩余目标见 [硬件计划](HARDWARE_PLAN.md)。

@@ -2,7 +2,7 @@
 
 `--timing --register-rtl --collector-rtl` 已把 MB_INIT、MB_EXPECT、MB_ARRIVE、CP_ASYNC 的字节预约/完成及 MB_WAIT 的事务查询接入 RTL。每 SM 的事务记录由同步 RAM 保存，地址查询、人数/字节算术、阶段推进、等待 shared 写确认和 CTA 回收扫描均由电路执行。warp 前端直接比较原始阶段令牌并保存、唤醒等待线程。
 
-这是本项目自定义异步 ISA 的电路。它没有实现 NVIDIA 的完整 `cp.async`、TMA 或非阻塞 MMA 协议，也没有证明 NVIDIA 使用下面的事务表组织。DMA 片段生成、请求及返回载荷已由后续 [DMA RTL](RTL_DMA.md) 接管；外部内存票据、shared bank 仲裁、不同地址的等待 lane 分组、跨实例连线仍有 C++；控制任务准入、等待计数及回收仲裁已由 [服务 RTL](RTL_ASYNC_SERVICE.md) 接管；完整 RTL GPU 尚未完成。
+这是本项目自定义异步 ISA 的电路。它没有实现 NVIDIA 的完整 `cp.async`、TMA 或非阻塞 MMA 协议，也没有证明 NVIDIA 使用下面的事务表组织。DMA 片段生成、请求及返回载荷已由后续 [DMA RTL](RTL_DMA.md) 接管；发布记录的 shared 数据及 bank 仲裁现由 [shared RTL](RTL_SHARED.md) 提供；外部内存票据、不同地址的等待 lane 分组、跨实例连线仍有 C++；控制任务准入、等待计数及回收仲裁已由 [服务 RTL](RTL_ASYNC_SERVICE.md) 接管；完整 RTL GPU 尚未完成。
 
 ## 记录到底存在什么地方
 
@@ -63,7 +63,7 @@ flowchart LR
 
 ## shared 发布与可见性
 
-算术结果先保存到 PUBLISH 的待提交寄存器。此时旧 RAM 记录仍有效，新命令仍被阻止。C++ 适配层读取输出记录，把八个 word 通过普通 shared 请求端口写出；这些写操作与 DMA、普通 LDS/STS 和 Tensor 访问竞争同一 bank 模型。
+算术结果先保存到 PUBLISH 的待提交寄存器。此时旧 RAM 记录仍有效，新命令仍被阻止。C++ 适配层读取输出记录，把八个 word 通过普通 shared 请求端口写出；这些写操作与 DMA、普通 LDS/STS 和 Tensor 访问竞争同一 [shared RTL](RTL_SHARED.md) 的请求槽和实际 bank 端口。
 
 只有全部 word 写确认后，适配层才拉高 `publication_ack`。该边沿将结果写入 RAM，随后进入 RESPONSE。初始化的有效位和占用数也在这个边沿改变。完成响应被软件取走后，原始地址及新阶段送到对应 CTA 的各 warp 前端。发布过程中反复读取输出或查询管理统计都不会偷偷推进电路时钟。
 

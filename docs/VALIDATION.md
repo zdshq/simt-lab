@@ -931,3 +931,64 @@ python3 artifacts/rtl-async-service-final/audit.py
 普通 nvidia-smi 实际显示真实 4070 SUPER 和活模拟会话，7 MiB 分配、释放归零与退出移除通过；直接系统二进制只显示实卡。NVML 接入不是 CUDA/PCIe 设备枚举，Tensor 仍是项目自己的 4×4 阵列，不能将其描述为完整还原 NVIDIA Tensor Core。
 
 审计记录四份电路清单、实际网表、一份适配器 sanitizer 清单、十份主机报告、366 个源码/模板/规范文件与三个联合二进制，位于 `artifacts/rtl-async-service-final/evidence-audit.json`。剩余目标包括 CTA 可回收条件生成、访存互联/返回路由、shared/TMEM/DRAM、SFU、完整 SM/设备顶层、实卡校准、PTX 异步矩阵协议及最终验收；总目标继续进行。
+
+## 64 KiB shared 数据、bank 仲裁与整数原子 RTL（基线 2df4b25）
+
+collector RTL 路径的 shared 数据改由每 SM 一份完整 64 KiB 电路保存。32 个 bank 各有四个 512×8 字节阵列、同步读、掩码写和字有效位；八个物理槽保存向量请求及未消费结果。年龄/lane 仲裁、同字广播、冲突串行化与十种整数原子读改写均进入 RTL。普通 shared 访存、DMA 目的写、事务屏障发布和 Tensor 供数共用这些数据与端口；C++ `Memory` 只保留实际写事件的观测快照。结构与软件边界见 [RTL_SHARED.md](RTL_SHARED.md)。
+
+| 验证范围 | 实际结果 | 证据 |
+|---|---|---|
+| 联合 Release 全量 | 71 套件、1006 项通过：870 Python / 136 C++ | `artifacts/rtl-shared-final/joint-ctest.log`、`joint-tests.log` |
+| 普通 Debug 全量 | 28 套件、284 项：282 通过 / 2 条件跳过 | 同目录 `default-ctest.log`、`default-tests.log` |
+| 完整容量独立 RTL | 5 项通过 | `shared/simulation-manifest.json` |
+| 独立 RTL ASan/UBSan | 5 项通过 | `artifacts/rtl-shared-sanitize/shared/simulation-manifest.json` |
+| 实际适配器与完整电路 ASan/UBSan | 4 项通过 | `artifacts/rtl-shared-adapter-sanitize/manifest.json` |
+| 完整 64 KiB 综合网表 | 同一套 5 项通过 | `shared/gate-manifest.json`、`shared/gate.log` |
+
+五项电路检查遍历全部 16,384 个字，覆盖最高地址、局部清除、首次子字写清除残留、同字广播、32 路 bank 冲突增加 31 拍、十种原子操作、32 个 bank 并行、八个未消费响应占满、旧请求优先于复用低槽、最大 32 位等待值、非法批次无部分提交及在途复位。随机检查用独立字节向量参考执行 700 个普通/原子请求，最后比较全部 SRAM。
+
+适配器检查故意改写 C++ 观测对象，确认 load 仍读出原 RTL SRAM 字节；另覆盖两个 CTA 物理区域、32 个同字原子的旧值/新值、区域复用、提交后同拍消费其他响应不改变已选槽、实例隔离与显式时钟。三项新整机检查覆盖九个 CTA 复用两块 32 KiB 区域、地址 65535 的部分写入，以及六个 CTA 的 129 字节非对齐 DMA→shared→LDS。原 collector 套件也增加了 shared 后端、容量、实际握手守恒、原子守恒与排空断言。局部 sanitizer 不代表整 GPU 联合 sanitizer。
+
+初次 sanitizer 发现旧 Verilator 为宽打包总线的动态窄切片生成越界临时索引；地址 row/offset/word 和返回槽改为显式未打包线后，完整独立电路和实际适配器均通过 ASan/UBSan。初始诊断保存在 `initial-rtl-sanitize-failure.log`、`initial-adapter-sanitize-failure.log`；位宽/未使用信号诊断保存在 `initial-lint.log`。没有关闭地址或 UB 检测。工具还在重新构建前删除旧 Verilator 静态归档，以免移除的分片对象仍留在归档中。
+
+综合期间发现扁平选择逻辑反复比较年龄，以及每个返回候选重复子字移位会产生过大的逻辑。最终电路先在各请求内选 lane，再在八个请求间比较年龄；返回按 lane 的原地址选 bank 字，再做一次子字提取。区域清除冲突在顶层统一检测，不在 32 个选择器中重复检测。中间运行主动停止并保留在 `flat-selection/`、`structured-with-duplicate-clear/`、`duplicated-return-shifts/`。随后 SAT 资源共享分析持续判定独立移位器不能合并，最终综合使用显式 `--no-share`，只跳过该项优化，保留完整容量、结构检查和网表验收；此前日志保存在 `resource-sharing/`。这些中止运行不计为综合成功。
+
+关闭资源共享后的首次完整运行触发工具默认 600 秒期限，当时正在优化映射后的触发器，未报告结构错误。日志保存在 `no-share-600s-timeout/`。工具新增有界 `--timeout` 参数，复跑使用 1800 秒，且清单记录实际期限；没有以缩小 SRAM 或减少 bank 数绕过此次超时。
+
+完整容量综合随后成功：32 个 bank 的 128 个字节存储阵列共 524,288 个数据位，每个阵列具有一个同步读端口和一个写端口；实际通用映射为 **3,653,250 个单元、577,120 位 FF、3,076,130 个组合单元**。映射后 `check -assert` 报告零问题。这些数字包含把 SRAM 展成触发器和选择逻辑的成本，没有 SRAM 宏、工艺面积或时序收敛含义，也没有执行整 GPU 综合。网表 SHA-256 为 `7c49f4a57008e4dadc3f24465b348d8c2393a934910c418e46211dcbb571c4fd`。
+
+网表约 158 MiB，Verilator 生成 1449 个 C++ 分片。首次四任务编译的实测速率可能超过 1800 秒，因此主动停止该次编译并保存 `gate-four-jobs-interrupted/`，随后在这台 32 CPU 主机上用 `--jobs 16` 重建同一份网表。保留已有对象文件作为编译缓存，没有缩小硬件或删去测试；主动中止的构建不计为通过。
+
+16 任务构建仍在 1800 秒期限中止，当时主要、bank 和波形分片已完成，初始化支持代码完成 510/711；记录保存在 `gate-1800s-timeout/`。确认编译子进程结束后，以 3600 秒期限复用相同生成代码与已编译对象继续构建。构建期间对单个分片探测 `-O0`/`-O1`，未据此更改正式编译优化；另外为未改变的 10 MiB 公共头文件建立匹配默认 fast/slow 编译选项的 GCC 预编译缓存，缓存命令和哈希保存在 `compiler-probe/`。这些构建辅助探测不计为硬件测试。
+
+```sh
+cmake --build build-cache-rtl -j4
+ctest --test-dir build-cache-rtl --output-on-failure -j4
+cmake --build build -j4
+ctest --test-dir build --output-on-failure -j4
+python3 tools/rtl.py --module shared --out artifacts/rtl-shared-final
+python3 tools/rtl.py --build build-sanitize --module shared --out artifacts/rtl-shared-sanitize
+python3 tools/rtl.py --module shared --synth --no-share --timeout 1800 --out artifacts/rtl-shared-final
+python3 tools/rtl.py --module shared --gate-sim --jobs 16 --timeout 3600 --out artifacts/rtl-shared-final
+python3 artifacts/rtl-shared-final/build_adapter.py
+python3 examples/hardware_host.py --build build-cache-rtl \
+  --register-rtl --collector-rtl --scoreboard-rtl --cache-rtl --tensor-rtl \
+  --out artifacts/rtl-shared-host
+python3 artifacts/rtl-shared-final/check_monitor.py
+python3 artifacts/rtl-shared-final/audit.py
+```
+
+四类主机上传→Graph→下载各重放两次，加活监控会话的两次 Transformer，共十份实际报告通过独立数值参考和各 RTL 握手守恒检查，下载结果与上一阶段逐字节相同。新 shared 入口和同步返回增加部分模型时钟；这些不是 NVIDIA GPU 性能。
+
+| 负载 | 本阶段两次 kernel 模型周期 | 上一阶段 |
+|---|---|---|
+| 向量 | 4846 / 5283 | 4846 / 5283 |
+| 规约 | 4023 / 4309 | 4020 / 4306 |
+| GEMM | 4361 / 4373 | 4359 / 4371 |
+| Transformer | 20687 / 20971 | 20514 / 20798 |
+
+普通 nvidia-smi 再次实际显示真实 4070 SUPER 和运行中的模拟器，7 MiB 分配、释放归零与退出移除通过；直接 `/usr/bin/nvidia-smi -L` 只显示真实显卡。该显示仍由用户级入口与 NVML 桥接实现，没有新增 CUDA 驱动设备或 PCIe 身份。Tensor 是自研 4×4 RTL 阵列，shared 和 L1 仍是独立物理模块，没有实现 NVIDIA 的统一容量划分。
+
+最终审计通过：四份电路清单、适配器 sanitizer 清单、实际网表及其测试可执行文件、十份主机报告、374 个源码/模板/规范文件和三个联合二进制均已核对。生成头文件缓存的来源与哈希也单独记录，未将缓存探测算作硬件验证。完整证据位于 `artifacts/rtl-shared-final/evidence-audit.json`；网表可执行文件 SHA-256 为 `437ea8bec47ebaab855ed6f7568c3d9bf873e5d52c9d33a77321cefbd4d05df7`。五项网表检查全部通过，但没有进行形式等价证明、整机联合 sanitizer 或整 GPU 综合。
+
+剩余工作包括区域准入/绑定与客户仲裁 RTL、访存互联和外部返回路由、TMEM/constant/DRAM、SFU、整数内部流水级、完整 SM/设备顶层、实卡校准、PTX 异步矩阵协议和最终验收。[总计划](HARDWARE_PLAN.md) 继续进行。

@@ -41,7 +41,7 @@ add_executable(simt-device src/device_main.cpp)
 target_link_libraries(simt-device PRIVATE simt_host)
 target_compile_options(simt-device PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_library(simt_hardware src/hardware/port.cpp src/hardware/dram.cpp src/hardware/cache_tags.cpp src/hardware/cache_engine.cpp
-    src/hardware/cache_request.cpp src/hardware/cache_fill.cpp src/hardware/coalescer.cpp src/hardware/shared.cpp
+    src/hardware/cache_request.cpp src/hardware/cache_fill.cpp src/hardware/coalescer.cpp src/hardware/shared.cpp src/hardware/shared_engine.cpp
     src/hardware/hierarchy.cpp src/hardware/scoreboard.cpp src/hardware/scoreboard_engine.cpp src/hardware/register_file.cpp src/hardware/resources.cpp src/hardware/local.cpp
     src/hardware/atomic_queue.cpp src/hardware/atomic_execute.cpp src/hardware/shared_atomic.cpp
     src/hardware/lifetime.cpp src/hardware/context.cpp src/hardware/instruction_memory.cpp src/hardware/warp_control.cpp src/hardware/warp_frontend.cpp src/hardware/cta_barrier.cpp src/hardware/transaction_table.cpp src/hardware/dma_engine.cpp src/hardware/warp_scheduler.cpp src/hardware/execution_arbiter.cpp src/hardware/instruction_decoder.cpp src/hardware/instruction_fetch.cpp src/hardware/async_service.cpp)
@@ -216,6 +216,12 @@ if(SIMT_REGISTER_RTL)
     target_link_libraries(test-rtl-async-service PRIVATE simt_hardware)
     target_compile_options(test-rtl-async-service PRIVATE -Wall -Wextra -Wpedantic -Werror)
     add_test(NAME rtl_async_service_adapter COMMAND test-rtl-async-service)
+    add_executable(test-rtl-shared-engine tests/test_rtl_shared_engine.cpp)
+    target_link_libraries(test-rtl-shared-engine PRIVATE simt_hardware)
+    target_compile_options(test-rtl-shared-engine PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    add_test(NAME rtl_shared_adapter COMMAND test-rtl-shared-engine)
+    add_simt_test(rtl_shared_execution test_rtl_shared.py)
+    set_tests_properties(rtl_shared_execution PROPERTIES TIMEOUT 300)
     add_executable(test-rtl-instruction-decoder tests/test_rtl_instruction_decoder.cpp)
     target_link_libraries(test-rtl-instruction-decoder PRIVATE simt_hardware)
     target_compile_options(test-rtl-instruction-decoder PRIVATE -Wall -Wextra -Wpedantic -Werror)

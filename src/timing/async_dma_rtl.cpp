@@ -9,7 +9,7 @@ void TimingMachine::return_dma_rtl(uint32_t sm_id,bool write) {
     auto& cursor=sm.dma_return_cursor[write ? 1 : 0];
     for (uint32_t offset=0; offset<64; ++offset) {
         const auto slot=(cursor+offset)%64; if (!tickets[slot]) continue;
-        const auto result=write ? sm.shared.take(*tickets[slot]) : memory_->take(*tickets[slot]);
+        const auto result=write ? sm.shared->take(*tickets[slot]) : memory_->take(*tickets[slot]);
         if (!result) continue;
         const auto event=write ? sm.dma->returned_write(slot) : sm.dma->returned_read(slot,*result);
         tickets[slot].reset(); cursor=(slot+1)%64;
@@ -23,7 +23,7 @@ void TimingMachine::request_dma_rtl(uint32_t sm_id,bool write) {
     auto& sm=*sms_[sm_id]; const auto request=sm.dma->request(write); if (!request) return;
     auto& tickets=write ? sm.dma_writes : sm.dma_reads;
     if (tickets[request->slot]) throw std::runtime_error("dma_ticket_slot_busy");
-    const auto ticket=write ? sm.shared.submit(request->access,&machine_.ctas_[request->cta].shared) :
+    const auto ticket=write ? sm.shared->submit(request->access,&machine_.ctas_[request->cta].shared) :
         submit_memory(sm_id,request->access);
     if (!ticket) { ++sm.async_stats.memory_stalls; return; }
     tickets[request->slot]=*ticket; sm.dma->accept(write);

@@ -324,10 +324,14 @@ void TimingMachine::dump_memory(std::ostream& out) const {
         << ",\"row_hits\":" << dram.row_hits << ",\"row_misses\":" << dram.row_misses << "},\"shared\":[";
     for (uint32_t sm = 0; sm < sms_.size(); ++sm) {
         if (sm) out << ',';
-        const auto& shared = sms_[sm]->shared.stats();
+        const auto& shared = sms_[sm]->shared->stats();
         out << "{\"bank_services\":" << shared.bank_services << ",\"broadcasts\":" << shared.broadcasts
             << ",\"bank_stalls\":" << shared.bank_stalls << ",\"atomic_started\":" << shared.atomic_started
-            << ",\"atomic_completed\":" << shared.atomic_completed << '}';
+            << ",\"atomic_completed\":" << shared.atomic_completed
+            << ",\"backend\":\"" << sms_[sm]->shared->name() << "\",\"bytes\":65536,\"banks\":32,\"word_bytes\":4"
+            << ",\"request_slots\":8,\"clocks\":" << sms_[sm]->shared->cycle() << ",\"active_clocks\":" << shared.active_clocks
+            << ",\"accepted\":" << shared.accepted << ",\"consumed\":" << shared.consumed
+            << ",\"outstanding\":" << sms_[sm]->shared->outstanding() << ",\"queue_stalls\":" << shared.queue_stalls << '}';
     }
     out << ']';
 }

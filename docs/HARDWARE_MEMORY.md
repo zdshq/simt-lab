@@ -51,7 +51,7 @@ DRAM 控制器具有有限请求/响应容量、独立 bank 当前打开行、ba
 
 `BankedShared` 保存真实 shared 字节，默认 32 banks、每 bank 每拍一个 32 位字。同字读取（包括子字）广播；不同字但同 bank 的请求分拍执行。不同 lane 写同字采用确定的逐 lane 顺序，不把数据竞争定义成真实 CUDA 的确定行为。队列与返回延迟有上限。
 
-时序执行时，同一 SM 的多个 CTA 使用各自的实际 shared 存储，全部请求经过同一个 `BankedShared` 仲裁器；底层存储指针随请求保留到响应消费，CTA 退休必须等待这些请求完成。constant 使用单 bank 同字广播模型，未实现独立 constant cache。
+默认 C++ 时序执行时，同一 SM 的多个 CTA 使用各自的实际 shared 存储，全部请求经过同一个 `BankedShared` 仲裁器。启用 collector RTL 后，现已替换为 [64 KiB 共享 SRAM 与 bank 电路](RTL_SHARED.md)：所有 CTA 使用同一物理容量，实际数据、广播、冲突选择、返回和整数原子均来自电路，C++ Memory 仅作为写端口观测。CTA 退休须等返回消费。constant 仍使用单 bank 同字广播模型，未实现独立 constant cache。
 
 ## 验证与运行
 

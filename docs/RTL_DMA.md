@@ -69,7 +69,7 @@ flowchart LR
 
 `src/rtl/dma_engine.cpp` 只驱动引脚、解包 33 位地址、采样事件和推进时钟，不执行分片选择或搬运结果计算。构造时有初始化复位边沿，kernel 的计数从零开始；`submit/request/accept/returned_*/claim/release` 本身不推进时钟。每次 `tick()` 最多产生一个有效边沿，空闲实例可以门控；观察统计不会推进状态。
 
-`src/timing/async_dma_rtl.cpp` 仍保存每个物理片段的外部读/写 ticket，并在每条返回总线上按轮转顺序选择最多一个已完成响应。**这一外部返回选择、访存合并、shared bank 服务及实例间连线仍是 C++**，不能把本阶段写成完整内存互联 RTL。
+`src/timing/async_dma_rtl.cpp` 仍保存每个物理片段的外部读/写 ticket，并在每条返回总线上按轮转顺序选择最多一个已完成响应。shared 的实际存储与 bank 服务现由 [shared RTL](RTL_SHARED.md) 提供；**外部返回选择、global 访存合并及实例间连线仍是 C++**，不能把本阶段写成完整内存互联 RTL。
 
 `sm.copies` 在 RTL 模式仅保留指令来源和范围元数据，用于 trace、错误归属、CTA 生存期以及 mbarrier 区域保护；不会填充 C++ 片段、推进软件游标或用其判断 DMA 完成资格。发射准入读取 DMA 的硬件 ready，后台存活判断读取硬件命令占用。每个片段的数据和进度只在 RTL 中持有。
 

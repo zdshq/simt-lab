@@ -14,7 +14,7 @@ void validate_async_config(const hw::AsyncConfig& config) {
 
 TimedSm::TimedSm(const hw::PipelineConfig& config, const hw::TensorConfig& tensor, const hw::AtomicConfig& atomic)
     : resources(config), owners(config.max_warps),
-      shared({65536, 32, 2, 8, atomic.latency}),
+      shared(hw::make_shared_engine({65536, 32, 2, 8, atomic.latency},config.collector_rtl)),
       tmem({131072, tensor.tmem_banks, tensor.tmem_latency, 8}), array(hw::make_tensor_engine(tensor)) {
     if (config.collector_rtl) execution_arbiter=hw::make_execution_arbiter(config.partitions,
         {config.integer_interval,config.float_interval,config.special_interval});
@@ -35,6 +35,8 @@ TimingMachine::TimingMachine(Machine& machine, std::shared_ptr<hw::HardwareConte
     validate_async_config(config.async);
     if (config.pipeline.collector_rtl && machine.module_.image.size()!=machine.module_.code.size())
         throw std::runtime_error("instruction_image_missing");
+    if (config.pipeline.collector_rtl && config.pipeline.shared_bytes>65536)
+        throw std::runtime_error("shared_rtl_capacity_exceeded");
     hw::SmResources probe(config.pipeline);
     if (config.pipeline.collector_rtl && config.pipeline.float_latency < 4)
         throw std::runtime_error("floating_rtl_requires_latency_at_least_4");
@@ -96,6 +98,8 @@ bool TimingMachine::admit() {
 void TimingMachine::place(uint32_t block, uint32_t sm, const hw::Residency& residency) {
     machine_.initialize_cta(block, sm);
     admit_cta_barrier(block, sm);
+    const auto shared_size=machine_.config_.cta_shared_bytes;
+    sms_[sm]->shared->attach(machine_.ctas_[block].shared,cta_slots_[block]*((shared_size+127)/128*128),shared_size);
     warps_[block].resize(residency.slots.size());
     for (uint32_t warp = 0; warp < residency.slots.size(); ++warp) {
         auto threads = std::span<Memory>(machine_.ctas_[block].local).subspan(warp * lanes);
@@ -145,7 +149,7 @@ void TimingMachine::retire_ctas() {
             if (barrier.bytes || barrier.issued) throw std::runtime_error("incomplete_async_transaction");
         }
         for (const auto& warp : warps_[cta.block_id]) sm.owners[warp.slot].reset();
-        sm.resources.release(cta.block_id);
+        sm.shared->detach(cta.shared); sm.resources.release(cta.block_id);
         if (!sm.cta_owners.empty()) sm.cta_owners[cta_slots_[cta.block_id]].reset();
         sm.allocated_columns -= sm.tensor_columns[cta.block_id];
         sm.tensor_columns.erase(cta.block_id);
@@ -185,7 +189,7 @@ bool TimingMachine::advance() {
     }
     admit();
     if (!external_clock_) { hardware_->tick(); cycle_ = hardware_->cycle(); }
-    for (auto& sm : sms_) { sm->shared.tick(); sm->constant.tick(); sm->tmem.tick(); sm->array->tick(); }
+    for (auto& sm : sms_) { sm->shared->tick(); sm->constant.tick(); sm->tmem.tick(); sm->array->tick(); }
     progress_async_units();
     retire_results(); collect_operands(); launch_ready();
     bool issued = false;

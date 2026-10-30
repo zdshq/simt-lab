@@ -26,6 +26,14 @@ class RtlCollector:
             self.assertTrue(hardware['integer_units'])
             self.assertTrue(hardware['floating_units'])
             self.assertTrue(hardware['predicate_files'])
+            for shared in hardware['shared']:
+                self.assertEqual(shared['backend'], 'rtl')
+                self.assertEqual((shared['bytes'], shared['banks'], shared['word_bytes'], shared['request_slots']), (65536, 32, 4, 8))
+                self.assertEqual(shared['outstanding'], 0)
+                self.assertEqual(shared['accepted'], shared['consumed'])
+                self.assertEqual(shared['atomic_started'], shared['atomic_completed'])
+                self.assertEqual(shared['clocks'], hardware['cycles'])
+                self.assertLessEqual(shared['active_clocks'], shared['clocks'])
             self.assertEqual(sum(unit['guard_reads'] for unit in hardware['predicate_files']), hardware['issued'])
             for unit in hardware['floating_units']:
                 self.assertEqual(unit['backend'], 'rtl')

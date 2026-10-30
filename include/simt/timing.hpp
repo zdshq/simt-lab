@@ -50,7 +50,7 @@ struct TimedSm {
     std::vector<std::unique_ptr<hw::WarpFrontend>> controls;
     std::vector<std::unique_ptr<hw::CtaBarrierEngine>> cta_tables;
     std::vector<std::optional<uint32_t>> cta_owners;
-    hw::BankedShared shared;
+    std::unique_ptr<hw::SharedPort> shared;
     hw::BankedShared constant{{65536, 1, 4, 8}};
     hw::BankedShared tmem;
     std::unique_ptr<hw::TensorEngine> array;

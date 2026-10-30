@@ -22,7 +22,7 @@ flowchart LR
 
 每个 SM 有一个 Tensor 前端和一个阵列，同一时间一个 Tensor 命令占有该单元。启用 collector RTL 时，跨分区候选轮转与持有到退休的归属由 [执行仲裁电路](RTL_EXECUTION_ARBITER.md) 保存。其他已发射 Tensor 命令等待，仍占有限的 operand collector 槽；不会形成无界软件任务队列。同一 SM 的其他 warp 可以运行普通算术和内存指令，另一个 SM 具有独立阵列。
 
-前端逐拍处理 start、descriptor、initial D、metadata、operands、feed、drain、store 和 complete 状态。一个微 tile 在每个 K 位置只读取一组最多 4 个 A 和 4 个 B；阵列消费旧数据时，前端可继续读取下一组。输入 FIFO 默认容量 2，满时保持原操作数并重试，不能丢失或重复乘积。源来自 global 时真正经过 sector cache、MSHR 和 DRAM；来自 shared 时与普通 LDS/STS 共享物理 bank 仲裁。描述符、scale、稀疏元数据也遵守对应端口容量和返回时序。
+前端逐拍处理 start、descriptor、initial D、metadata、operands、feed、drain、store 和 complete 状态。一个微 tile 在每个 K 位置只读取一组最多 4 个 A 和 4 个 B；阵列消费旧数据时，前端可继续读取下一组。输入 FIFO 默认容量 2，满时保持原操作数并重试，不能丢失或重复乘积。源来自 global 时真正经过 sector cache、MSHR 和 DRAM；来自 shared 时与普通 LDS/STS 共享 bank 仲裁。启用 collector RTL 后，后者使用 [实际共享 SRAM 和 bank 电路](RTL_SHARED.md)，描述符和操作数读取不使用 C++ shared 快照。描述符、scale、稀疏元数据也遵守对应端口容量和返回时序。
 
 ## PE 内部到底保存什么
 

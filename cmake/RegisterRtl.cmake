@@ -51,4 +51,13 @@ function(simt_enable_register_rtl)
     target_sources(simt_hardware PRIVATE src/rtl/register_file.cpp src/rtl/operand_collector.cpp src/rtl/warp_control.cpp src/rtl/warp_frontend.cpp src/rtl/cta_barrier.cpp src/rtl/transaction_table.cpp src/rtl/dma_engine.cpp src/rtl/warp_scheduler.cpp src/rtl/execution_arbiter.cpp src/rtl/instruction_decoder.cpp src/rtl/instruction_fetch.cpp src/rtl/async_service.cpp)
     target_compile_definitions(simt_hardware PRIVATE SIMT_HAS_REGISTER_RTL=1)
     target_link_libraries(simt_hardware PRIVATE simt_register_circuit)
+    add_library(simt_shared_circuit STATIC)
+    verilate(simt_shared_circuit TOP_MODULE shared_memory PREFIX Vsimt_shared_memory
+        SOURCES rtl/shared_bank.sv rtl/shared_select.sv rtl/shared_memory.sv
+        VERILATOR_ARGS -Wall --unroll-count 4096)
+    target_compile_options(simt_shared_circuit PRIVATE ${VERILATOR_CFLAGS})
+    get_target_property(shared_includes simt_shared_circuit INTERFACE_INCLUDE_DIRECTORIES)
+    set_property(TARGET simt_shared_circuit PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${shared_includes})
+    target_sources(simt_hardware PRIVATE src/rtl/shared_engine.cpp)
+    target_link_libraries(simt_hardware PRIVATE simt_shared_circuit)
 endfunction()

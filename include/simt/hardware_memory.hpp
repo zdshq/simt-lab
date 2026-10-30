@@ -222,6 +222,7 @@ struct SharedConfig { uint32_t bytes = 65536, banks = 32, latency = 2, capacity 
 struct SharedStats {
     uint64_t bank_services = 0, broadcasts = 0, bank_stalls = 0, queue_stalls = 0;
     uint64_t atomic_started = 0, atomic_completed = 0;
+    uint64_t clocks = 0, active_clocks = 0, accepted = 0, consumed = 0;
 };
 struct SharedRequest {
     Ticket ticket;
@@ -234,17 +235,36 @@ struct SharedRequest {
 };
 struct SharedAtomic { Ticket request; uint32_t lane, old, value; uint64_t due; };
 
+// Shared backends own the executed data; attached Memory objects serve only as RTL observations.
+// shared 后端拥有实际执行数据；附加的 Memory 对象在 RTL 模式仅作观测快照。
+class SharedPort {
+public:
+    virtual ~SharedPort()=default;
+    virtual std::optional<Ticket> submit(const WarpAccess& access, Memory* backing=nullptr)=0;
+    virtual void tick()=0;
+    virtual std::optional<std::array<uint32_t,32>> take(Ticket ticket)=0;
+    virtual uint64_t cycle() const=0;
+    virtual const SharedStats& stats() const=0;
+    virtual std::string_view name() const=0;
+    virtual size_t outstanding() const=0;
+    virtual void attach(Memory&,uint32_t,uint32_t) {}
+    virtual void detach(Memory&) {}
+};
+std::unique_ptr<SharedPort> make_shared_engine(SharedConfig config,bool rtl);
+
 // Shared memory serves one word per bank per clock and broadcasts same-word reads.
 // shared 每个 bank 每拍服务一个字，并广播同字读取。
-class BankedShared {
+class BankedShared : public SharedPort {
 public:
     explicit BankedShared(SharedConfig config = {});
     Memory memory;
-    std::optional<Ticket> submit(const WarpAccess& access, Memory* backing = nullptr);
-    void tick();
-    std::optional<std::array<uint32_t, 32>> take(Ticket ticket);
-    uint64_t cycle() const { return cycle_; }
-    const SharedStats& stats() const { return stats_; }
+    std::optional<Ticket> submit(const WarpAccess& access, Memory* backing = nullptr) override;
+    void tick() override;
+    std::optional<std::array<uint32_t, 32>> take(Ticket ticket) override;
+    uint64_t cycle() const override { return cycle_; }
+    const SharedStats& stats() const override { return stats_; }
+    std::string_view name() const override { return "model"; }
+    size_t outstanding() const override { return requests_.size(); }
 private:
     SharedConfig config_;
     SharedStats stats_;

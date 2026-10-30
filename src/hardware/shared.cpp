@@ -12,6 +12,7 @@ std::optional<Ticket> BankedShared::submit(const WarpAccess& access, Memory* bac
     validate_access(access, backing ? *backing : memory);
     if (requests_.size() == config_.capacity) { ++stats_.queue_stalls; return {}; }
     const auto ticket = next_++;
+    ++stats_.accepted;
     requests_.push_back({ticket, access, access.mask, access.mask ? UINT64_MAX : cycle_ + config_.latency, {}, backing});
     return ticket;
 }
@@ -52,6 +53,7 @@ void BankedShared::service(SharedRequest& request, std::vector<bool>& used) {
 
 void BankedShared::tick() {
     ++cycle_;
+    ++stats_.clocks; stats_.active_clocks+=!requests_.empty();
     std::vector<bool> used(config_.banks);
     retire_atomics(used);
     for (auto& request : requests_) service(request, used);
@@ -62,6 +64,7 @@ std::optional<std::array<uint32_t, 32>> BankedShared::take(Ticket ticket) {
         if (at->ticket != ticket) continue;
         if (at->due > cycle_) return {};
         const auto result = at->result;
+        ++stats_.consumed;
         requests_.erase(at);
         return result;
     }

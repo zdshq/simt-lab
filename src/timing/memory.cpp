@@ -74,7 +74,7 @@ void TimingMachine::poll_memory(Inflight& entry) {
     auto& sm = *sms_[entry.sm];
     for (auto& flight : entry.memory) {
         if (flight.done) continue;
-        auto& port = flight.space == 1 ? sm.shared : sm.constant;
+        auto& port = flight.space == 1 ? *sm.shared : static_cast<hw::SharedPort&>(sm.constant);
         auto& backing = flight.space == 1 ? machine_.ctas_[entry.cta].shared : machine_.constant_;
         if (!flight.ticket) {
             flight.ticket = (flight.space == 0 || flight.space == 2) ? submit_memory(entry.sm, flight.access) : port.submit(flight.access, &backing);

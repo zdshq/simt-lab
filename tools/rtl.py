@@ -12,6 +12,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = {'cache': ('sector_cache', 'test_cache.cpp', ['sector_sram.sv', 'cache_lru.sv', 'sector_cache.sv']),
+           'shared': ('shared_memory', 'test_shared.cpp', ['shared_bank.sv', 'shared_select.sv', 'shared_memory.sv']),
            'async_service': ('async_service', 'test_async_service.cpp', ['async_service.sv']),
            'instruction_fetch': ('instruction_fetch', 'test_instruction_fetch.cpp', ['instruction_cache.sv', 'instruction_fetch.sv']),
            'instruction_decoder': ('instruction_decoder', 'test_instruction_decoder.cpp', ['instruction_operands.sv', 'instruction_decoder.sv']),
@@ -65,12 +66,12 @@ def environment():
 
 # Keep complete diagnostics on disk and expose failures instead of silently skipping unavailable tools.
 # 将完整诊断保存在磁盘，并报告失败，不静默跳过缺失工具。
-def run(command, destination, name, env=None):
+def run(command, destination, name, env=None, timeout=600):
     path = destination/f'{name}.log'
     with path.open('w') as output:
         try:
             result = subprocess.run(command, cwd=destination, env=env, text=True, stdout=output,
-                                    stderr=subprocess.STDOUT, timeout=600)
+                                    stderr=subprocess.STDOUT, timeout=timeout)
         except subprocess.TimeoutExpired as error:
             raise RuntimeError(f'{name} timed out; partial diagnostics: {path}') from error
     report = path.read_text()
@@ -102,6 +103,7 @@ def compiler_flags(options):
         libraries += ' '+str(options.build/'libsimt_scoreboard_circuit.a')
     if 'SIMT_REGISTER_RTL:BOOL=ON' in (options.build/'CMakeCache.txt').read_text():
         libraries += ' '+str(options.build/'libsimt_register_circuit.a')
+        libraries += ' '+str(options.build/'libsimt_shared_circuit.a')
     if sanitized(options):
         includes += ' -fsanitize=address,undefined -fno-omit-frame-pointer'
         libraries += ' -fsanitize=address,undefined'
@@ -116,7 +118,7 @@ def sanitized(options):
 def execute_simulation(options, destination, executable, label):
     env = dict(os.environ)
     env['UBSAN_OPTIONS'] = env.get('UBSAN_OPTIONS', '')+':halt_on_error=1'
-    return run([str(executable)], destination, label, env)
+    return run([str(executable)], destination, label, env, options.timeout)
 
 
 # Keep mapped buses internal so old Verilator can split bit dependencies without hiding loop warnings.
@@ -190,14 +192,14 @@ def simulation(options, name):
     # Old Verilator archives retain removed split objects; rebuild the archive from the current object list.
     # 旧版 Verilator 归档会保留已移除的分片对象，按当前对象列表重新建立归档。
     (destination/objects/('V'+top+'__ALL.a')).unlink(missing_ok=True)
-    run(command, destination, label+'-build', environment())
+    run(command, destination, label+'-build', environment(), options.timeout)
     output = execute_simulation(options, destination, destination/objects/('V'+top), label)
     verify_unchanged(paths, original_sources)
     verify_unchanged(drivers, original_drivers)
     if options.gate_sim: verify_netlist(destination, paths, cache_parameters(options, name))
     print(output, end='', flush=True)
     return {'checks': len([line for line in output.splitlines() if line.startswith('PASS ')]),
-            'command': command, 'parameters': cache_parameters(options, name),
+            'command': command, 'parameters': cache_parameters(options, name), 'timeout_seconds': options.timeout,
             'sources': original_sources,
             'drivers': original_drivers,
             'waveforms': [] if sanitized(options) else sorted(path.name for path in destination.glob('*.vcd'))}
@@ -242,22 +244,24 @@ def synthesis(options, name):
     if name in ('register_file', 'operand_unit', 'predicate'): lines.append(f'chparam -set SLOTS {options.rf_slots} {top}')
     if name == 'transaction_table': lines.append(f'chparam -set SLOTS {options.transaction_slots} {top}')
     if name == 'cache': lines.append(f'chparam -set SETS {options.sets} -set WAYS {options.ways} {top}')
-    lines += [f'synth -top {top} -run begin:fine', 'check -assert',
+    sharing = ' -noshare' if options.no_share else ''
+    lines += [f'synth -top {top} -run begin:fine{sharing}', 'check -assert',
               'write_json inferred.json', 'tee -o inferred-stat.json stat -json']
     if not options.infer_only:
-        lines += [f'synth -top {top} -run fine: -noabc',
+        lines += [f'synth -top {top} -run fine: -noabc{sharing}',
                   'abc -exe '+yosys_string(tool('berkeley-abc'))+' -fast', 'clean', 'check -assert',
                   'write_json gates.json', 'tee -o gates-stat.json stat -json',
                   'clean -purge', 'splitnets', 'clean -purge', 'write_verilog -noattr gates.v']
     script = destination/'synthesis.ys'
     script.write_text('\n'.join(lines)+'\n')
-    run([tool('yosys'), '-Q', '-T', '-s', str(script)], destination, 'synthesis')
+    run([tool('yosys'), '-Q', '-T', '-s', str(script)], destination, 'synthesis', timeout=options.timeout)
     verify_unchanged(paths, original_sources)
     inferred = json.loads((destination/'inferred.json').read_text())
     memories = memory_inventory(inferred)
     result = {'top': top, 'parameters': cache_parameters(options, name),
               'memories': memories, 'inferred_stat': 'inferred-stat.json',
-              'sources': original_sources}
+              'sources': original_sources, 'resource_sharing': not options.no_share, 'timeout_seconds': options.timeout,
+              'script_sha256': hashlib.sha256(script.read_bytes()).hexdigest()}
     if not options.infer_only:
         result['gate_stat'] = 'gates-stat.json'
         result['gate_sha256'] = hashlib.sha256((destination/'gates.v').read_bytes()).hexdigest()
@@ -303,11 +307,14 @@ def parse_options():
     parser.add_argument('--rf-slots', type=int, choices=(2, 4, 8, 16, 32), default=8)
     parser.add_argument('--transaction-slots', type=int, choices=(16, 1024), default=1024)
     parser.add_argument('--jobs', type=int, default=4)
+    parser.add_argument('--timeout', type=int, default=600, help='Maximum seconds for each build, synthesis or simulation process.')
     parser.add_argument('--synth', action='store_true')
+    parser.add_argument('--no-share', action='store_true', help='Keep parallel resources separate during synthesis; retain structural and gate checks.')
     parser.add_argument('--infer-only', action='store_true')
     parser.add_argument('--gate-sim', action='store_true')
     parser.add_argument('--simcells', type=Path, default=ROOT/'.tools/rtl/yosys-src/techlibs/common/simcells.v')
     options = parser.parse_args()
+    if options.timeout < 1: parser.error('--timeout must be positive')
     if options.module in ('writeback', 'all') and options.collector_entries < 4:
         parser.error('writeback validation requires at least four completion entries')
     options.build, options.out = options.build.resolve(), options.out.resolve()
@@ -317,6 +324,7 @@ def parse_options():
     if options.ways != 4 and options.module != 'cache':
         parser.error('--ways 8 requires --module cache')
     if options.infer_only and not options.synth: parser.error('--infer-only requires --synth')
+    if options.no_share and not options.synth: parser.error('--no-share requires --synth')
     if options.gate_sim and options.synth: parser.error('--gate-sim and --synth are separate steps')
     return options
 

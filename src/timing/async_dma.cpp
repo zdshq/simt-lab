@@ -32,11 +32,11 @@ bool TimingMachine::service_copy_fragment(DmaCommand& copy, DmaFragment& fragmen
     auto& sm = *sms_[copy.sm]; const bool read = fragment.stage == FragmentStage::read;
     if (!fragment.ticket) {
         fragment.ticket = read ? submit_memory(copy.sm, fragment.access) :
-            sm.shared.submit(fragment.access, &machine_.ctas_[copy.cta].shared);
+            sm.shared->submit(fragment.access, &machine_.ctas_[copy.cta].shared);
         if (!fragment.ticket) { ++sm.async_stats.memory_stalls; return false; }
         trace_copy(copy, read ? "copy_read_submit" : "copy_write_submit");
     }
-    const auto result = read ? memory_->take(*fragment.ticket) : sm.shared.take(*fragment.ticket);
+    const auto result = read ? memory_->take(*fragment.ticket) : sm.shared->take(*fragment.ticket);
     if (!result) return false;
     fragment.ticket.reset(); trace_copy(copy, read ? "copy_read_complete" : "copy_write_complete");
     if (!read) { sm.async_stats.write_bytes += fragment.bytes; return true; }

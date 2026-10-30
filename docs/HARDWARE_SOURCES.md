@@ -92,3 +92,5 @@ DMA 的 64×259 位命令寄存器、64×1,108 位片段寄存器、四个独立
 指令缓存的每分区 4 KiB 数据、64 字节行、直接映射、同步读口、八分区单通道轮转均为项目设计假设，没有将 NVIDIA 公开容量或逆向延迟套用为电路证明。完整八分区实例综合为 564,062 generic cells / 276,530 FF 位；中间两类 RAM 定义乘以八个实例为 274,432 位，最终通用网表已展开为触发器，不代表 SRAM 宏面积。补充现已接入共用 L2/DRAM，见 [RTL_INSTRUCTION_FETCH.md](RTL_INSTRUCTION_FETCH.md)。
 
 只读代码位于 2^63 以上、每次启动分配新的 64 字节对齐物理区间，以及每 SM 一个 16 字节在途补充请求，均为项目设计。指令、数据和拷贝共享 L2/DRAM，取指绕过数据 L1；原独立八拍后备模型已删除。加载器、连接适配器、层次顺序协调和 DRAM 尚为 C++，没有新增 NVIDIA 逆向或门级面积结论，见 [INSTRUCTION_MEMORY_HIERARCHY.md](INSTRUCTION_MEMORY_HIERARCHY.md)。
+
+shared 的 32 bank、连续 32 位字映射与同字读广播参考 [CUDA Programming Guide](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/writing-cuda-kernels.html)。新增 [shared RTL](RTL_SHARED.md) 的 64 KiB 独立容量、四字节阵列、每字有效位、128 B 分配清除、八请求槽、相对年龄矩阵、原子等待计数和返回路径均为本项目设计；尚未实现与 L1 的统一 SRAM 容量重划分，不能据此声称恢复了 NVIDIA 物理组织。

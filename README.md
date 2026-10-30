@@ -102,6 +102,8 @@ python3 examples/host_graph.py
 
 新增 [指令缓存与取指 RTL](docs/RTL_INSTRUCTION_FETCH.md)：每 SM 八个独立 4 KiB 指令缓存，实际数据/tag 同步读取，四字整行补充和单通道轮转均由电路完成；发射使用缓存返回的原始机器字。完整实例为 564,062 generic cells / 276,530 FF 位，普通 RTL、sanitizer 和综合网表验证通过。补充请求现已接入 [共享 L2/DRAM](docs/INSTRUCTION_MEMORY_HIERARCHY.md)，实际竞争请求容量与带宽；启动私有代码映射和指令缓存目前不跨 kernel 复用，传输连接与 DRAM 仍为 C++，尚无完整 SM 顶层。
 
-新增 [异步服务 RTL](docs/RTL_ASYNC_SERVICE.md)：每 SM 用 143 位触发器保存事务表归属、等待计数、回收完成与轮转游标，实际选择 DMA 完成、CTA 回收和前台指令；完整 64 槽选择电路综合为 5,892 generic cells。回收资格生成、shared bank 和外部票据路由仍有 C++。
+新增 [异步服务 RTL](docs/RTL_ASYNC_SERVICE.md)：每 SM 用 143 位触发器保存事务表归属、等待计数、回收完成与轮转游标，实际选择 DMA 完成、CTA 回收和前台指令；完整 64 槽选择电路综合为 5,892 generic cells。回收资格生成和外部票据路由仍有 C++。
 
-当前默认 Debug 运行 28 套件、284 项（282 通过，2 项未构建 RTL 而跳过）。当前联合 Release 构建通过 69 套件、999 项；本阶段另通过异步服务四项独立 RTL/sanitizer/综合网表检查及实际适配器三项 sanitizer 检查，未重跑完整联合 sanitizer 或整机综合。实际结果与各阶段失败记录见 [验证记录](docs/VALIDATION.md)。不同构建包含既有场景复跑，各套件按其目的选择后端，并非全部同时启用所有 RTL。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。
+新增 [shared SRAM 与 bank RTL](docs/RTL_SHARED.md)：collector 后端的普通 shared 访存、DMA 目的写入、屏障发布和 Tensor 供数共用每 SM 一份 64 KiB 电路。32 个 bank 使用真实字节阵列、有效位、同步读及掩码写，八个向量槽保存请求和返回，硬件处理年龄选择、广播、冲突和十种整数原子操作；C++ shared 字节只保留写事件快照。物理区域绑定、入站客户调用、外部路由和 TMEM/constant/DRAM 仍有 C++。
+
+当前默认 Debug 运行 28 套件、284 项（282 通过，2 项未构建 RTL 而跳过）。本阶段联合 Release 通过 71 套件、1006 项；shared 的五项独立 RTL、sanitizer 和完整综合网表检查、实际适配器的四项 sanitizer 检查也已通过，未执行整机联合 sanitizer 或整 GPU 综合。实际结果与失败记录见 [验证记录](docs/VALIDATION.md)。不同构建包含既有场景复跑，各套件按其目的选择后端，并非全部同时启用所有 RTL。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。
