@@ -40,12 +40,16 @@ void TimingMachine::commit_control(Inflight& entry) {
         if (entry.group.mask & lane_bit(lane)) next.pc[lane] = entry.group.pc + 1;
     const ExecutionContext context{entry.instruction, cta, entry.operands, next, machine_.config_,
                                    entry.warp, *machine_.global_, machine_.constant_};
+    const bool hardware_control = !entry.collective_result && commit_warp_control(entry, next);
     if (entry.collective_result) write_result(entry, next);
-    else if (!commit_warp_control(entry, next) && !execute_control(context, entry.group, entry.mask, machine_.module_) &&
+    else if (!hardware_control && !execute_control(context, entry.group, entry.mask, machine_.module_) &&
         !execute_collective(context, entry.group, entry.mask) && !execute_barrier(context, entry.mask) &&
         !execute_memory(context, entry.mask)) throw std::runtime_error("unhandled_timing_control");
     warp = std::move(next);
+    if (auto* unit = frontend(entry.cta, entry.warp); unit && !hardware_control)
+        unit->advance({entry.group.pc, entry.group.mask});
     release_cta_barriers(cta);
+    publish_waiters(cta);
 }
 
 void TimingMachine::launch(Inflight& entry) {

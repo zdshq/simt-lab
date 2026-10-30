@@ -2,7 +2,7 @@
 
 启用 `--timing --register-rtl --collector-rtl` 后，`EXIT/BRA/BSSY/BSYNC/BREAK/YIELD` 的控制状态转换由 `rtl/warp_control.sv` 执行。每个实际使用的物理 warp 槽拥有一个独立实例，其中的 16 个令牌记录持久保存在 RTL 触发器里。C++ 不再调用功能参考器计算这六条指令的结果，也不把 C++ 令牌副本送回电路。
 
-这仍是混合系统：每个 lane 的 PC、运行状态和等待编号通过显式接口输入、输出，持久存储和调度仍在 C++。取指、目标指令检查、YIELD 恢复、CTA/异步事务屏障和部分访存执行尚未实现为完整 RTL。本模块实现项目自定义 ISA，不宣称复刻 NVIDIA 的分支单元或支持其 SASS 二进制。
+本文记录令牌子模块及其独立接口。后续实际执行已由 [warp 前端 RTL](RTL_WARP_FRONTEND.md) 提供持久 PC、lane 状态与等待元数据，直接连接这些端口，并实现 PC 组选择和 YIELD 恢复。跨 warp 仲裁、取指、目标指令检查、CTA/异步事务屏障和部分访存执行仍有 C++。本模块实现项目自定义 ISA，不宣称复刻 NVIDIA 的分支单元或支持其 SASS 二进制。
 
 ```mermaid
 flowchart LR
@@ -40,7 +40,7 @@ BSSY 保存当前 PC 组的成员和目标；BSYNC 合并到达掩码并暂挂�
 
 ## 接入与时钟
 
-`WarpControl` 接口和 Verilator 适配器分别位于 `include/simt/warp_control.hpp`、`src/rtl/warp_control.cpp`。`src/timing/control.cpp` 在实际指令退休时驱动物理 warp 实例，并接收电路产生的 lane 状态；返回的令牌数组仅更新观察快照。目标是否指向匹配的 BSYNC 仍由宿主读取指令镜像后作为输入，不能算作硬件取指或译码器。
+独立子模块的 `WarpControl` 接口和 Verilator 适配器分别位于 `include/simt/warp_control.hpp`、`src/rtl/warp_control.cpp`。它们保留用于子模块检查；当前 `src/timing/control.cpp` 在实际指令退休时通过 `WarpFrontend` 驱动直连组合电路，令牌数组仍仅为观察快照。目标是否指向匹配的 BSYNC 仍由宿主读取指令镜像后作为输入，不能算作硬件取指或译码器。
 
 `execute()` 只设置输入并读取组合结果，不暗中推进时钟。一个实例每拍至多有一个待提交命令，第二次提交或在待提交期间清槽明确报错；全局模型拍末的 `tick()` 才提交记录并撤销输入引脚。宿主控制通路仍使用已有的一拍执行延迟和退休边界，尚未添加独立控制结果 FIFO，也没有物理频率或时序收敛结论。
 
@@ -57,7 +57,7 @@ Yosys/ABC 对完整单 warp、16 令牌模块的结果为 **68,030 个 generic c
 - 独立电路四场景：嵌套重聚、BREAK/EXIT 唤醒、解除令牌、全部 16 令牌；200 轮共 9,600 次随机令牌事务和 3,000 次随机 BRA/YIELD；错误原子性与清零。普通 RTL、ASan/UBSan 和综合网表均通过，参考来自另行实现的功能 ISA。
 - 适配器四场景：无隐藏边沿、待提交命令保护、清槽与复用、两实例隔离、观察快照不影响存储、错误后撤销输入、96 位 lane 状态跨字打包。
 - 实际 ISA 套件复用原九项控制流检查并新增三项：16 令牌同时存活、9 个 CTA/37 线程/1/2/4/8 分区下槽复用、最后一个令牌及各调度策略、非法描述符。确认控制计数与退休指令对应。
-- 当前默认 Debug 27 套件/279 项（277 通过、2 项因未构建 RTL 跳过）；联合 Release 50 套件/880 项全部通过。完整联合后端的 sanitizer 本阶段未重跑；sanitizer 结论限定于新的独立电路与参考库。
+- 本阶段当时默认 Debug 27 套件/279 项（277 通过、2 项因未构建 RTL 跳过）；联合 Release 50 套件/880 项全部通过。完整联合后端的 sanitizer 本阶段未重跑；sanitizer 结论限定于新的独立电路与参考库。
 - 新增两项持久主机测试：16 令牌、9 CTA/37 线程的 Graph 两次重放验证全部 333 个内存输出及令牌计数；错误 BSYNC 留下的私有状态不会污染下一 kernel。两项启用寄存器和 collector 后端。
 - 五个可选后端同时运行四类主机负载各两次 Graph 重放，并验证独立数学结果。这四类负载对新控制单元只覆盖 EXIT，不替代前述重聚检查。额外两次监控规约验证 `nvidia-smi` 实卡共存和分配/释放/退出；这是 [NVML 管理接口](NVIDIA_SMI.md)，不提供 CUDA 计算设备枚举。
 
@@ -73,4 +73,4 @@ UBSAN_OPTIONS=halt_on_error=1 python3 tools/rtl.py --build build-sanitize \
 
 `build-release` 和 `build-sanitize` 分别是普通 Release 和 ASan/UBSan 参考库，先按项目构建说明生成。联合构建沿用 [RTL 集合通路](RTL_COLLECTIVES.md) 的四个 CMake 开关；本模块随 collector 运行选项启用，无新增命令行开关。
 
-证据位于 `artifacts/rtl-warp-control*/`、`artifacts/rtl-control-host/` 和 `artifacts/rtl-control-final/`；后者保存测试日志、监控结果和源码/网表哈希审计。完整目标保持进行中，后续仍需 PC/调度/屏障等控制硬件、其余执行与访存电路、整机 RTL、参数校准和最终审计，见 [硬件计划](HARDWARE_PLAN.md)。
+证据位于 `artifacts/rtl-warp-control*/`、`artifacts/rtl-control-host/` 和 `artifacts/rtl-control-final/`；后者保存测试日志、监控结果和源码/网表哈希审计。完整目标保持进行中，后续仍需跨 warp 仲裁、屏障等控制硬件及其余执行与访存电路、整机 RTL、参数校准和最终审计，见 [硬件计划](HARDWARE_PLAN.md)。

@@ -181,6 +181,25 @@ void control_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedSm>
     out << ']';
 }
 
+// Expose persistent frontend storage and real event handshakes separately from token-only counters.
+// 将持久前端存储及实际事件握手与仅令牌计数分开报告。
+void frontend_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedSm>>& sms) {
+    out << ",\"warp_frontends\":[";
+    bool first = true;
+    for (uint32_t sm = 0; sm < sms.size(); ++sm)
+        for (uint32_t slot = 0; slot < sms[sm]->controls.size(); ++slot) {
+            const auto& unit = sms[sm]->controls[slot];
+            if (!unit) continue;
+            if (!first) out << ',';
+            first = false; const auto& s = unit->frontend_stats();
+            out << "{\"sm\":" << sm << ",\"slot\":" << slot << ",\"backend\":\"rtl\",\"lane_storage_bits\":3233,\"token_storage_bits\":1568"
+                << ",\"clocks\":" << s.clocks << ",\"active_clocks\":" << s.active_clocks
+                << ",\"issued\":" << s.issued << ",\"retire_advances\":" << s.advances
+                << ",\"external_lanes\":" << s.external_lanes << ",\"resumed_lanes\":" << s.resumed_lanes << '}';
+        }
+    out << ']';
+}
+
 void cache_stats(std::ostream& out, const hw::CachePort& cache) {
     const auto& s = cache.stats(); const auto& config = cache.config();
     out << "{\"backend\":\"" << cache.name() << "\",\"clocks\":" << cache.cycle()
@@ -270,6 +289,7 @@ void TimingMachine::dump(std::ostream& out) const {
     dump_statistics(out);
     scoreboard_stats(out, sms_);
     control_stats(out, sms_);
+    frontend_stats(out, sms_);
     register_stats(out, sms_);
     predicate_stats(out, sms_);
     collector_stats(out, sms_);

@@ -71,4 +71,6 @@ Tensor RTL 的四级 FP32 FMA、77 位对齐通路、完整次正规数和最近
 
 集合执行的 32 lane 跨 lane 多路选择、最低成员编码、布尔归约、单项结果寄存器及控制完成端口优先级是本项目硬件设计。谓词文件新增独立执行读口，三个端口共享同一数据和有效位。集合单元 55,423 cells/1,030 FF 位、32 槽谓词文件 68,814 cells/7,392 FF 位来自本次 Yosys/ABC 实际综合；不代表 NVIDIA 网络拓扑、真实延迟或具体工艺面积。实际 ISA 和主机 Graph 接入见 [RTL_COLLECTIVES.md](RTL_COLLECTIVES.md)。
 
-分支重聚的每 warp 16 个 98 位令牌记录、并行参与/到达更新、16 位完成向量和按 lane 等待编号选择目标都是项目自定义电路，不是 NVIDIA 逆向得到的结构。实际综合为 68,030 个 generic cells/1,568 个触发器位，令牌存储未映射为 SRAM；lane PC/运行状态和指令目标检查仍由宿主提供。数据来源、时钟边界和验证见 [RTL_WARP_CONTROL.md](RTL_WARP_CONTROL.md)。
+分支重聚的每 warp 16 个 98 位令牌记录、并行参与/到达更新、16 位完成向量和按 lane 等待编号选择目标都是项目自定义电路，不是 NVIDIA 逆向得到的结构。实际综合为 68,030 个 generic cells/1,568 个触发器位，令牌存储未映射为 SRAM；独立子模块的 lane 输入在实际执行中现由下述前端存储提供，指令目标检查仍由宿主完成。数据来源、时钟边界和验证见 [RTL_WARP_CONTROL.md](RTL_WARP_CONTROL.md)。
+
+Warp 前端的 3,233 位 PC/lane/等待元数据/游标存储、五层最小/最大/后继树、两个有序外部等待字段写端口及同拍退休到发射旁路属于本项目设计。完整连接令牌的前端实际综合为 103,263 generic cells / 4,801 FF 位，没有 SRAM 或工艺映射结论；不能根据 NVIDIA 的线程调度语义推断其使用同一拓扑。跨 warp 仲裁、取指译码与 CTA/异步屏障计数仍有 C++，见 [RTL_WARP_FRONTEND.md](RTL_WARP_FRONTEND.md)。

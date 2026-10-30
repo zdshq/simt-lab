@@ -35,10 +35,9 @@ bool TimingMachine::capacity(uint32_t sm, uint32_t partition) {
 // Predicate dependencies are resolved before selecting lanes or decoding operand footprints.
 // 选择参与 lane 和解码操作数占用之前，先解决谓词依赖。
 bool TimingMachine::try_issue(uint32_t cta_id, uint32_t wi) {
-    auto& cta = machine_.ctas_[cta_id]; auto& warp = cta.warps[wi]; auto& timed = warps_[cta_id][wi];
+    auto& cta = machine_.ctas_[cta_id]; auto& timed = warps_[cta_id][wi];
     if (timed.boundary) return false;
-    auto group = machine_.select_group(warp);
-    if (!group && resume_yielded(warp)) group = machine_.select_group(warp);
+    auto group = select_warp_group(cta_id, wi);
     if (!group) return false;
     try { return issue_group(cta_id, wi, *group); }
     catch (const std::exception& error) {
@@ -91,11 +90,7 @@ void TimingMachine::enqueue(uint32_t cta_id, uint32_t wi, Group group, uint32_t 
     if (entry->footprint.source_predicate) entry->operands.predicates[*entry->footprint.source_predicate] = predicate_source;
     auto& file = sms_[entry->sm]->partitions[entry->partition].registers;
     if (file) file->accept_predicates(entry->footprint.source_predicate.has_value());
-    reserve(*entry); resume_yielded(warp);
-    if (!entry->footprint.boundary)
-        for (uint32_t lane = 0; lane < lanes; ++lane)
-            if (group.mask & lane_bit(lane)) warp.pc[lane] = group.pc + 1;
-    warp.last_pc = group.pc;
+    reserve(*entry); issue_frontend(*entry);
     ++machine_.steps_; ++stats_.issued;
     ++machine_.op_counts_[static_cast<uint8_t>(entry->instruction.op)];
     machine_.lane_instructions_ += std::popcount(mask);

@@ -87,8 +87,8 @@ void TimingMachine::place(uint32_t block, uint32_t sm, const hw::Residency& resi
         const auto slot = residency.slots[warp];
         if (machine_.config_.pipeline.collector_rtl) {
             auto& control = sms_[sm]->controls[slot];
-            if (!control) control = hw::make_warp_control();
-            control->clear();
+            if (!control) control = hw::make_warp_frontend();
+            control->initialize(machine_.ctas_[block].warps[warp].valid_mask);
         }
         auto& file = sms_[sm]->partitions[slot % sms_[sm]->partitions.size()].registers;
         if (file) file->clear(slot / sms_[sm]->partitions.size());

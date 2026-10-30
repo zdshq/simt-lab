@@ -33,6 +33,11 @@ class RtlControl:
                 self.assertLessEqual(unit['active_clocks'], unit['clocks'])
             expected = sum(result['op_counts'].get(name, 0) for name in ('EXIT', 'BRA', 'BSSY', 'BSYNC', 'BREAK', 'YIELD'))
             self.assertEqual(sum(unit['commands'] for unit in units), expected)
+            frontends = result['hardware']['warp_frontends']
+            self.assertEqual(sum(unit['issued'] for unit in frontends), result['instruction_steps'])
+            for unit in frontends:
+                self.assertEqual((unit['backend'], unit['lane_storage_bits'], unit['token_storage_bits']), ('rtl', 3233, 1568))
+                self.assertLessEqual(unit['active_clocks'], unit['clocks'])
         return result
 
 

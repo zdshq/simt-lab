@@ -1,0 +1,117 @@
+// Persistent lane storage feeds control and group selection directly; external ports serve unfinished barrier engines.
+// 持久 lane 存储直接连接控制与线程组选择；外部端口服务尚未硬件化的屏障引擎。
+module warp_frontend (
+    input wire clk, reset, initialize,
+    input wire [31:0] initial_mask,
+    input wire [1:0] policy,
+    input wire [63:0] write_state_mask, write_blocked_mask, write_phase_mask,
+    input wire [191:0] write_state,
+    input wire [2047:0] write_blocked, write_phase,
+    input wire retire_advance,
+    input wire [31:0] retire_pc, retire_mask,
+    input wire command_valid,
+    input wire [7:0] opcode,
+    input wire [5:0] token,
+    input wire [3:0] guard,
+    input wire [31:0] group_pc, group_mask, mask, target_pc, code_size,
+    input wire target_is_sync,
+    input wire resume_idle, issue_valid, issue_advance,
+    input wire [31:0] issue_pc, issue_mask,
+    output wire group_valid, needs_resume,
+    output wire [31:0] selected_pc, selected_mask,
+    output reg [1023:0] observed_pc, observed_blocked, observed_phase,
+    output reg [95:0] observed_state,
+    output wire [31:0] observed_valid_mask, observed_last_pc,
+    output wire observed_last_valid,
+    output wire [31:0] token_states,
+    output wire [511:0] token_members, token_arrivals, token_targets,
+    output wire [31:0] wake_mask,
+    output reg [31:0] resumed_mask,
+    output wire [3:0] error,
+    output wire accept, control_clock_enable, clock_enable
+);
+    reg [1023:0] stored_pc, stored_blocked, stored_phase;
+    reg [95:0] stored_state;
+    reg [31:0] stored_valid_mask, stored_last_pc;
+    reg stored_last_valid;
+    reg [1023:0] before_pc, before_blocked, before_phase;
+    reg [95:0] before_state;
+    wire [1023:0] control_pc, control_blocked;
+    wire [95:0] control_state;
+    reg [1023:0] after_pc, after_blocked, after_phase;
+    reg [95:0] after_state;
+    integer first_lane, second_lane, final_lane;
+
+    // Initialization forwards into first-cycle issue; pre-control writes reflect earlier asynchronous completions.
+    // 初始化旁路到首拍发射；控制前写入反映较早的异步完成。
+    always @* begin
+        before_pc = stored_pc; before_state = stored_state;
+        before_blocked = stored_blocked; before_phase = stored_phase;
+        for (first_lane = 0; first_lane < 32; first_lane = first_lane+1) begin
+            if (initialize || reset) begin
+                before_pc[first_lane*32+:32] = 0;
+                before_state[first_lane*3+:3] = !reset && initial_mask[first_lane] ? 3'd0 : 3'd5;
+                before_blocked[first_lane*32+:32] = 0; before_phase[first_lane*32+:32] = 0;
+            end
+            if (write_state_mask[first_lane]) before_state[first_lane*3+:3] = write_state[first_lane*3+:3];
+            if (write_blocked_mask[first_lane]) before_blocked[first_lane*32+:32] = write_blocked[first_lane*32+:32];
+            if (write_phase_mask[first_lane]) before_phase[first_lane*32+:32] = write_phase[first_lane*32+:32];
+        end
+    end
+    warp_control control (
+        .clk(clk), .reset(reset), .clear(initialize), .command_valid(command_valid),
+        .opcode(opcode), .token(token), .guard(guard), .group_pc(group_pc), .group_mask(group_mask), .mask(mask),
+        .target_pc(target_pc), .code_size(code_size), .target_is_sync(target_is_sync),
+        .lane_pc(before_pc), .lane_blocked(before_blocked), .lane_state(before_state),
+        .next_pc(control_pc), .next_blocked(control_blocked), .next_state(control_state),
+        .token_states(token_states), .token_members(token_members), .token_arrivals(token_arrivals), .token_targets(token_targets),
+        .wake_mask(wake_mask), .error(error), .accept(accept), .clock_enable(control_clock_enable)
+    );
+
+    // Boundary continuations and post-control barrier wakeups precede group selection.
+    // 边界指令后续 PC 与控制后的屏障唤醒先于线程组选择。
+    always @* begin
+        after_pc = control_pc; after_state = control_state;
+        after_blocked = control_blocked; after_phase = before_phase;
+        for (second_lane = 0; second_lane < 32; second_lane = second_lane+1) begin
+            if (retire_advance && retire_mask[second_lane]) after_pc[second_lane*32+:32] = retire_pc+1'b1;
+            if (write_state_mask[32+second_lane]) after_state[second_lane*3+:3] = write_state[96+second_lane*3+:3];
+            if (write_blocked_mask[32+second_lane]) after_blocked[second_lane*32+:32] = write_blocked[1024+second_lane*32+:32];
+            if (write_phase_mask[32+second_lane]) after_phase[second_lane*32+:32] = write_phase[1024+second_lane*32+:32];
+        end
+    end
+    warp_group selector (
+        .pc(after_pc), .state(after_state), .policy(policy),
+        .last_valid(stored_last_valid && !initialize && !reset), .last_pc(stored_last_pc),
+        .valid(group_valid), .needs_resume(needs_resume), .selected_pc(selected_pc), .selected_mask(selected_mask)
+    );
+
+    // Successful issue resumes yielded peers, updates the round-robin cursor, and advances only nonboundary PCs.
+    // 成功发射恢复让出的同伴，更新轮转游标，并且只推进非边界指令 PC。
+    always @* begin
+        observed_pc = after_pc; observed_state = after_state;
+        observed_blocked = after_blocked; observed_phase = after_phase; resumed_mask = 0;
+        for (final_lane = 0; final_lane < 32; final_lane = final_lane+1) begin
+            if ((resume_idle || issue_valid) && after_state[final_lane*3+:3] == 2) begin
+                observed_state[final_lane*3+:3] = 0; resumed_mask[final_lane] = 1;
+            end
+            if (issue_valid && issue_advance && issue_mask[final_lane]) observed_pc[final_lane*32+:32] = issue_pc+1'b1;
+        end
+    end
+    assign observed_valid_mask = reset ? 0 : initialize ? initial_mask : stored_valid_mask;
+    assign observed_last_valid = !reset && (issue_valid || (!initialize && stored_last_valid));
+    assign observed_last_pc = reset ? 0 : issue_valid ? issue_pc : initialize ? 0 : stored_last_pc;
+    assign clock_enable = control_clock_enable || retire_advance || issue_valid || |resumed_mask ||
+        |write_state_mask || |write_blocked_mask || |write_phase_mask;
+    always @(posedge clk) begin
+        if (reset) begin
+            stored_pc <= 0; stored_state <= {32{3'd5}}; stored_blocked <= 0; stored_phase <= 0;
+            stored_valid_mask <= 0; stored_last_pc <= 0; stored_last_valid <= 0;
+        end else if (clock_enable) begin
+            stored_pc <= observed_pc; stored_state <= observed_state;
+            stored_blocked <= observed_blocked; stored_phase <= observed_phase;
+            stored_valid_mask <= observed_valid_mask;
+            stored_last_pc <= observed_last_pc; stored_last_valid <= observed_last_valid;
+        end
+    end
+endmodule

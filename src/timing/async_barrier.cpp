@@ -70,6 +70,7 @@ void TimingMachine::finish_barrier_job(uint32_t sm_id, BarrierJob& job) {
         trace(entry, "barrier_publish"); entry.stage = Stage::writeback;
     }
     release_async_waiters(cta);
+    publish_waiters(cta);
     sm.barrier_job.reset();
 }
 

@@ -83,12 +83,13 @@ void TimingMachine::start_async(Inflight& entry) {
 // 等待 lane 先提交后续 PC 再休眠，已经完成的阶段会立即唤醒它们。
 void TimingMachine::commit_async_instruction(Inflight& entry) {
     auto& cta = machine_.ctas_[entry.cta]; auto& warp = cta.warps[entry.warp];
+    advance_warp_pc(entry);
     for (uint32_t lane = 0; lane < lanes; ++lane) {
-        if (entry.group.mask & lane_bit(lane)) warp.pc[lane] = entry.group.pc + 1;
         if (entry.instruction.op != Op::MB_WAIT || !(entry.mask & lane_bit(lane))) continue;
         warp.state[lane] = entry.result.state[lane]; warp.blocked_token[lane] = entry.result.blocked_token[lane];
         warp.waiting_phase[lane] = entry.result.waiting_phase[lane];
     }
     release_async_waiters(cta);
+    publish_waiters(cta);
 }
 }

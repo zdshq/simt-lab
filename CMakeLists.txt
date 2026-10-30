@@ -44,7 +44,7 @@ add_library(simt_hardware src/hardware/port.cpp src/hardware/dram.cpp src/hardwa
     src/hardware/cache_request.cpp src/hardware/cache_fill.cpp src/hardware/coalescer.cpp src/hardware/shared.cpp
     src/hardware/hierarchy.cpp src/hardware/scoreboard.cpp src/hardware/scoreboard_engine.cpp src/hardware/register_file.cpp src/hardware/resources.cpp src/hardware/local.cpp
     src/hardware/atomic_queue.cpp src/hardware/atomic_execute.cpp src/hardware/shared_atomic.cpp
-    src/hardware/lifetime.cpp src/hardware/context.cpp src/hardware/warp_control.cpp)
+    src/hardware/lifetime.cpp src/hardware/context.cpp src/hardware/warp_control.cpp src/hardware/warp_frontend.cpp)
 target_link_libraries(simt_hardware PUBLIC simt_storage)
 target_link_libraries(simt_core PUBLIC simt_hardware)
 option(SIMT_TENSOR_RTL "Build the optional Verilator Tensor execution backend" OFF)
@@ -182,6 +182,10 @@ if(SIMT_REGISTER_RTL)
     target_link_libraries(test-rtl-warp-control PRIVATE simt_hardware)
     target_compile_options(test-rtl-warp-control PRIVATE -Wall -Wextra -Wpedantic -Werror)
     add_test(NAME rtl_warp_control_adapter COMMAND test-rtl-warp-control)
+    add_executable(test-rtl-warp-frontend tests/test_rtl_warp_frontend.cpp)
+    target_link_libraries(test-rtl-warp-frontend PRIVATE simt_hardware)
+    target_compile_options(test-rtl-warp-frontend PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    add_test(NAME rtl_warp_frontend_adapter COMMAND test-rtl-warp-frontend)
     add_executable(test-rtl-writeback tests/test_rtl_writeback.cpp)
     target_link_libraries(test-rtl-writeback PRIVATE simt_hardware)
     target_compile_options(test-rtl-writeback PRIVATE -Wall -Wextra -Wpedantic -Werror)

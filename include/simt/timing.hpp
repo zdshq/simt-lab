@@ -11,7 +11,7 @@
 #include "simt/integer_execution.hpp"
 #include "simt/floating_execution.hpp"
 #include "simt/collective_execution.hpp"
-#include "simt/warp_control.hpp"
+#include "simt/warp_frontend.hpp"
 #include <deque>
 
 namespace simt {
@@ -48,7 +48,7 @@ struct TimedSm {
     std::vector<Partition> partitions;
     std::vector<std::optional<WarpOwner>> owners;
     std::vector<std::unique_ptr<hw::ScoreboardEngine>> scoreboards;
-    std::vector<std::unique_ptr<hw::WarpControl>> controls;
+    std::vector<std::unique_ptr<hw::WarpFrontend>> controls;
     hw::BankedShared shared;
     hw::BankedShared constant{{65536, 1, 4, 8}};
     hw::BankedShared tmem;
@@ -155,6 +155,12 @@ private:
     void poll_rtl_execution(Inflight& entry);
     void commit_control(Inflight& entry);
     bool commit_warp_control(const Inflight& entry, Warp& next);
+    hw::WarpFrontend* frontend(uint32_t cta, uint32_t warp) const;
+    void observe_frontend(uint32_t cta, uint32_t warp);
+    void publish_waiters(Cta& cta);
+    std::optional<Group> select_warp_group(uint32_t cta, uint32_t warp);
+    void issue_frontend(const Inflight& entry);
+    void advance_warp_pc(const Inflight& entry);
     void poll_memory(Inflight& entry);
     void prepare_memory(Inflight& entry);
     void prepare_atomic(Inflight& entry);

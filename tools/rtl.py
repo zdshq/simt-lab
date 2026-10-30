@@ -17,6 +17,7 @@ MODULES = {'cache': ('sector_cache', 'test_cache.cpp', ['sector_sram.sv', 'cache
                             ['register_bank.sv', 'predicate_file.sv', 'register_file.sv', 'collector_dispatch.sv', 'collector_payload.sv', 'operand_collector.sv',
                              'integer_lane.sv', 'integer_vector.sv', 'integer_execute.sv', 'fp32_fma.sv', 'fp32_misc.sv', 'fp32_scalar_lane.sv', 'floating_execute.sv', 'collective_execute.sv',
                              'writeback_payload.sv', 'writeback_unit.sv', 'register_operand_unit.sv']),
+           'warp_frontend': ('warp_frontend', 'test_warp_frontend.cpp', ['warp_control.sv', 'warp_group.sv', 'warp_frontend.sv']),
            'warp_control': ('warp_control', 'test_warp_control.cpp', ['warp_control.sv']),
            'collective': ('collective_execute', 'test_collective.cpp', ['collective_execute.sv']),
            'floating': ('floating_execute', 'test_floating.cpp', ['fp32_fma.sv', 'fp32_misc.sv', 'fp32_scalar_lane.sv', 'floating_execute.sv']),

@@ -2,7 +2,7 @@
 
 启用 `--timing --register-rtl --collector-rtl` 后，`SHFL`、`VOTE`、`ELECT` 和 `ACTIVEMASK` 由 `collective_execute.sv` 计算。源向量来自 collector 的物理控制端口，VOTE 谓词来自实际谓词存储，结果经物理写回总线进入 GPR 或谓词文件。C++ 不再为这四条指令计算结果。
 
-这是本项目 ISA 的可综合实现，不是 NVIDIA 内部 shuffle 网络或投票单元的逆向电路。lane PC 存储、调度、CTA 屏障、SFU 和部分访存执行仍有 C++；后续已接入 [重聚令牌与控制转换 RTL](RTL_WARP_CONTROL.md)，整机 RTL 尚未完成。
+这是本项目 ISA 的可综合实现，不是 NVIDIA 内部 shuffle 网络或投票单元的逆向电路。跨 warp 仲裁、CTA 屏障、SFU 和部分访存执行仍有 C++；后续已接入 [重聚令牌](RTL_WARP_CONTROL.md) 及 [PC/状态/分组选择前端](RTL_WARP_FRONTEND.md)，整机 RTL 尚未完成。
 
 ```mermaid
 flowchart LR
