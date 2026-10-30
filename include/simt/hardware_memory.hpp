@@ -42,7 +42,7 @@ struct DramConfig {
     uint32_t banks = 8, row_bytes = 2048, capacity = 64;
     uint32_t rcd = 12, cas = 12, rp = 12, burst = 4;
 };
-struct DramStats { uint64_t reads = 0, writes = 0, row_hits = 0, row_misses = 0, queue_stalls = 0; };
+struct DramStats { uint64_t reads = 0, writes = 0, row_hits = 0, row_misses = 0, queue_stalls = 0, instruction_reads = 0; };
 struct DramBank { std::optional<uint64_t> row; uint64_t available = 0; };
 struct DramRequest { Ticket ticket; Packet packet; uint64_t due = 0; };
 

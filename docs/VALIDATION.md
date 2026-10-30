@@ -846,3 +846,49 @@ python3 artifacts/rtl-fetch-final/audit.py
 普通 nvidia-smi 再次实际列出 RTX 4070 SUPER 与 `SIMT Lab 2 SM (simulator)`，7 MiB 分配、释放至零、退出移除均通过；直接 `/usr/bin/nvidia-smi -L` 仍只列出实卡。这是已有用户入口与 NVML 桥接层的真实状态查询，不是新增 CUDA 驱动或 PCIe 设备。
 
 审计核对四份电路清单、一份实际综合网表、一份适配器 sanitizer 清单、十份主机报告、355 个源码/模板/规范文件和三个联合二进制，记录在 `artifacts/rtl-fetch-final/evidence-audit.json`。综合网表 SHA-256 为 `017d8cb2ce76010f1147b46896ce27fd7f3779d9b22951cd9f3c66dbb142b7d0`。仍未完成后备指令存储与数据层次连接、完整前端顶层、后台服务仲裁、其余执行/访存、整 GPU RTL、实卡校准及 PTX 异步矩阵协议；[总计划](HARDWARE_PLAN.md) 继续进行。
+
+## 指令补充接入共享 L2/DRAM（基线 1d21de6）
+
+取指适配器已删除直接读宿主映像并固定等待八拍的路径。所有补充字都经过与数据、DMA/Tensor、主机 copy 相同的有界层次请求队列、L2 和 DRAM；只读物理映像在启动创建，排空后释放。结构、代码地址布局、逐字补充、请求生命周期和剩余 C++ 边界见 [INSTRUCTION_MEMORY_HIERARCHY.md](INSTRUCTION_MEMORY_HIERARCHY.md)。
+
+| 范围 | 实际结果 | 证据 |
+|---|---|---|
+| 联合 Release 全量 | 68 套件，996 项通过：867 Python / 129 C++ | `artifacts/rtl-fetch-hierarchy-final/joint-ctest.log`、`joint-tests.log` |
+| 普通 Debug 全量 | 28 套件，284 项：282 通过 / 2 条件跳过 | `default-ctest.log`、`default-tests.log` |
+| 新只读存储与层次检查 | 5 项 ASan/UBSan 通过 | `memory-sanitize.log` |
+| 实际取指适配器与共享层次 | 模型 L2 / 完整 RTL L2 各 5 项，10 项 ASan/UBSan 通过 | `artifacts/rtl-fetch-hierarchy-adapter-sanitize/manifest.json` |
+| 原子故障检查加强后 | 联合 8 个主机套件、普通 3 个主机套件再次通过 | `host-assertion-*`、`default-host-assertion-*` |
+
+新的 sanitizer 适配器实际链接插桩后的存储层次和完整容量 L1/L2 电路，并记录这些静态库、源码和二进制哈希；不是模拟一个 L2 接口桩。范围仍是局部存储/取指连接，不是完整 GPU 联合 sanitizer。指令缓存/补充器 RTL 和独立测试驱动未修改，上一阶段的四份 RTL、sanitizer、综合与网表清单经哈希核对继续匹配；没有把旧适配器证据冒充当前实现，也没有声称新增 C++ 连接已综合。
+
+五项只读存储检查覆盖小端字节/半字读取、不可变映像、尾部零填充、禁写前置拒绝、映射销毁、不重用旧物理 sector、local 地址上限、实际 L2 共享和跨 owner 排空。实际适配器另外检查：冷行四个机器字只产生两个 DRAM sector 读取，另一 SM 可复用同一 L2 数据；未消费的数据响应占满共同请求额度时取指确实停顿；故障排空不会继续提交后续补充字。两项整机测试在第八拍触发失败，确认在途代码保持有效，排空后销毁，再运行 17/91/17 三个不同映像并核对实际 global 结果。
+
+初次 67 套件回归有 6 套件失败，日志保留在 `initial-ctest.log` 和 `initial-tests.log`。没有数值计算错误；主要是原测试未计入代码请求，以及依赖链、调度和异步可见性刺激受到冷取指影响：
+
+- DRAM `reads` 现在确实包含代码与数据。新增在实际 DRAM 准入点计数的 `instruction_reads` 与 `data_reads`，原有数据访存的精确数量断言转而核对后者；新取指检查核对总数守恒及实际代码 sector 数，没有把额外流量从报告中删掉。
+- 依赖链压力的两组整数延迟统一设为 200，保持原大于两倍与依赖停顿断言。被阻塞 warp 与其他 warp 的工作放入同一条代码缓存行，保留真实内存等待期间其他 warp 必须发射的断言。
+- 异步拷贝与提前 LDS 放入同一指令缓存行，确保 LDS 确实先于拷贝完成；仍要求提前读取为旧值、等待屏障后为新值，不将竞态结果改成任意允许值。
+- 原子故障用例将 ATOM 和触发 step limit 的后续指令放入同一行，避免取指空档让原子提前结束。新增“进入恢复时原子尚未全部完成”的断言，并将有界观察窗口改为 10,000 次；失败后仍要求 32 个原子操作完成、缓冲区保持 pin、另一 stream 拷贝无损。
+
+随后完整 68 套件与普通 28 套件通过。最后加入的原子在途断言又通过上述两组主机套件；不重复相加套件数。整个修改保持旧数值与资源/排空契约，并明确区分功能语义与受取指影响的时序。
+
+```sh
+cmake --build build-cache-rtl -j4
+ctest --test-dir build-cache-rtl --output-on-failure
+cmake --build build -j4
+ctest --test-dir build --output-on-failure
+cmake --build build-cache-sanitize --target simt_hardware test-instruction-memory -j4
+UBSAN_OPTIONS=halt_on_error=1 build-cache-sanitize/test-instruction-memory
+python3 artifacts/rtl-fetch-hierarchy-final/build_adapter.py
+python3 examples/hardware_host.py --build build-cache-rtl \
+  --register-rtl --collector-rtl --scoreboard-rtl --cache-rtl --tensor-rtl \
+  --out artifacts/rtl-fetch-hierarchy-host
+python3 artifacts/rtl-fetch-hierarchy-final/check_monitor.py
+python3 artifacts/rtl-fetch-hierarchy-final/audit.py
+```
+
+四类主机负载各重放两次，独立数学参考通过，全部下载与上阶段逐字节相同。两次模型周期分别为：向量 4846/5283、规约 4020/4306、GEMM 4359/4371、Transformer 20514/20798。只读数据缓存复用的冷/热启动为 154/108 拍，热启动不增加数据 DRAM 读取，但新代码映射仍会产生指令读取；演示因此报告 `extra_data_dram_reads`。这些不是实卡性能预测。
+
+另有活监控会话的两次 Transformer Graph 重放。普通 nvidia-smi 再次查询真实显卡与模拟器、7 MiB 分配、释放归零和退出移除；直接系统二进制仍只显示实卡。管理面范围未变，不代表 CUDA/PCIe 枚举。
+
+审计记录四份未改变的电路证据、新适配器 sanitizer、十份主机报告、359 个源码/模板/规范文件和五个联合二进制，输出为 `artifacts/rtl-fetch-hierarchy-final/evidence-audit.json`。完整硬件目标仍在进行：存储连接和后台服务仲裁 RTL、其余执行/访存、整机顶层、实卡参数校准、PTX 异步矩阵协议和最终验收仍未完成；启动间代码映射复用也尚未实现。

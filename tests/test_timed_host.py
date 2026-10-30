@@ -76,7 +76,7 @@ class PersistentHardwareTest(TimedDevice, HostCase):
         cold = kernel.launch((buffer,), threads=1).wait()['hardware']
         warm = kernel.launch((buffer,), threads=1).wait()['hardware']
         self.assertLess(warm['cycles'], cold['cycles'])
-        self.assertEqual(warm['dram']['reads'], cold['dram']['reads'])
+        self.assertEqual(warm['dram']['data_reads'], cold['dram']['data_reads'])
         self.assertEqual(warm['l1'][0]['hits'], cold['l1'][0]['hits'] + 1)
         self.assertEqual(warm['clock_start'], cold['clock_end'])
 
@@ -202,16 +202,17 @@ class PersistentHardwareTest(TimedDevice, HostCase):
     def test_fault_drains_accepted_atomic_before_releasing_pins(self):
         d = self.device()
         buffer = d.allocate(4)
-        p = Program().emit('LDC', rd=0, ra=Z, mode=4).emit('MOVI', rd=1, imm=1)
+        p = Program().emit('NOP').emit('NOP').emit('LDC', rd=0, ra=Z, mode=4).emit('MOVI', rd=1, imm=1)
         p.emit('ATOM', rd=2, ra=0, rb=1)
-        for _ in range(100): p.emit('NOP')
-        failed = d.load(p.emit('EXIT')).launch((buffer,), max_steps=30, stream=1)
+        for _ in range(3): p.emit('NOP')
+        failed = d.load(p.emit('EXIT')).launch((buffer,), max_steps=7, stream=1)
         scratch = d.allocate(257)
         transfer = d.h2d(scratch, bytes([19])*257, stream=2)
-        for _ in range(1000):
+        for _ in range(10000):
             d.progress()
             if failed.query()['recovering']: break
         else: self.fail('fault never entered drain state')
+        self.assertLess(failed.query()['hardware']['global_atomic']['completed'],32)
         with self.assertRaisesRegex(DeviceError, 'buffer_in_use'): buffer.free()
         with self.assertRaisesRegex(DeviceError, 'step_limit'): failed.wait()
         report = failed.query()

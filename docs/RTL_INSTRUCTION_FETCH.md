@@ -2,7 +2,7 @@
 
 启用 `--timing --register-rtl --collector-rtl` 后，实际发射必须从有限指令缓存取得原始 128 位机器字，再送入组合译码器。命中时不读取宿主映像，缺失时等待电路完成整行补充。每个 SM 实例有八个物理分区缓存，运行时允许启用 1/2/4/8 个分区。
 
-这是项目自定义的研究架构。容量、直接映射方式、端口、轮转策略和后备存储延迟均是设计选择，没有声称逆向还原 NVIDIA 指令缓存。取指与译码实例之间仍由 C++ 路由引脚；后备指令存储是独立模型，尚未连接数据 L2/DRAM 通路，也没有形成完整 RTL GPU 顶层。
+这是项目自定义的研究架构。容量、直接映射方式、端口和轮转策略均是设计选择，没有声称逆向还原 NVIDIA 指令缓存。取指与译码实例之间仍由 C++ 路由引脚；补充请求现已接入 [共享 L2/DRAM](INSTRUCTION_MEMORY_HIERARCHY.md)，其传输连接和 DRAM 仍有 C++，没有形成完整 RTL GPU 顶层。
 
 ## 实际存储结构
 
@@ -23,7 +23,7 @@ flowchart LR
     W[RTL warp 调度器 / PC 前端] --> Q[分区查询 PC]
     Q --> C[8 个独立指令缓存<br/>数据 / tag / 有效位 / FSM]
     C -->|缺失| A[单通道轮转仲裁<br/>owner / cursor / beat / pending]
-    A -->|128 位机器字请求| M[C++ 后备指令存储<br/>一个在途请求 / 8 模型拍]
+    A -->|128 位机器字请求| M[共用 L2 / DRAM 层次<br/>一个在途机器字]
     M -->|响应握手| C
     C -->|匹配当前 PC 的 128 位指令| D[组合译码 / 依赖检查]
     D --> I[实际指令准入]
@@ -35,7 +35,7 @@ flowchart LR
 
 共享补充器每次选择一个分区，完成整行四个 128 位传输后才释放归属并推进轮转游标。外部通道最多一个在途机器字，请求遭反压时保持地址；响应仅路由到当前归属缓存。分区缺失、行内 beat、轮转、请求在途状态都由 RTL 保存，没有软件请求队列替代仲裁。
 
-外部存储模型只在接受请求时读取 `Module::image`，八个模型拍后提供响应。八拍是项目假设，不是 NVIDIA 周期测量。含查询、仲裁和握手的适配器单分区冷取指实测为 40 个模型拍；保持同 PC 再取一次多一拍，换到同一缓存行另一条指令多两拍。这些数字约束当前接口实现，不代表工艺频率或真实显卡延迟。
+适配器只从共享存储层次的完成响应取得机器字，不直接读取宿主映像，也不再设置八拍固定延迟。每个补充字绕过数据 L1，经过同一个 L2、DRAM bank/row 与总线；详细传输和只读映射见 [指令存储连接](INSTRUCTION_MEMORY_HIERARCHY.md)。保持同 PC 再取一次多一拍，换到同一缓存行另一条指令多两拍；冷补充时间由实际共享层次状态决定。
 
 补充结束而指令尚未被查询方取走时，缓存仍报告 busy。`response_seen` 防止整机把“已经有结果、但尚未被译码”错误地当成无后台工作的死锁。已消费的保持结果不持续报告忙；候选被放弃后补充继续排空，之后回到 IDLE，不凭空留下等待。
 
@@ -45,9 +45,9 @@ flowchart LR
 
 调度器选出的候选先查询当前分区缓存。没有指令响应时，本拍不调用译码器，也不提交调度器的接受/拒绝决定。缓存不推进调度游标；后续退休、唤醒等事件仍可能改变下拍候选，因此响应必须与当前查询 PC 相同。
 
-每个 SM 的缓存每模型拍只显式时钟一次。只读 `query()`、报告和计数读取不推进电路。适配器借用模块映像，模块必须比缓存实例活得更久；每次 kernel 创建新的取指实例，所以 Graph 更换 kernel 或重放不会错误沿用旧映像。这里与跨 kernel 保留的数据 L1/L2 不同，指令缓存目前不跨 kernel 保留。
+每个 SM 的缓存每模型拍只显式时钟一次。只读 `query()`、报告和计数读取不推进电路。启动持有原始机器字的只读物理映射，所有已接受请求排空后才释放；每次 kernel 创建新的取指实例和物理映射，所以 Graph 更换 kernel 或重放不会错误沿用旧映像。这里与跨 kernel 保留的数据 L1/L2 不同，指令缓存目前不跨 kernel 保留。
 
-`hardware.instruction_fetch[]` 明确报告 `backend=rtl`、`memory_backend=model`、实际物理容量、启用分区数、单补充通道、外部模型延迟和事件计数。计数是宿主对引脚的观测，不是附加的 RTL 性能计数寄存器。成功排空的运行检查：
+`hardware.instruction_fetch[]` 明确报告 `backend=rtl`、`memory_backend=shared_l2_dram`、实际 L2 后端和 `dram_backend=model`、实际物理容量、启用分区数、单补充通道、映射地址和事件计数。计数是宿主对引脚的观测，不是附加的 RTL 性能计数寄存器。成功排空的运行检查：
 
 - 每分区 `queries = delivered + stalls`，`reads = hits + misses`。
 - 每分区 `fill_words = 4 × misses`；全部补充字数等于外部请求/响应数。
@@ -62,7 +62,7 @@ Yosys 0.40 / ABC 对完整八分区实例的结果为 **564,062 个通用单元�
 
 五项独立检查在 RTL、ASan/UBSan 和实际综合网表上通过，覆盖同步命中、缓存内真实字节、tag 冲突替换、八分区轮转、请求/响应反压、候选变化、部分补充复位、最高 PC、末行、废弃查询排空、400 次随机替换及全部 2,048 个物理字位置。独立存储源与生产适配器不同，能主动暂停握手。
 
-四项实际适配器检查还单独经过 ASan/UBSan，检查固定时序、旧缓存字节直到驱逐才更新、通道容量、实例隔离、重复查询和越界。五项整机/主机检查覆盖循环复用、超容量程序、相冲突的远跳转、1/2/4/8 分区，以及 Graph 将相同 PC 的 kernel 从写 17 改为写 91 再改回 17，并核对真实下载数据。
+当前五项实际适配器检查分别在模型与 RTL L2 上运行，共十项，并单独经过 ASan/UBSan；另有五项只读映射检查和两项整机失败排空检查。五项 Python 整机/主机检查覆盖循环复用、超容量程序、相冲突的远跳转、1/2/4/8 分区，以及 Graph 将相同 PC 的 kernel 从写 17 改为写 91 再改回 17，核对真实下载数据和实际 DRAM 请求。
 
 ```sh
 cmake --build build-cache-rtl -j4
@@ -71,7 +71,8 @@ python3 tools/rtl.py --build build-release --module instruction_fetch --out arti
 python3 tools/rtl.py --build build-release --module instruction_fetch --synth --out artifacts/rtl-fetch-final
 python3 tools/rtl.py --build build-release --module instruction_fetch --gate-sim --out artifacts/rtl-fetch-final
 python3 tools/rtl.py --build build-sanitize --module instruction_fetch --out artifacts/rtl-fetch-sanitize
-python3 artifacts/rtl-fetch-final/build_adapter.py
+cmake --build build-cache-sanitize --target simt_hardware test-instruction-memory -j4
+python3 artifacts/rtl-fetch-hierarchy-final/build_adapter.py
 ```
 
-独立工具使用的参考库应先按 [RTL 工具说明](RTL.md) 构建。适配器 sanitizer 是局部插桩，不是整机联合 sanitizer。完整回归、失败及修复、四类负载和 NVML 复查见 [验证记录](VALIDATION.md)。后备存储接入、前端顶层连线、后台服务仲裁、其余执行/访存和整机验收仍须继续，见 [硬件计划](HARDWARE_PLAN.md)。
+独立工具使用的参考库应先按 [RTL 工具说明](RTL.md) 构建。适配器 sanitizer 是局部插桩，不是整机联合 sanitizer。完整回归、失败及修复、四类负载和 NVML 复查见 [验证记录](VALIDATION.md)。存储传输连接的 RTL、前端顶层连线、后台服务仲裁、其余执行/访存和整机验收仍须继续，见 [硬件计划](HARDWARE_PLAN.md)。

@@ -9,6 +9,7 @@ namespace simt::hw {
 class LocalAddressSpace final : public MemoryBacking {
 public:
     static constexpr uint64_t base = uint64_t{1} << 32;
+    static constexpr uint64_t limit = uint64_t{1} << 63;
     static constexpr uint32_t thread_bytes = 16384, warp_bytes = thread_bytes * 32;
     explicit LocalAddressSpace(Memory& global) : global_(global) {}
     void attach(uint64_t warp, std::span<Memory> threads);

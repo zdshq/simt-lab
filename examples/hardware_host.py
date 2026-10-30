@@ -88,11 +88,11 @@ def cache_reuse(device):
     program = Program().emit('LDC', rd=0, ra=Z, mode=4).emit('LDG', rd=1, ra=0, mode=4).emit('EXIT')
     kernel = device.load(program)
     cold, warm = [kernel.launch((buffer,), threads=1).wait()['hardware'] for _ in range(2)]
-    if warm['cycles'] >= cold['cycles'] or warm['dram']['reads'] != cold['dram']['reads']:
+    if warm['cycles'] >= cold['cycles'] or warm['dram']['data_reads'] != cold['dram']['data_reads']:
         raise AssertionError('persistent cache reuse failed')
     buffer.free()
     return {'cold_cycles': cold['cycles'], 'warm_cycles': warm['cycles'],
-            'extra_dram_reads': warm['dram']['reads']-cold['dram']['reads']}
+            'extra_data_dram_reads': warm['dram']['data_reads']-cold['dram']['data_reads']}
 
 
 def run_demo(options):

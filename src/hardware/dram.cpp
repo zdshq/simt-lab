@@ -16,11 +16,13 @@ Dram::Dram(MemoryBacking& memory, DramConfig config) : memory_(memory), config_(
 // 队列饱和时拒绝请求，不预留事务编号。
 std::optional<Ticket> Dram::submit(const Packet& packet) {
     check_packet(packet);
-    memory_.check(packet.address, sector_bytes);
+    if (packet.write) memory_.check_write(packet.address,sector_bytes);
+    else memory_.check(packet.address, sector_bytes);
     if (outstanding() == config_.capacity) { ++stats_.queue_stalls; return {}; }
     const auto ticket = reserve();
     waiting_.push_back({ticket, packet, 0});
     if (packet.write) ++stats_.writes; else ++stats_.reads;
+    if (!packet.write && memory_.instruction_address(packet.address)) ++stats_.instruction_reads;
     return ticket;
 }
 

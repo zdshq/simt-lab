@@ -37,7 +37,7 @@ class RtlTensorPipeline(RtlExecution, timed.TensorPipelineTest):
         program.emit('MMA', ra=Z, guard=0).emit('EXIT')
         result = self.timed(program, '--threads', 1)
         self.assertEqual(self.tile(result, descriptor), [f32(48)]*16)
-        self.assertEqual(result['hardware']['dram']['reads'], 0)
+        self.assertEqual(result['hardware']['dram']['data_reads'], 0)
         self.assertEqual(result['hardware']['tensor'][0]['products'], 128)
         for options in (('--tensor-latency', 1), ('--tensor-latency', 32), ('--tensor-queue', 1)):
             self.timed(program, '--threads', 1, *options, error='tensor_rtl_requires_latency_4_and_queue_2')

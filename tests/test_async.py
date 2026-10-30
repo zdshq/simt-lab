@@ -21,7 +21,9 @@ class AsyncTest(SimulationCase):
     # A load before completion sees old bytes; a phase wait must see completed bytes.
     # 完成前读取看到旧字节；等待阶段完成后必须看到新字节。
     def test_deferred_copy_and_wait(self):
-        p = transaction_program().emit('CP_ASYNC',ra=Z,rb=2,rc=1,imm=4,guard=0)
+        # Keep the copy and early load in one instruction line so the load actually races the copy.
+        # 将拷贝与提前读取放入同一指令行，使读取确实与拷贝竞争。
+        p = transaction_program().emit('NOP').emit('CP_ASYNC',ra=Z,rb=2,rc=1,imm=4,guard=0)
         p.emit('LDS',rd=4,ra=2,mode=4).emit('MB_WAIT',ra=1,rb=3)
         p.emit('LDS',rd=5,ra=2,mode=4).emit('EXIT')
         result = self.execute(p,images={'global':struct.pack('<I',0x12345678)})

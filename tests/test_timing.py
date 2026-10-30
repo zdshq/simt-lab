@@ -27,8 +27,8 @@ class TimingTest(SimulationCase):
         for index in range(12):
             dependent.emit('IADD', rd=0, ra=0, rb=Z)
             independent.emit('IADD', rd=index, ra=Z, rb=Z)
-        slow = self.timed(dependent.emit('EXIT'), '--threads', 1, '--int-latency', 40)['hardware']
-        fast = self.timed(independent.emit('EXIT'), '--threads', 1, '--int-latency', 40)['hardware']
+        slow = self.timed(dependent.emit('EXIT'), '--threads', 1, '--int-latency', 200)['hardware']
+        fast = self.timed(independent.emit('EXIT'), '--threads', 1, '--int-latency', 200)['hardware']
         self.assertGreater(slow['cycles'], fast['cycles'] * 2)
         self.assertGreater(slow['scoreboard_stalls'], 0)
         self.assertEqual(fast['scoreboard_stalls'], 0)
@@ -137,7 +137,7 @@ class TimingTest(SimulationCase):
         result = self.timed(p, '--threads', 1, images={'global': struct.pack('<I', 12)})
         self.assertEqual([self.registers(result, r)[0] for r in range(4)], [12, 12, 71, 71])
         self.assertEqual(result['hardware']['l1'][0]['hits'], 1)
-        self.assertEqual(result['hardware']['dram']['reads'], 2)
+        self.assertEqual(result['hardware']['dram']['data_reads'], 2)
         self.assertEqual(word(result['global'], 0), 71)
 
     def test_subwords_and_generic_shared(self):

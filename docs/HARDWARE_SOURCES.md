@@ -89,4 +89,6 @@ DMA 的 64×259 位命令寄存器、64×1,108 位片段寄存器、四个独立
 
 三源、一个普通目标与两个谓词端口的并行依赖查询，以及七位冲突分类，是本项目在自定义 ISA 上实现的拓扑，不是 NVIDIA 逆向证据。查询直接读取原有 scoreboard 阶段旁路，单独模块为 11,061 个组合单元，包含它的完整 scoreboard 为 764,130 generic cells / 14,368 FF 位；没有增加持久存储或提供工艺面积/频率结论。主机仍路由前端实例间引脚，见 [RTL_DEPENDENCIES.md](RTL_DEPENDENCIES.md)。
 
-指令缓存的每分区 4 KiB 数据、64 字节行、直接映射、同步读口、八分区单通道轮转，以及后备存储的八模型拍延迟均为项目设计假设，没有将 NVIDIA 公开容量或逆向延迟套用为电路证明。完整八分区实例综合为 564,062 generic cells / 276,530 FF 位；中间两类 RAM 定义乘以八个实例为 274,432 位，最终通用网表已展开为触发器，不代表 SRAM 宏面积。后备指令存储仍为独立模型，见 [RTL_INSTRUCTION_FETCH.md](RTL_INSTRUCTION_FETCH.md)。
+指令缓存的每分区 4 KiB 数据、64 字节行、直接映射、同步读口、八分区单通道轮转均为项目设计假设，没有将 NVIDIA 公开容量或逆向延迟套用为电路证明。完整八分区实例综合为 564,062 generic cells / 276,530 FF 位；中间两类 RAM 定义乘以八个实例为 274,432 位，最终通用网表已展开为触发器，不代表 SRAM 宏面积。补充现已接入共用 L2/DRAM，见 [RTL_INSTRUCTION_FETCH.md](RTL_INSTRUCTION_FETCH.md)。
+
+只读代码位于 2^63 以上、每次启动分配新的 64 字节对齐物理区间，以及每 SM 一个 16 字节在途补充请求，均为项目设计。指令、数据和拷贝共享 L2/DRAM，取指绕过数据 L1；原独立八拍后备模型已删除。加载器、连接适配器、层次顺序协调和 DRAM 尚为 C++，没有新增 NVIDIA 逆向或门级面积结论，见 [INSTRUCTION_MEMORY_HIERARCHY.md](INSTRUCTION_MEMORY_HIERARCHY.md)。

@@ -1,6 +1,7 @@
 #pragma once
 #include "simt/hardware_local.hpp"
 #include "simt/hardware_memory.hpp"
+#include "simt/instruction_memory.hpp"
 
 namespace simt::hw {
 // Device lifetime owns caches and physical decoding; individual kernels own warp and CTA state.
@@ -9,6 +10,7 @@ class HardwareContext {
 public:
     HardwareContext(Memory& global, HierarchyConfig config);
     LocalAddressSpace physical;
+    InstructionMemory instructions;
     MemoryHierarchy memory;
     uint64_t new_owner();
     uint64_t reserve_local(uint64_t warps);

@@ -83,7 +83,7 @@ class DmaPipelineTest(SimulationCase):
         stats = result['hardware']['async'][0]
         self.assertEqual((stats['submitted'], stats['completed']), (1, 1))
         self.assertEqual((stats['read_bytes'], stats['write_bytes']), (size, size))
-        self.assertGreater(result['hardware']['dram']['reads'], 0)
+        self.assertGreater(result['hardware']['dram']['data_reads'], 0)
 
     def test_aligned_unaligned_tails_and_maximum_size(self):
         for size in (1, 3, 4, 31, 32, 127, 128, 129, 4096):
@@ -188,7 +188,7 @@ class DmaPipelineTest(SimulationCase):
             p.emit(op, ra=Z, guard=NOT_PT)
         result = self.execute(p.emit('EXIT'))
         self.assertEqual(result['hardware']['async'][0]['barrier_requests'], 0)
-        self.assertEqual(result['hardware']['dram']['reads'], 0)
+        self.assertEqual(result['hardware']['dram']['data_reads'], 0)
 
     def test_barrier_entries_are_released_on_cta_retirement(self):
         p = Program().emit('MB_INIT', ra=Z, imm=1).emit('MB_ARRIVE', rd=1, ra=Z).emit('EXIT')
@@ -255,7 +255,7 @@ class DmaPipelineTest(SimulationCase):
         p.emit('MB_EXPECT', ra=1, imm=128, guard=0).emit('MB_ARRIVE', rd=3, ra=1, guard=0)
         p.emit('SHFL', rd=3, ra=3, rb=Z, imm=0xFFFFFFFF)
         result = self.execute(finish_copy(copy_command(p, 128)))
-        self.assertEqual(result['hardware']['dram']['reads'], 4)
+        self.assertEqual(result['hardware']['dram']['data_reads'], 4)
         self.assertGreaterEqual(result['hardware']['l1'][0]['hits'], 4)
         starts, ends = event_cycles(result, 'copy_submitted'), event_cycles(result, 'copy_complete')
         self.assertGreater(ends[0]-starts[0], ends[1]-starts[1])

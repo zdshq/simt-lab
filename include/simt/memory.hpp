@@ -12,6 +12,8 @@ class MemoryBacking {
 public:
     virtual ~MemoryBacking() = default;
     virtual void check(uint64_t address, uint64_t size, uint32_t alignment = 1) const = 0;
+    virtual void check_write(uint64_t address,uint64_t size,uint32_t alignment=1) const { check(address,size,alignment); }
+    virtual bool instruction_address(uint64_t) const { return false; }
     virtual uint32_t read(uint64_t address, uint32_t size) const = 0;
     virtual void write(uint64_t address, uint32_t size, uint32_t value) = 0;
 };

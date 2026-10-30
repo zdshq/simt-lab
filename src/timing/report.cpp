@@ -320,6 +320,7 @@ void TimingMachine::dump_memory(std::ostream& out) const {
     out << "],\"l2\":"; cache_stats(out, memory_->l2_cache());
     const auto& dram = memory_->dram_stats();
     out << ",\"dram\":{\"reads\":" << dram.reads << ",\"writes\":" << dram.writes
+        << ",\"instruction_reads\":" << dram.instruction_reads << ",\"data_reads\":" << dram.reads-dram.instruction_reads
         << ",\"row_hits\":" << dram.row_hits << ",\"row_misses\":" << dram.row_misses << "},\"shared\":[";
     for (uint32_t sm = 0; sm < sms_.size(); ++sm) {
         if (sm) out << ',';

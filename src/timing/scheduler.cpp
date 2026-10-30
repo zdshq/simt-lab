@@ -49,9 +49,11 @@ TimingMachine::TimingMachine(Machine& machine, std::shared_ptr<hw::HardwareConte
     memory_ = &hardware_->memory;
     owner_ = hardware_->new_owner(); local_base_ = hardware_->reserve_local(uint64_t{config.blocks} * 32);
     started_ = cycle_ = hardware_->cycle();
+    if (config.pipeline.collector_rtl)
+        instruction_image_=std::make_unique<hw::InstructionMapping>(hardware_->instructions,machine.module_.image);
     for (uint32_t sm = 0; sm < config.sms; ++sm) {
         sms_.push_back(std::make_unique<TimedSm>(config.pipeline, config.tensor, config.atomic));
-        if (config.pipeline.collector_rtl) sms_.back()->instruction_fetch=hw::make_instruction_fetch(machine.module_.image,config.pipeline.partitions);
+        if (instruction_image_) sms_.back()->instruction_fetch=hw::make_instruction_fetch(*memory_,*instruction_image_,sm,config.pipeline.partitions,owner_);
         if (config.pipeline.collector_rtl) sms_.back()->transactions = hw::make_transaction_table(config.async.barrier_slots);
         if (config.pipeline.collector_rtl) sms_.back()->dma = hw::make_dma_engine(config.async.commands, config.async.fragments, config.async.chunk_bytes);
     }

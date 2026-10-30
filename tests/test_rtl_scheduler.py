@@ -52,11 +52,12 @@ class SchedulerExecution(SimulationCase):
     def test_blocked_priority_warp_does_not_starve_others(self):
         for policy in ('rr', 'min', 'max'):
             slow = 3 if policy == 'max' else 0
-            p = Program().emit('S2R', rd=0, imm=2).emit('MOVI', rd=3, imm=slow).emit('ISETP', rd=0, ra=0, rb=3)
-            p.emit('BRA', imm='slow', guard=0)
-            for _ in range(6): p.emit('IADD', rd=4, ra=4, rb=Z)
-            p.emit('EXIT').label('slow'); load_pc = len(p.instructions)
-            p.emit('LDG', rd=1, ra=Z, mode=4).emit('IADD', rd=2, ra=1, rb=1).emit('EXIT')
+            # Keep the blocked load and other warps' work in the same cached instruction line.
+            # 将阻塞读取与其他 warp 的工作放在同一已缓存指令行内。
+            p = Program().emit('NOP').emit('S2R', rd=0, imm=2).emit('MOVI', rd=3, imm=slow).emit('ISETP', rd=0, ra=0, rb=3)
+            load_pc = len(p.instructions)
+            p.emit('LDG', rd=1, ra=Z, mode=4, guard=0).emit('IADD', rd=2, ra=1, rb=1, guard=0)
+            p.emit('IADD', rd=4, ra=4, rb=Z, guard=8).emit('EXIT')
             result = self.execute(p, '--sms', 1, '--threads', 128, '--partitions', 1, '--warp-policy', policy,
                                   images={'global': struct.pack('<I', 13)})
             trace = result['hardware']['trace']

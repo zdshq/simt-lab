@@ -66,3 +66,5 @@ ctest --test-dir build --output-on-failure
 随机差分另外包含在一个检查中：320 个混合大小、掩码、两 SM 读写请求，独立参考为普通字节向量；比较每次读回及最终全部 2048 字节。Debug、Release、ASan+UBSan 都通过，原 75 项功能检查也保持通过。
 
 剩余工作仍以 [总计划](HARDWARE_PLAN.md) 为准。SM/Tensor/异步/local/原子流水线、持久 CP/copy/Graph 和 NVML 已有各自的增量验收，不能由存储单元测试替代；关键模块 RTL 已有增量，完整 RTL 层次连接和参数校准仍未完成。
+
+指令缓存补充现已绕过数据 L1 接入同一 L2/DRAM，并使用高位独立只读代码区；DRAM 总读取计数包含代码和数据，另提供实际 `instruction_reads` 与 `data_reads`。映射、失败排空和剩余 C++ 连接见 [INSTRUCTION_MEMORY_HIERARCHY.md](INSTRUCTION_MEMORY_HIERARCHY.md)。

@@ -7,10 +7,15 @@ from host_support import HostCase
 
 
 def check_fetch(test,hardware):
+    dram=hardware['dram']
+    test.assertEqual(dram['reads'],dram['data_reads']+dram['instruction_reads'])
+    test.assertGreater(dram['instruction_reads'],0)
     decoders={(d['sm'],d['partition']):d for d in hardware['instruction_decoders']}
     for unit in hardware['instruction_fetch']:
         test.assertEqual((unit['backend'],unit['physical_partitions'],unit['bytes_per_partition'],unit['line_bytes']),('rtl',8,4096,64))
-        test.assertEqual((unit['refill_ports'],unit['memory_backend'],unit['memory_latency']),(1,'model',8))
+        test.assertEqual((unit['refill_ports'],unit['memory_backend'],unit['dram_backend']),(1,'shared_l2_dram','model'))
+        test.assertEqual(unit['l2_backend'],hardware['l2']['backend'])
+        test.assertGreaterEqual(unit['image_address'],1<<63)
         test.assertEqual(unit['clocks'],hardware['cycles']); test.assertFalse(unit['busy'])
         test.assertEqual(unit['memory_requests'],unit['memory_responses'])
         test.assertEqual(unit['memory_responses'],sum(p['fill_words'] for p in unit['partitions']))
@@ -48,6 +53,8 @@ class InstructionFetch(SimulationCase):
         unit=result['hardware']['instruction_fetch'][0]
         self.assertEqual(unit['partitions'][0]['misses'],151)
         self.assertEqual(unit['memory_requests'],604)
+        self.assertEqual(result['hardware']['dram']['instruction_reads'],302)
+        self.assertEqual(result['hardware']['dram']['data_reads'],0)
 
     def test_conflicting_branch_targets_refill_tags(self):
         p=Program().emit('MOVI',rd=0,imm=0).emit('MOVI',rd=1,imm=1).emit('MOVI',rd=2,imm=4)
@@ -65,6 +72,7 @@ class InstructionFetch(SimulationCase):
             for warp in range(8): self.assertEqual(self.registers(result,2,warp=warp),[42]*32)
             unit=result['hardware']['instruction_fetch'][0]
             self.assertEqual(unit['memory_requests'],parts*4)
+            self.assertEqual(result['hardware']['dram']['instruction_reads'],2)
             self.assertEqual([p['misses'] for p in unit['partitions']],[1]*parts+[0]*(8-parts))
 
 
@@ -81,6 +89,7 @@ class InstructionFetchHost(HostCase):
             snapshot=run.node_event(node).query(); check_fetch(self,snapshot['hardware'])
             for _ in range(20): self.assertEqual(run.node_event(node).query(),snapshot)
             self.assertEqual(device.d2h(output,4).result(),(17 if index==0 else 91).to_bytes(4,'little'))
+            self.assertEqual(device.stats()['hardware']['instruction_mappings'],0)
 
 
 if __name__ == '__main__':

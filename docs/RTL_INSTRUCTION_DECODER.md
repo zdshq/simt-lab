@@ -63,4 +63,4 @@ python3 artifacts/rtl-decoder-final/build_adapter.py
 
 首次独立运行前先构建相应 build 的库与生成目标；综合和网表验证须选同一个 build 的实际生成文件。清单记录 RTL、生成源码、测试驱动与网表哈希。完整回归、Graph/NVML 与失败记录见 [验证记录](VALIDATION.md)，原始证据在 `artifacts/rtl-decoder-final/`。
 
-指令后备存储与数据层次接入、前端顶层连接、异步后台和 CTA 服务次序、SFU/剩余访存、外部返回选择、整机 RTL、实卡参数校准和 PTX 异步矩阵协议仍未完成。不能用本阶段的局部电路与综合网表证明整 GPU 已还原，剩余目标见 [硬件计划](HARDWARE_PLAN.md)。
+存储传输连接 RTL、前端顶层连接、异步后台和 CTA 服务次序、SFU/剩余访存、外部返回选择、整机 RTL、实卡参数校准和 PTX 异步矩阵协议仍未完成。不能用本阶段的局部电路与综合网表证明整 GPU 已还原，剩余目标见 [硬件计划](HARDWARE_PLAN.md)。

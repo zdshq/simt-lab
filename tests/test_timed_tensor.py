@@ -61,7 +61,7 @@ class TensorPipelineTest(SimulationCase):
             tensor = result['hardware']['tensor'][0]
             self.assertEqual(tensor['tiles'], math.ceil(d.m/size) * math.ceil(d.n/size))
             self.assertEqual(tensor['products'], d.m*d.n*d.k)
-            self.assertGreater(result['hardware']['dram']['reads'], 0)
+            self.assertGreater(result['hardware']['dram']['data_reads'], 0)
         self.assertGreater(reports[0]['hardware']['cycles'], reports[1]['hardware']['cycles'])
 
     # Real shared stores populate the descriptor and input tiles before the tensor frontend reads.
@@ -76,7 +76,7 @@ class TensorPipelineTest(SimulationCase):
         slow = self.timed(p, '--threads', 1, '--tensor-latency', 32, '--tensor-queue', 1)
         for result in (fast, slow):
             self.assertEqual(self.tile(result, d), [f32(48)]*16)
-            self.assertEqual(result['hardware']['dram']['reads'], 0)
+            self.assertEqual(result['hardware']['dram']['data_reads'], 0)
             self.assertEqual(result['hardware']['tensor'][0]['products'], 128)
         self.assertGreater(slow['hardware']['cycles'], fast['hardware']['cycles'])
         self.assertGreater(slow['hardware']['tensor'][0]['queue_stalls'], 0)

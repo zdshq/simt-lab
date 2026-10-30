@@ -3,7 +3,7 @@
 
 namespace simt::hw {
 HardwareContext::HardwareContext(Memory& global, HierarchyConfig config)
-    : physical(global), memory(physical, config), sms_(config.sms) {}
+    : physical(global), instructions(physical), memory(instructions, config), sms_(config.sms) {}
 
 uint64_t HardwareContext::new_owner() {
     if (next_owner_ == UINT64_MAX) throw std::runtime_error("hardware_owner_ids_exhausted");
@@ -13,7 +13,7 @@ uint64_t HardwareContext::new_owner() {
 // New launches receive distinct local physical tags, so retired cache lines cannot alias a later CTA.
 // 新启动获得不同的 local 物理 tag，避免已退休缓存行与后续 CTA 别名。
 uint64_t HardwareContext::reserve_local(uint64_t warps) {
-    const auto limit = (UINT64_MAX - LocalAddressSpace::base) / LocalAddressSpace::warp_bytes;
+    const auto limit = (LocalAddressSpace::limit - LocalAddressSpace::base) / LocalAddressSpace::warp_bytes;
     if (warps > limit - next_warp_) throw std::runtime_error("local_physical_ids_exhausted");
     const auto first = next_warp_; next_warp_ += warps;
     return first;
@@ -24,6 +24,7 @@ uint64_t HardwareContext::reserve_local(uint64_t warps) {
 void HardwareContext::dump(std::ostream& out) const {
     const auto& dram = memory.dram_stats(); const auto& l2 = memory.l2_stats();
     out << "{\"cycles\":" << cycle() << ",\"dram_reads\":" << dram.reads << ",\"dram_writes\":" << dram.writes
+        << ",\"dram_instruction_reads\":" << dram.instruction_reads << ",\"instruction_mappings\":" << instructions.mappings()
         << ",\"l2_hits\":" << l2.hits << ",\"l2_misses\":" << l2.sector_misses
         << ",\"cache_backend\":\"" << memory.l2_cache().name() << "\",\"l2_clocks\":" << memory.l2_cache().cycle()
         << ",\"l1\":[";

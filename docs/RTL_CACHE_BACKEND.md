@@ -2,7 +2,7 @@
 
 `SIMT_CACHE_RTL=ON` 构建新增实际缓存电路后端。运行时 `--timing --cache-rtl` 或 Python `Device(timing=True, cache_rtl=True)` 选择它；默认 C++ 模型仍保留，没有编译 RTL 却请求它会明确报错。它可以与 `--tensor-rtl` 同时使用。
 
-此模式中，load、Tensor 操作数和 DMA 源读取经过每个 SM 的 RTL L1，再经过共享 RTL L2。主机拷贝、普通写入和整数原子经过同一个 RTL L2。缓存命中从 `sector_sram.sv` 的实际数据阵列返回，C++ 不维护另一份影子 tag/data 来替代电路结果。数据 SRAM 的接口、缺失处理和 LRU 电路见 [RTL.md](RTL.md)。
+此模式中，load、Tensor 操作数和 DMA 源读取经过每个 SM 的 RTL L1，再经过共享 RTL L2。主机拷贝、普通写入、整数原子和 [指令缓存补充](INSTRUCTION_MEMORY_HIERARCHY.md) 经过同一个 RTL L2。缓存命中从 `sector_sram.sv` 的实际数据阵列返回，C++ 不维护另一份影子 tag/data 来替代电路结果。数据 SRAM 的接口、缺失处理和 LRU 电路见 [RTL.md](RTL.md)。
 
 ## 硬件配置与连接
 
@@ -120,4 +120,4 @@ python3 tools/rtl.py --module cache --ways 8 --gate-sim --out artifacts/rtl-cach
 
 ## 尚未完成
 
-当前是 CPU 执行的混合仿真。缓存和 Tensor 电路已经参与计算，但 DRAM、取指译码、后台服务次序、合并器、维护队列、一致性协调、CP 和主机接口仍有 C++；[scoreboard RTL](RTL_SCOREBOARD.md) 已接入依赖控制，[寄存器数据 RTL](RTL_REGISTERS.md)、[collector/读仲裁 RTL](RTL_COLLECTOR.md)、[写回 RTL](RTL_WRITEBACK.md) 与 [跨 warp 调度 RTL](RTL_WARP_SCHEDULER.md) 也已可选接入。尚未形成完整 RTL SM，没有 FPGA bitstream、布局布线、NVIDIA 门级还原或完整实卡参数校准。完整目标继续以 [HARDWARE_PLAN.md](HARDWARE_PLAN.md) 为准。
+当前是 CPU 执行的混合仿真。缓存和 Tensor 电路已经参与计算，但 DRAM、取指与译码实例间的传输连接、后台服务次序、合并器、维护队列、一致性协调、CP 和主机接口仍有 C++；[scoreboard RTL](RTL_SCOREBOARD.md) 已接入依赖控制，[寄存器数据 RTL](RTL_REGISTERS.md)、[collector/读仲裁 RTL](RTL_COLLECTOR.md)、[写回 RTL](RTL_WRITEBACK.md) 与 [跨 warp 调度 RTL](RTL_WARP_SCHEDULER.md) 也已可选接入。尚未形成完整 RTL SM，没有 FPGA bitstream、布局布线、NVIDIA 门级还原或完整实卡参数校准。完整目标继续以 [HARDWARE_PLAN.md](HARDWARE_PLAN.md) 为准。

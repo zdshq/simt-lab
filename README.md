@@ -100,6 +100,6 @@ python3 examples/host_graph.py
 
 新增 [并行依赖查询 RTL](docs/RTL_DEPENDENCIES.md)：三个源、一个普通目标和两个谓词端口直接读取 scoreboard 同拍旁路状态，RAW/WAW/WAR 与谓词冲突的选择、归约和 ready 全部来自电路；C++ 不再逐个查询后短路合并。完整 scoreboard 为 764,130 generic cells / 14,368 FF 位，单独查询模块无持久状态。
 
-新增 [指令缓存与取指 RTL](docs/RTL_INSTRUCTION_FETCH.md)：每 SM 八个独立 4 KiB 指令缓存，实际数据/tag 同步读取，四字整行补充和单通道轮转均由电路完成；发射使用缓存返回的原始机器字。完整实例为 564,062 generic cells / 276,530 FF 位，普通 RTL、sanitizer 和综合网表验证通过。后备指令存储仍为独立八拍模型，缓存目前不跨 kernel 保留；尚未接入数据 L2/DRAM 或完整 SM 顶层。
+新增 [指令缓存与取指 RTL](docs/RTL_INSTRUCTION_FETCH.md)：每 SM 八个独立 4 KiB 指令缓存，实际数据/tag 同步读取，四字整行补充和单通道轮转均由电路完成；发射使用缓存返回的原始机器字。完整实例为 564,062 generic cells / 276,530 FF 位，普通 RTL、sanitizer 和综合网表验证通过。补充请求现已接入 [共享 L2/DRAM](docs/INSTRUCTION_MEMORY_HIERARCHY.md)，实际竞争请求容量与带宽；启动私有代码映射和指令缓存目前不跨 kernel 复用，传输连接与 DRAM 仍为 C++，尚无完整 SM 顶层。
 
 当前默认 Debug 运行 27 套件、279 项（277 通过，2 项未构建 RTL 而跳过）。当前联合 Release 构建通过 64 套件、974 项；本阶段另通过并行查询/完整 scoreboard 两模块共八项和实际适配器七项独立 ASan/UBSan 检查，未重跑完整联合 sanitizer 或整机综合。构建范围、实际结果与各阶段失败记录见 [验证记录](docs/VALIDATION.md)。不同构建包含既有场景复跑，独立 RTL 检查另计，各套件按其目的选择后端，并非全部同时启用所有 RTL。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。

@@ -6,28 +6,33 @@ namespace simt::hw {
 namespace {
 class RtlInstructionFetch final : public InstructionFetch {
 public:
-    RtlInstructionFetch(std::span<const InstructionWords> image,uint32_t partitions);
+    RtlInstructionFetch(MemoryHierarchy& memory,const InstructionMapping& image,uint32_t sm,uint32_t partitions,uint64_t owner);
     ~RtlInstructionFetch() override { dut_.final(); }
     std::optional<InstructionWords> lookup(uint32_t partition,uint32_t pc) override;
     void tick() override;
     bool busy() const override { return dut_.busy; }
     const InstructionFetchStats& stats() const override { return stats_; }
 private:
-    struct Reply { uint64_t due; InstructionWords words; };
     Vsimt_instruction_fetch dut_;
-    std::span<const InstructionWords> image_;
-    std::optional<Reply> memory_reply_;
+    MemoryHierarchy& memory_;
+    uint64_t base_,owner_;
+    uint32_t sm_;
+    std::optional<Ticket> memory_ticket_;
+    std::optional<InstructionWords> memory_reply_;
     InstructionFetchStats stats_;
     void edge() { dut_.clk=1; dut_.eval(); dut_.clk=0; dut_.eval(); }
     void drive_memory();
+    void submit_memory();
     void accept_memory();
     void sample_events();
 };
 
-RtlInstructionFetch::RtlInstructionFetch(std::span<const InstructionWords> image,uint32_t partitions) : image_(image) {
-    if (!partitions || partitions>8 || !image.size() || image.size()>(uint64_t{1}<<32))
+RtlInstructionFetch::RtlInstructionFetch(MemoryHierarchy& memory,const InstructionMapping& image,
+    uint32_t sm,uint32_t partitions,uint64_t owner) : memory_(memory),base_(image.address()),owner_(owner),sm_(sm) {
+    if (!partitions || partitions>8 || sm>=64)
         throw std::out_of_range("invalid_instruction_fetch_configuration");
-    dut_.partition_limit=partitions; dut_.program_words=image.size(); dut_.query_valid=0;
+    static_cast<void>(memory.l1_cache(sm));
+    dut_.partition_limit=partitions; dut_.program_words=image.words(); dut_.query_valid=0;
     dut_.memory_request_ready=0; dut_.memory_response_valid=0;
     dut_.clk=0; dut_.reset=1; edge(); dut_.reset=0; dut_.eval();
 }
@@ -44,23 +49,38 @@ std::optional<InstructionWords> RtlInstructionFetch::lookup(uint32_t partition,u
     ++stats_.delivered[partition]; return words;
 }
 
-// Only refill requests access the backing image; a hit never reads host instruction bytes.
-// 只有补充请求访问后备映像；命中不会读取宿主指令字节。
+// Returned words come exclusively from completed hierarchy requests, without a second backing read.
+// 返回机器字仅来自已完成的层次请求，不再次读取后备存储。
 void RtlInstructionFetch::drive_memory() {
-    dut_.memory_request_ready=!memory_reply_;
-    dut_.memory_response_valid=memory_reply_ && memory_reply_->due<=stats_.clocks;
+    dut_.memory_request_ready=0;
+    if (memory_ticket_) {
+        if (const auto words=memory_.take(*memory_ticket_)) {
+            memory_reply_=InstructionWords{(*words)[0],(*words)[1],(*words)[2],(*words)[3]};
+            memory_ticket_.reset();
+        }
+    }
+    dut_.memory_response_valid=bool(memory_reply_);
     if (dut_.memory_response_valid)
-        for (uint32_t word=0; word<4; ++word) dut_.memory_response_words[word]=memory_reply_->words[word];
+        for (uint32_t word=0; word<4; ++word) dut_.memory_response_words[word]=(*memory_reply_)[word];
+    dut_.eval();
+    submit_memory();
+}
+
+// One accepted 16-byte request bypasses data L1 and competes for the shared hierarchy capacity.
+// 一个已接受的 16 字节请求绕过数据 L1，竞争共享层次容量。
+void RtlInstructionFetch::submit_memory() {
+    if (!dut_.memory_request_valid || memory_ticket_ || memory_reply_) return;
+    WarpAccess access; access.mask=15;
+    for (uint32_t word=0; word<4; ++word) access.address[word]=base_+uint64_t{dut_.memory_request_pc}*16+word*4;
+    memory_ticket_=memory_.submit(sm_,access,owner_,true);
+    dut_.memory_request_ready=bool(memory_ticket_);
+    if (!memory_ticket_) ++stats_.memory_stalls;
     dut_.eval();
 }
+
 void RtlInstructionFetch::accept_memory() {
     if (dut_.memory_response_valid && dut_.memory_response_ready) { memory_reply_.reset(); ++stats_.memory_responses; }
-    if (dut_.memory_request_valid && dut_.memory_request_ready) {
-        if (memory_reply_) throw std::runtime_error("instruction_memory_request_overlap");
-        const auto pc=dut_.memory_request_pc;
-        memory_reply_=Reply{stats_.clocks+8,pc<image_.size() ? image_[pc] : InstructionWords{}};
-        ++stats_.memory_requests;
-    }
+    if (dut_.memory_request_valid && dut_.memory_request_ready) ++stats_.memory_requests;
 }
 void RtlInstructionFetch::sample_events() {
     for (uint32_t part=0; part<8; ++part) {
@@ -74,7 +94,8 @@ void RtlInstructionFetch::tick() {
     dut_.query_valid=0; dut_.memory_request_ready=0; dut_.memory_response_valid=0; dut_.eval();
 }
 }
-std::unique_ptr<InstructionFetch> make_instruction_fetch(std::span<const InstructionWords> image,uint32_t partitions) {
-    return std::make_unique<RtlInstructionFetch>(image,partitions);
+std::unique_ptr<InstructionFetch> make_instruction_fetch(MemoryHierarchy& memory,const InstructionMapping& image,
+    uint32_t sm,uint32_t partitions,uint64_t owner) {
+    return std::make_unique<RtlInstructionFetch>(memory,image,sm,partitions,owner);
 }
 }

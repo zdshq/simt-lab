@@ -9,8 +9,11 @@ void validate_access(const WarpAccess& access, const MemoryBacking& memory) {
         throw std::runtime_error("invalid_memory_width");
     if (access.atomic && (*access.atomic > 9 || access.width != 4 || !access.write))
         throw std::runtime_error("invalid_atomic_access");
-    for (uint32_t lane = 0; lane < 32; ++lane)
-        if (access.mask & (uint32_t{1} << lane)) memory.check(access.address[lane], access.width, access.width);
+    for (uint32_t lane = 0; lane < 32; ++lane) {
+        if (!(access.mask & (uint32_t{1} << lane))) continue;
+        if (access.write) memory.check_write(access.address[lane],access.width,access.width);
+        else memory.check(access.address[lane],access.width,access.width);
+    }
 }
 
 namespace {

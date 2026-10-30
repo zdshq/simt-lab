@@ -120,6 +120,7 @@ private:
     hw::MemoryHierarchy* memory_ = nullptr;
     bool external_clock_ = false;
     uint64_t owner_ = 0, local_base_ = 0, started_ = 0;
+    std::unique_ptr<hw::InstructionMapping> instruction_image_;
     std::vector<std::unique_ptr<TimedSm>> sms_;
     std::vector<std::vector<TimedWarp>> warps_;
     std::vector<uint32_t> cta_slots_;

@@ -60,7 +60,7 @@ class MemoryPipelineTest(SimulationCase):
     def test_local_coalescing_and_cache_reuse(self):
         p = Program().emit('LDL', rd=1, ra=Z, mode=4).emit('LDL', rd=2, ra=Z, mode=4).emit('EXIT')
         result = self.execute(p)
-        self.assertEqual(result['hardware']['dram']['reads'], 4)
+        self.assertEqual(result['hardware']['dram']['data_reads'], 4)
         self.assertEqual(result['hardware']['l1'][0]['hits'], 4)
         self.assertLess(cycles(result, 1, 'retire')[0]-cycles(result, 1, 'issue')[0],
                         cycles(result, 0, 'retire')[0]-cycles(result, 0, 'issue')[0])
@@ -71,7 +71,7 @@ class MemoryPipelineTest(SimulationCase):
             p = Program().emit('S2R', rd=0, imm=0).emit('MOVI', rd=1, imm=stride)
             p.emit('IMUL', rd=2, ra=0, rb=1).emit('LDL', rd=3, ra=2, mode=4).emit('EXIT')
             reports.append(self.execute(p)['hardware'])
-        self.assertEqual([r['dram']['reads'] for r in reports], [4, 32])
+        self.assertEqual([r['dram']['data_reads'] for r in reports], [4, 32])
         self.assertGreater(reports[1]['cycles'], reports[0]['cycles'])
 
     def test_local_subwords_and_last_word(self):
@@ -110,7 +110,7 @@ class MemoryPipelineTest(SimulationCase):
             self.execute(Program().emit(op, ra=Z, imm=16384), error='memory_out_of_bounds')
             self.execute(Program().emit(op, ra=Z, imm=1, mode=4), error='misaligned_memory_access')
             p = Program().emit(op, ra=Z, imm=16384, guard=NOT_PT).emit('EXIT')
-            self.assertEqual(self.execute(p)['hardware']['dram']['reads'], 0)
+            self.assertEqual(self.execute(p)['hardware']['dram']['data_reads'], 0)
 
     def test_global_and_shared_random_atomic_modes(self):
         for space in (0, 1):

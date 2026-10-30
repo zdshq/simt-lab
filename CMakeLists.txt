@@ -44,7 +44,7 @@ add_library(simt_hardware src/hardware/port.cpp src/hardware/dram.cpp src/hardwa
     src/hardware/cache_request.cpp src/hardware/cache_fill.cpp src/hardware/coalescer.cpp src/hardware/shared.cpp
     src/hardware/hierarchy.cpp src/hardware/scoreboard.cpp src/hardware/scoreboard_engine.cpp src/hardware/register_file.cpp src/hardware/resources.cpp src/hardware/local.cpp
     src/hardware/atomic_queue.cpp src/hardware/atomic_execute.cpp src/hardware/shared_atomic.cpp
-    src/hardware/lifetime.cpp src/hardware/context.cpp src/hardware/warp_control.cpp src/hardware/warp_frontend.cpp src/hardware/cta_barrier.cpp src/hardware/transaction_table.cpp src/hardware/dma_engine.cpp src/hardware/warp_scheduler.cpp src/hardware/execution_arbiter.cpp src/hardware/instruction_decoder.cpp src/hardware/instruction_fetch.cpp)
+    src/hardware/lifetime.cpp src/hardware/context.cpp src/hardware/instruction_memory.cpp src/hardware/warp_control.cpp src/hardware/warp_frontend.cpp src/hardware/cta_barrier.cpp src/hardware/transaction_table.cpp src/hardware/dma_engine.cpp src/hardware/warp_scheduler.cpp src/hardware/execution_arbiter.cpp src/hardware/instruction_decoder.cpp src/hardware/instruction_fetch.cpp)
 target_link_libraries(simt_hardware PUBLIC simt_storage)
 add_dependencies(simt_hardware generate_isa)
 target_include_directories(simt_hardware PUBLIC ${GENERATED_DIR})
@@ -148,6 +148,10 @@ target_link_libraries(test-hardware-context PRIVATE simt_hardware)
 target_compile_options(test-hardware-context PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME hardware_context_lifetime COMMAND test-hardware-context)
 set_tests_properties(hardware_context_lifetime PROPERTIES TIMEOUT 90)
+add_executable(test-instruction-memory tests/test_instruction_memory.cpp)
+target_link_libraries(test-instruction-memory PRIVATE simt_hardware)
+target_compile_options(test-instruction-memory PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME instruction_memory_hierarchy COMMAND test-instruction-memory)
 function(add_simt_test name script)
     add_test(NAME ${name} COMMAND ${CMAKE_COMMAND} -E env
         "PYTHONPATH=${GENERATED_DIR}:${CMAKE_CURRENT_SOURCE_DIR}/python"
@@ -220,6 +224,10 @@ if(SIMT_REGISTER_RTL)
     target_link_libraries(test-rtl-instruction-fetch PRIVATE simt_hardware)
     target_compile_options(test-rtl-instruction-fetch PRIVATE -Wall -Wextra -Wpedantic -Werror)
     add_test(NAME rtl_instruction_fetch_adapter COMMAND test-rtl-instruction-fetch)
+    add_executable(test-rtl-fetch-path tests/test_rtl_fetch_path.cpp)
+    target_link_libraries(test-rtl-fetch-path PRIVATE simt_core)
+    target_compile_options(test-rtl-fetch-path PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    add_test(NAME rtl_instruction_fetch_path COMMAND test-rtl-fetch-path)
     add_simt_test(rtl_instruction_fetch_execution test_rtl_instruction_fetch.py)
     set_tests_properties(rtl_instruction_fetch_execution PROPERTIES TIMEOUT 300)
     add_executable(test-rtl-writeback tests/test_rtl_writeback.cpp)

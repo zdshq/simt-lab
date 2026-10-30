@@ -5,7 +5,7 @@ namespace simt::hw {
 // The owner retains architectural storage until all requests and inspection snapshots are finished.
 // 所有请求及检查快照结束前，所有者持续保留架构存储。
 void LocalAddressSpace::attach(uint64_t warp, std::span<Memory> threads) {
-    if (threads.empty() || threads.size() > 32 || warps_.contains(warp))
+    if (threads.empty() || threads.size() > 32 || warps_.contains(warp) || warp>=(limit-base)/warp_bytes)
         throw std::runtime_error("invalid_local_warp_registration");
     auto& mapped = warps_[warp];
     for (size_t lane = 0; lane < threads.size(); ++lane) mapped[lane] = &threads[lane];
@@ -16,7 +16,7 @@ void LocalAddressSpace::detach(uint64_t first, uint64_t count) {
 }
 
 uint64_t LocalAddressSpace::translate(uint64_t warp, uint32_t lane, uint32_t offset) {
-    if (lane >= 32 || offset >= thread_bytes || warp >= (UINT64_MAX - base) / warp_bytes)
+    if (lane >= 32 || offset >= thread_bytes || warp >= (limit - base) / warp_bytes)
         throw std::runtime_error("invalid_local_translation");
     return base + uint64_t{warp} * warp_bytes + uint64_t{offset / 4} * 128 + lane * 4 + offset % 4;
 }
