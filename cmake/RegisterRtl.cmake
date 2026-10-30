@@ -24,10 +24,12 @@ function(simt_enable_register_rtl)
         SOURCES rtl/warp_control.sv VERILATOR_ARGS -Wall --unroll-count 4096)
     verilate(simt_register_circuit TOP_MODULE warp_frontend PREFIX Vsimt_warp_frontend
         SOURCES rtl/warp_control.sv rtl/warp_group.sv rtl/warp_frontend.sv VERILATOR_ARGS -Wall --unroll-count 4096)
+    verilate(simt_register_circuit TOP_MODULE cta_barrier PREFIX Vsimt_cta_barrier
+        SOURCES rtl/lane_popcount.sv rtl/cta_barrier_record.sv rtl/cta_barrier.sv VERILATOR_ARGS -Wall --unroll-count 4096)
     target_compile_options(simt_register_circuit PRIVATE ${VERILATOR_CFLAGS})
     get_target_property(circuit_includes simt_register_circuit INTERFACE_INCLUDE_DIRECTORIES)
     set_property(TARGET simt_register_circuit PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${circuit_includes})
-    target_sources(simt_hardware PRIVATE src/rtl/register_file.cpp src/rtl/operand_collector.cpp src/rtl/warp_control.cpp src/rtl/warp_frontend.cpp)
+    target_sources(simt_hardware PRIVATE src/rtl/register_file.cpp src/rtl/operand_collector.cpp src/rtl/warp_control.cpp src/rtl/warp_frontend.cpp src/rtl/cta_barrier.cpp)
     target_compile_definitions(simt_hardware PRIVATE SIMT_HAS_REGISTER_RTL=1)
     target_link_libraries(simt_hardware PRIVATE simt_register_circuit)
 endfunction()

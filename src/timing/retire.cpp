@@ -6,6 +6,7 @@ namespace simt {
 // Result readiness does not bypass register-file write bandwidth or predicate write ports.
 // 结果就绪不能绕过寄存器堆写带宽和谓词写端口。
 bool TimingMachine::writeback_available(Inflight& entry) {
+    if (!cta_barrier_available(entry)) return false;
     if (entry.completion) return take_writeback(entry);
     auto& partition = sms_[entry.sm]->partitions[entry.partition];
     const auto& f = entry.footprint;

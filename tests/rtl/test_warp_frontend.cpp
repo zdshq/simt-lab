@@ -15,6 +15,7 @@ using simt::hw::ControlCommand;
 void pins(TestBench& b) {
     auto& d=b.dut; d.initialize=0; d.command_valid=0; d.retire_advance=0; d.resume_idle=0; d.issue_valid=0;
     d.write_state_mask=0; d.write_blocked_mask=0; d.write_phase_mask=0; d.eval();
+    d.cta_block_mask=0; d.cta_release_mask=0; d.eval();
 }
 void check(TestBench& b, const simt::Warp& w) {
     const auto& d=b.dut;
@@ -149,11 +150,30 @@ void ordered_external_ports_errors_and_clear() {
     b.dut.reset=1; b.tick(); b.dut.reset=0; pins(b); w={}; w.state.fill(LaneState::exited); check(b,w);
 }
 
+// A dedicated release vector compares stored CTA IDs and cannot wake an asynchronous address with the same low bits.
+// 专用释放向量比较已存 CTA 编号，不能唤醒低位相同的异步地址。
+void cta_ports_immediate_release_and_wait_isolation() {
+    TestBench b("frontend-cta.vcd"); simt::Warp w; initialize(b,w,UINT32_MAX); tick(b,w);
+    advance(b,w,UINT32_MAX,3); b.dut.cta_block_mask=0xff; b.dut.cta_block_id=15;
+    for (uint32_t lane=0; lane<8; ++lane) { w.state[lane]=LaneState::cta_barrier; w.blocked_token[lane]=15; }
+    tick(b,w);
+    waits(b,w,0,1u<<8,4,15,23); waits(b,w,0,1u<<9,3,0x1000f,17);
+    b.dut.cta_release_mask=1u<<15;
+    for (uint32_t lane=0; lane<8; ++lane) w.state[lane]=LaneState::active;
+    b.dut.eval(); require(b.dut.cta_wake_mask==0xff,"CTA wake selected asynchronous or wide address");
+    auto group=probe(b,w,0); require(group && group->mask==(UINT32_MAX^0x300),"CTA wake-to-select bypass");
+    issue(b,w,*group,true); tick(b,w);
+    advance(b,w,0x80000401,7); b.dut.cta_block_mask=0x80000401; b.dut.cta_block_id=7; b.dut.cta_release_mask=1u<<7;
+    for (uint32_t lane : {0,10,31}) w.blocked_token[lane]=7;
+    b.dut.eval(); require(b.dut.cta_wake_mask==0x80000401,"same-cycle CTA block/release lost waiters"); tick(b,w);
+}
+
 void run_cases() {
     initialization_forwarding_and_idle_storage(); std::cout<<"PASS frontend initialization, first issue, partial lanes and idle storage\n";
     random_selection_wait_metadata_and_wrapping_pc(); std::cout<<"PASS frontend 6000 random ordered cycles, selection policies, waits and PC wrap\n";
     nested_tokens_exit_and_same_cycle_issue(); std::cout<<"PASS frontend connected token storage, EXIT wakeup, same-cycle issue and yield\n";
     ordered_external_ports_errors_and_clear(); std::cout<<"PASS frontend pre/control/post ordering, rejected branch, slot reuse and reset\n";
+    cta_ports_immediate_release_and_wait_isolation(); std::cout<<"PASS frontend CTA block/release ports, immediate wakeup and async isolation\n";
 }
 int run_application() {
     try { run_cases(); return 0; } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }

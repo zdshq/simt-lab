@@ -21,6 +21,7 @@ TimedSm::TimedSm(const hw::PipelineConfig& config, const hw::TensorConfig& tenso
         if (config.register_rtl) partitions.back().registers = hw::make_register_file(config.partitions, config.register_banks, config.collector_rtl ? config.collectors : 0);
     }
     scoreboards.resize(config.max_warps); controls.resize(config.max_warps);
+    if (config.collector_rtl) { cta_tables.resize(config.max_ctas); cta_owners.resize(config.max_ctas); }
 }
 
 TimingMachine::TimingMachine(Machine& machine, std::shared_ptr<hw::HardwareContext> hardware)
@@ -43,7 +44,7 @@ TimingMachine::TimingMachine(Machine& machine, std::shared_ptr<hw::HardwareConte
     owner_ = hardware_->new_owner(); local_base_ = hardware_->reserve_local(uint64_t{config.blocks} * 32);
     started_ = cycle_ = hardware_->cycle();
     for (uint32_t sm = 0; sm < config.sms; ++sm) sms_.push_back(std::make_unique<TimedSm>(config.pipeline, config.tensor, config.atomic));
-    warps_.resize(config.blocks);
+    warps_.resize(config.blocks); cta_slots_.resize(config.blocks);
 }
 
 TimingMachine::~TimingMachine() { hardware_->physical.detach(local_base_, uint64_t{machine_.config_.blocks} * 32); }
@@ -80,6 +81,7 @@ bool TimingMachine::admit() {
 
 void TimingMachine::place(uint32_t block, uint32_t sm, const hw::Residency& residency) {
     machine_.initialize_cta(block, sm);
+    admit_cta_barrier(block, sm);
     warps_[block].resize(residency.slots.size());
     for (uint32_t warp = 0; warp < residency.slots.size(); ++warp) {
         auto threads = std::span<Memory>(machine_.ctas_[block].local).subspan(warp * lanes);
@@ -125,6 +127,7 @@ void TimingMachine::retire_ctas() {
         auto& sm = *sms_[cta.sm_id];
         for (const auto& warp : warps_[cta.block_id]) sm.owners[warp.slot].reset();
         sm.resources.release(cta.block_id);
+        if (!sm.cta_owners.empty()) sm.cta_owners[cta_slots_[cta.block_id]].reset();
         sm.allocated_columns -= sm.tensor_columns[cta.block_id];
         sm.tensor_columns.erase(cta.block_id);
         sm.barrier_entries -= static_cast<uint32_t>(cta.transactions.size());
@@ -173,6 +176,7 @@ bool TimingMachine::advance() {
     for (auto& sm : sms_) {
         for (auto& board : sm->scoreboards) if (board) board->tick();
         for (auto& control : sm->controls) if (control) control->tick();
+        for (auto& table : sm->cta_tables) if (table) table->tick();
         for (auto& partition : sm->partitions) if (partition.registers) partition.registers->tick();
     }
     retire_ctas();

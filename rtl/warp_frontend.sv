@@ -17,6 +17,9 @@ module warp_frontend (
     input wire target_is_sync,
     input wire resume_idle, issue_valid, issue_advance,
     input wire [31:0] issue_pc, issue_mask,
+    input wire [31:0] cta_block_mask,
+    input wire [3:0] cta_block_id,
+    input wire [15:0] cta_release_mask,
     output wire group_valid, needs_resume,
     output wire [31:0] selected_pc, selected_mask,
     output reg [1023:0] observed_pc, observed_blocked, observed_phase,
@@ -27,6 +30,7 @@ module warp_frontend (
     output wire [511:0] token_members, token_arrivals, token_targets,
     output wire [31:0] wake_mask,
     output reg [31:0] resumed_mask,
+    output reg [31:0] cta_wake_mask,
     output wire [3:0] error,
     output wire accept, control_clock_enable, clock_enable
 );
@@ -40,7 +44,9 @@ module warp_frontend (
     wire [95:0] control_state;
     reg [1023:0] after_pc, after_blocked, after_phase;
     reg [95:0] after_state;
-    integer first_lane, second_lane, final_lane;
+    reg [1023:0] cta_blocked;
+    reg [95:0] cta_state, scheduled_state;
+    integer first_lane, second_lane, final_lane, blocking, waking;
 
     // Initialization forwards into first-cycle issue; pre-control writes reflect earlier asynchronous completions.
     // 初始化旁路到首拍发射；控制前写入反映较早的异步完成。
@@ -80,8 +86,26 @@ module warp_frontend (
             if (write_phase_mask[32+second_lane]) after_phase[second_lane*32+:32] = write_phase[1024+second_lane*32+:32];
         end
     end
+    // A raw CTA release bus wakes matching stored waiters; the host does not calculate lane wake masks.
+    // 原始 CTA 释放总线唤醒匹配的已存等待者，宿主不计算 lane 唤醒掩码。
+    always @* begin
+        cta_state = after_state; cta_blocked = after_blocked;
+        for (blocking = 0; blocking < 32; blocking = blocking+1)
+            if (cta_block_mask[blocking]) begin
+                cta_state[blocking*3+:3] = 3;
+                cta_blocked[blocking*32+:32] = {28'b0,cta_block_id};
+            end
+    end
+    always @* begin
+        scheduled_state = cta_state; cta_wake_mask = 0;
+        for (waking = 0; waking < 32; waking = waking+1)
+            if (cta_state[waking*3+:3] == 3 && cta_blocked[waking*32+:32] < 16 &&
+                    cta_release_mask[cta_blocked[waking*32+:4]]) begin
+                scheduled_state[waking*3+:3] = 0; cta_wake_mask[waking] = 1;
+            end
+    end
     warp_group selector (
-        .pc(after_pc), .state(after_state), .policy(policy),
+        .pc(after_pc), .state(scheduled_state), .policy(policy),
         .last_valid(stored_last_valid && !initialize && !reset), .last_pc(stored_last_pc),
         .valid(group_valid), .needs_resume(needs_resume), .selected_pc(selected_pc), .selected_mask(selected_mask)
     );
@@ -89,10 +113,10 @@ module warp_frontend (
     // Successful issue resumes yielded peers, updates the round-robin cursor, and advances only nonboundary PCs.
     // 成功发射恢复让出的同伴，更新轮转游标，并且只推进非边界指令 PC。
     always @* begin
-        observed_pc = after_pc; observed_state = after_state;
-        observed_blocked = after_blocked; observed_phase = after_phase; resumed_mask = 0;
+        observed_pc = after_pc; observed_state = scheduled_state;
+        observed_blocked = cta_blocked; observed_phase = after_phase; resumed_mask = 0;
         for (final_lane = 0; final_lane < 32; final_lane = final_lane+1) begin
-            if ((resume_idle || issue_valid) && after_state[final_lane*3+:3] == 2) begin
+            if ((resume_idle || issue_valid) && scheduled_state[final_lane*3+:3] == 2) begin
                 observed_state[final_lane*3+:3] = 0; resumed_mask[final_lane] = 1;
             end
             if (issue_valid && issue_advance && issue_mask[final_lane]) observed_pc[final_lane*32+:32] = issue_pc+1'b1;
@@ -102,7 +126,7 @@ module warp_frontend (
     assign observed_last_valid = !reset && (issue_valid || (!initialize && stored_last_valid));
     assign observed_last_pc = reset ? 0 : issue_valid ? issue_pc : initialize ? 0 : stored_last_pc;
     assign clock_enable = control_clock_enable || retire_advance || issue_valid || |resumed_mask ||
-        |write_state_mask || |write_blocked_mask || |write_phase_mask;
+        |write_state_mask || |write_blocked_mask || |write_phase_mask || |cta_block_mask || |cta_wake_mask;
     always @(posedge clk) begin
         if (reset) begin
             stored_pc <= 0; stored_state <= {32{3'd5}}; stored_blocked <= 0; stored_phase <= 0;

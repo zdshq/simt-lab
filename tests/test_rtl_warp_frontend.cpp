@@ -82,11 +82,30 @@ void phase_guards_and_rejected_transactions() {
     rejects([&]{unit->external(waits(unit->read()));},"frontend_external_phase"); unit->tick();
     require(unit->read().control.tokens[15].members==UINT32_MAX && unit->stats().commands==1,"errors lost token or counted command");
 }
+
+// Raw CTA signals change only matching local waiters and obey the same single-edge lifecycle as issue.
+// 原始 CTA 信号只改变匹配的本地等待者，并遵循与发射相同的单边沿生命周期。
+void cta_signal_routing_and_async_isolation() {
+    auto unit=make_warp_frontend(); unit->initialize(UINT32_MAX); unit->tick();
+    rejects([&]{unit->cta_barrier(1,16,0);},"frontend_cta_descriptor");
+    rejects([&]{unit->cta_barrier(0,0,65536);},"frontend_cta_descriptor");
+    unit->advance({3,UINT32_MAX}); unit->cta_barrier(0xff,15,0); unit->tick();
+    auto external=waits(unit->read()); external.state[8]=4; external.blocked[8]=15; external.phase[8]=23;
+    external.state[9]=3; external.blocked[9]=0x1000f; unit->external(external);
+    unit->cta_barrier(0,0,1u<<15);
+    auto group=unit->select(0); require(group && group->mask==(UINT32_MAX^0x300),"CTA adapter woke wrong lanes");
+    unit->issue(*group,true);
+    rejects([&]{unit->cta_barrier(0,0,1);},"frontend_cta_phase"); unit->tick();
+    const auto stored=unit->read();
+    require(stored.control.lanes.pc[0]==5 && stored.control.lanes.state[8]==4 && stored.control.lanes.state[9]==3,"CTA/async state isolation");
+    require(unit->frontend_stats().cta_blocked==8 && unit->frontend_stats().cta_woken==8,"CTA event accounting");
+}
 void run_cases() {
     persistent_pc_grouping_and_read_isolation(); std::cout<<"PASS frontend adapter stored PCs, selection cursor and observation isolation\n";
     ordered_wait_writes_and_same_cycle_issue(); std::cout<<"PASS frontend adapter pre/control/post/issue ordering and packed metadata\n";
     yielded_lane_lifetime_and_slot_reuse(); std::cout<<"PASS frontend adapter yielded lifetime, stalled resume and physical slot reuse\n";
     phase_guards_and_rejected_transactions(); std::cout<<"PASS frontend adapter phase guards, rejected writes and preserved token ownership\n";
+    cta_signal_routing_and_async_isolation(); std::cout<<"PASS frontend adapter CTA signal routing, wakeup and asynchronous isolation\n";
 }
 int run_application() {
     try { run_cases(); return 0; } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }

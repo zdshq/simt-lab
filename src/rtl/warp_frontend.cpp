@@ -32,6 +32,7 @@ public:
     void issue(FrontendGroup group, bool advance) override;
     void advance(FrontendGroup group) override;
     void external(const FrontendWait& waits) override;
+    void cta_barrier(uint32_t block_mask, uint32_t barrier, uint32_t release_mask) override;
     void tick() override;
     const ControlStats& stats() const override { return control_stats_; }
     const FrontendStats& frontend_stats() const override { return stats_; }
@@ -49,6 +50,7 @@ void RtlWarpFrontend::clear_pins() {
     dut_.initialize = 0; dut_.command_valid = 0; dut_.retire_advance = 0;
     dut_.resume_idle = 0; dut_.issue_valid = 0;
     dut_.write_state_mask = 0; dut_.write_blocked_mask = 0; dut_.write_phase_mask = 0;
+    dut_.cta_block_mask = 0; dut_.cta_release_mask = 0;
 }
 void RtlWarpFrontend::initialize(uint32_t mask) {
     if (dut_.clock_enable) throw std::runtime_error("frontend_initialize_phase");
@@ -132,6 +134,16 @@ void RtlWarpFrontend::external(const FrontendWait& waits) {
     dut_.eval();
 }
 
+// Route accepted table signals into lane storage; an entire CTA shares one release vector per cycle.
+// 将已接受表事务的信号送入 lane 存储，整个 CTA 每拍共享一个释放向量。
+void RtlWarpFrontend::cta_barrier(uint32_t block_mask, uint32_t barrier, uint32_t release_mask) {
+    if (dut_.issue_valid || dut_.resume_idle || dut_.cta_block_mask || dut_.cta_release_mask)
+        throw std::runtime_error("frontend_cta_phase");
+    if ((block_mask && barrier>=16) || release_mask>=65536) throw std::out_of_range("frontend_cta_descriptor");
+    dut_.cta_block_mask = block_mask; dut_.cta_block_id = barrier&15;
+    dut_.cta_release_mask = release_mask; dut_.eval();
+}
+
 // Sample accepted events once, commit one edge, then remove all forwarding transactions.
 // 只统计一次已接受事件，提交一个边沿，然后撤销全部旁路事务。
 void RtlWarpFrontend::tick() {
@@ -142,6 +154,8 @@ void RtlWarpFrontend::tick() {
     stats_.issued += bool(dut_.issue_valid); stats_.advances += bool(dut_.retire_advance);
     stats_.external_lanes += std::popcount(uint64_t{dut_.write_state_mask|dut_.write_blocked_mask|dut_.write_phase_mask});
     stats_.resumed_lanes += std::popcount(uint32_t{dut_.resumed_mask});
+    stats_.cta_blocked += std::popcount(uint32_t{dut_.cta_block_mask});
+    stats_.cta_woken += std::popcount(uint32_t{dut_.cta_wake_mask});
     if (dut_.clock_enable) { ++stats_.active_clocks; edge(); }
     clear_pins(); dut_.eval();
 }

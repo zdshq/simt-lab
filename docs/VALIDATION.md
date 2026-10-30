@@ -543,3 +543,29 @@ python3 examples/hardware_host.py --build build-cache-rtl --tensor-rtl --cache-r
 - 测试覆盖所声明的功能案例和负例，并非形式验证或所有输入穷举。
 
 阶段 0–10 的功能 ISS、持久主机链路与任务图已完成其原有验收。后续 CP/copy/Graph 时序、持久缓存和可选 Tensor RTL 后端也已接入。完整硬件目标仍未完成，剩余 PTX 异步矩阵提交、其余 RTL 单元接入、整体 RTL 连接、参数校准和最终审计以 HARDWARE_PLAN.md 为准。
+
+
+## 阶段 16：CTA 到达表、有限端口与硬件唤醒（2026-10-30）
+
+从 `3823448` 接续，将实际 BAR_SYNC/BAR_ARRIVE/EXIT 的 CTA 到达状态移入 RTL，并为 warp 前端增加原始完成信号输入。每 CTA 有 16 条记录、最多 1,024 个线程；C++ 保留物理槽映射、跨分区提交次序和信号路由，异步事务屏障仍由软件推进。字段、计数不变量与接口边界见 [RTL_CTA_BARRIER.md](RTL_CTA_BARRIER.md)。
+
+| 本轮实际运行 | 结果与范围 |
+|---|---|
+| `cmake --build build` / `ctest --test-dir build --output-on-failure` | 默认 Debug 27 套件/279 项运行：236 Python、43 C++；277 通过、2 项因未构建可选后端跳过，9.81 秒 |
+| `cmake --build build-cache-rtl -j4` / `ctest --test-dir build-cache-rtl --output-on-failure` | 联合 Release 53 套件/897 项全部通过：812 Python、85 C++，29.14 秒；各套件按目的选择后端，并非全部检查同时打开五种 RTL |
+| CTA 表独立 RTL / sanitizer / 网表 | 同四项全部通过：16 个编号、1/37/257/1,024 线程、代数复用、已到达 EXIT、全部 16 路完成、原子错误拒绝和 3,200 次随机事件 |
+| Warp 前端独立 RTL / sanitizer / 网表 | 同五项全部通过：原四项加专用 CTA 阻塞/释放、同拍唤醒到发射及异步状态隔离 |
+| 两个实际 C++ 适配器 | CTA 四项、前端五项在联合 Release 与独立 ASan/UBSan 中均通过；含两个 RTL 模型间的原始完成位传递、槽复用、无隐藏时钟和错误事务保留 |
+| 新增 ISA/主机套件 | 八项通过，包括四分区端口等待、16 屏障、9 CTA/37 线程、1/2/4/8 分区、错误 kernel 后两次 Graph 重放，每次验证 333 个输出 |
+| 实际综合 | 完整 CTA 表 234,669 generic cells / 18,999 FF 位；带 CTA 端口的完整 warp 前端 106,383 cells / 4,801 FF 位；`check -assert` 与实际网表执行通过 |
+| 完整主机与监控 | `python3 examples/hardware_host.py --build build-cache-rtl --register-rtl --collector-rtl --scoreboard-rtl --cache-rtl --tensor-rtl --out artifacts/rtl-cta-host`：四负载各两次 Graph 重放；另两次监控规约，输出均通过独立参考 |
+
+十份主机报告逐条对照实际退休 trace 与汇编，确认 CTA 命令数、启动次数和退出人数；下载字节与上一阶段相同。规约每次有 9 次端口等待、3 次屏障完成、480 个 lane 阻塞与唤醒；GEMM 为 9 次完成、288 个 lane；小 Transformer 为 33 次完成、2,112 个 lane，另保留 128 个外部异步等待字段写事件。向量没有屏障到达但 EXIT 经过表。本组总模型周期与前阶段一致；没有声称 trace 或所有调度行为完全相同。
+
+首轮 53 套件中 52 通过；失败来自直接复用功能模拟的重复到达负例，它依赖连续选择同一 warp。多分区时序可能完成两代，使原程序合法。保留 `artifacts/rtl-cta-final/initial-joint-{ctest,tests}.log`，改用既有时序案例显式延迟另一 warp，仍断言同一重复到达错误和出错 PC。没有修改硬件语义或放宽错误断言。
+
+sanitizer 工具的 `--module` 是单值选项，最初同时填写两次只运行了前端；随后单独执行 CTA 表并核验两份模块清单。没有将未运行的部分算作成功。最终受影响的九项独立电路均在普通 RTL、ASan/UBSan 与网表上复跑，其他独立模块未全部重新执行；完整联合 sanitizer 与整 GPU 综合也未在本轮执行。
+
+原版 nvidia-smi 经已安装入口实测显示 RTX 4070 SUPER 和活模拟器，实际分配 7 MiB、释放归零、关闭后移除；直接系统二进制只见实卡，仍属于 NVML 管理接口。结果在 `artifacts/rtl-cta-final/{list,table,native-list}.txt` 与 `{allocated,freed,exited}.csv`。
+
+八份模块清单、两个实际网表哈希、两适配器 sanitizer 清单、十份主机报告、290 个源码文件和四个联合二进制已核对，记录在 `artifacts/rtl-cta-final/evidence-audit.json`。同目录 `audit.py` 可复查，保留默认/联合完整日志；适配器精确编译命令在 `artifacts/rtl-cta-adapter-sanitize/manifest.json`。这轮完成 CTA 屏障局部电路，不代表整机 RTL、实卡校准或 PTX 异步矩阵协议已经完成。

@@ -12,6 +12,7 @@
 #include "simt/floating_execution.hpp"
 #include "simt/collective_execution.hpp"
 #include "simt/warp_frontend.hpp"
+#include "simt/cta_barrier.hpp"
 #include <deque>
 
 namespace simt {
@@ -49,6 +50,8 @@ struct TimedSm {
     std::vector<std::optional<WarpOwner>> owners;
     std::vector<std::unique_ptr<hw::ScoreboardEngine>> scoreboards;
     std::vector<std::unique_ptr<hw::WarpFrontend>> controls;
+    std::vector<std::unique_ptr<hw::CtaBarrierEngine>> cta_tables;
+    std::vector<std::optional<uint32_t>> cta_owners;
     hw::BankedShared shared;
     hw::BankedShared constant{{65536, 1, 4, 8}};
     hw::BankedShared tmem;
@@ -89,7 +92,7 @@ struct Inflight {
 struct TimingStats {
     uint64_t issued = 0, retired = 0, scoreboard_stalls = 0, boundary_stalls = 0;
     uint64_t collector_stalls = 0, register_stalls = 0, unit_stalls = 0, writeback_stalls = 0;
-    uint64_t memory_order_stalls = 0, completion_stalls = 0, peak_ctas = 0, dropped_trace = 0;
+    uint64_t memory_order_stalls = 0, completion_stalls = 0, cta_barrier_stalls = 0, peak_ctas = 0, dropped_trace = 0;
 };
 struct HardwareEvent {
     uint64_t cycle, instruction;
@@ -114,6 +117,7 @@ private:
     uint64_t owner_ = 0, local_base_ = 0, started_ = 0;
     std::vector<std::unique_ptr<TimedSm>> sms_;
     std::vector<std::vector<TimedWarp>> warps_;
+    std::vector<uint32_t> cta_slots_;
     std::map<uint64_t, std::unique_ptr<Inflight>> inflight_;
     std::deque<HardwareEvent> trace_;
     TimingStats stats_;
@@ -161,6 +165,11 @@ private:
     std::optional<Group> select_warp_group(uint32_t cta, uint32_t warp);
     void issue_frontend(const Inflight& entry);
     void advance_warp_pc(const Inflight& entry);
+    void admit_cta_barrier(uint32_t cta, uint32_t sm);
+    hw::CtaBarrierEngine* cta_barrier(uint32_t cta) const;
+    bool cta_barrier_available(const Inflight& entry);
+    std::optional<uint32_t> accept_cta_barrier(const Inflight& entry);
+    void route_cta_barrier(const Inflight& entry, uint32_t release);
     void poll_memory(Inflight& entry);
     void prepare_memory(Inflight& entry);
     void prepare_atomic(Inflight& entry);

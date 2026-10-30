@@ -195,7 +195,38 @@ void frontend_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedSm
             out << "{\"sm\":" << sm << ",\"slot\":" << slot << ",\"backend\":\"rtl\",\"lane_storage_bits\":3233,\"token_storage_bits\":1568"
                 << ",\"clocks\":" << s.clocks << ",\"active_clocks\":" << s.active_clocks
                 << ",\"issued\":" << s.issued << ",\"retire_advances\":" << s.advances
-                << ",\"external_lanes\":" << s.external_lanes << ",\"resumed_lanes\":" << s.resumed_lanes << '}';
+                << ",\"external_lanes\":" << s.external_lanes << ",\"resumed_lanes\":" << s.resumed_lanes
+                << ",\"cta_blocked\":" << s.cta_blocked << ",\"cta_woken\":" << s.cta_woken << '}';
+        }
+    out << ']';
+}
+
+// Record snapshots describe the most recent slot owner; event counters accumulate over CTA reuse.
+// 记录快照描述槽位最近的所有者，事件计数跨 CTA 复用累积。
+void barrier_records(std::ostream& out, const hw::CtaBarrierState& state) {
+    out << ",\"threads\":" << state.threads << ",\"live_threads\":" << state.live_count << ",\"records\":[";
+    for (uint32_t id = 0; id < state.records.size(); ++id) {
+        if (id) out << ',';
+        const auto& r = state.records[id];
+        out << "{\"id\":" << id << ",\"active\":" << (r.active ? "true" : "false")
+            << ",\"count\":" << r.count << ",\"arrived\":" << r.arrived << ",\"expected\":" << r.expected
+            << ",\"generation\":" << r.generation << '}';
+    }
+    out << ']';
+}
+void cta_barrier_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedSm>>& sms) {
+    out << ",\"cta_barriers\":["; bool first = true;
+    for (uint32_t sm = 0; sm < sms.size(); ++sm)
+        for (uint32_t slot = 0; slot < sms[sm]->cta_tables.size(); ++slot) {
+            const auto& unit = sms[sm]->cta_tables[slot];
+            if (!unit) continue;
+            if (!first) out << ',';
+            first = false; const auto& s = unit->stats();
+            out << "{\"sm\":" << sm << ",\"slot\":" << slot << ",\"backend\":\"rtl\",\"storage_bits\":18999,\"command_ports\":1"
+                << ",\"clocks\":" << s.clocks << ",\"active_clocks\":" << s.active_clocks << ",\"initializations\":" << s.initializations
+                << ",\"commands\":" << s.commands << ",\"arrivals\":" << s.arrivals << ",\"exits\":" << s.exits
+                << ",\"arrival_lanes\":" << s.arrival_lanes << ",\"exit_lanes\":" << s.exit_lanes << ",\"completions\":" << s.completions;
+            barrier_records(out, unit->read()); out << '}';
         }
     out << ']';
 }
@@ -228,6 +259,7 @@ void TimingMachine::dump_statistics(std::ostream& out) const {
         << ",\"collector_stalls\":" << stats_.collector_stalls << ",\"register_bank_stalls\":" << stats_.register_stalls
         << ",\"unit_stalls\":" << stats_.unit_stalls << ",\"writeback_stalls\":" << stats_.writeback_stalls
         << ",\"completion_stalls\":" << stats_.completion_stalls
+        << ",\"cta_barrier_stalls\":" << stats_.cta_barrier_stalls
         << ",\"memory_order_stalls\":" << stats_.memory_order_stalls << ",\"peak_ctas_per_sm\":" << stats_.peak_ctas
         << ",\"dropped_trace\":" << stats_.dropped_trace;
 }
@@ -290,6 +322,7 @@ void TimingMachine::dump(std::ostream& out) const {
     scoreboard_stats(out, sms_);
     control_stats(out, sms_);
     frontend_stats(out, sms_);
+    cta_barrier_stats(out, sms_);
     register_stats(out, sms_);
     predicate_stats(out, sms_);
     collector_stats(out, sms_);
