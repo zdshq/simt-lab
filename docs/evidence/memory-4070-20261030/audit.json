@@ -1,0 +1,9 @@
+{
+  "native_cases": 118,
+  "native_samples": 590,
+  "model_cases": 30,
+  "native_checks_passed": true,
+  "model_checks_passed": true,
+  "source_hashes_match_frozen_copy": true,
+  "binary_hashes_match": true
+}

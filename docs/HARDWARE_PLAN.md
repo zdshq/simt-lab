@@ -6,7 +6,7 @@
 
 | 阶段 | 实现内容 | 必须提供的证据 | 当前状态 |
 |---|---|---|---|
-| 11 | 官方资料、逆向论文、参数来源与不确定性台账 | 每个结构/参数区分公开事实、实测结论和设计假设；架构代际不得混用 | 进行中 |
+| 11 | 官方资料、逆向论文、参数来源与不确定性台账 | 每个结构/参数区分公开事实、实测结论和设计假设；架构代际不得混用 | 进行中；已有本机 118 组/590 个 CUDA/PTX 样本与 30 组模型探针对照，见 MEMORY_CALIBRATION.md；NCU 计数和 L2 辨识仍未完成 |
 | 12 | 真实数据缓存、访存合并、L1/L2 tag/sector、MSHR、反压、shared banks、DRAM bank/row/总线 | 冷热、冲突、合并、容量、队列满、跨 SM、数据一致性与独立参考测试 | C++ 时序层次和可选 L1/L2 RTL 已接入实际访存及主机，见 RTL_CACHE_BACKEND.md；参数校准与更完整 DRAM/一致性硬件仍待完成 |
 | 13 | SM 分区、warp 发射、寄存器 bank/operand collector、scoreboard、执行流水线、多 CTA 资源准入 | 依赖链/独立链、RAW/WAW、结构冲突、occupancy 和退休顺序；逐周期轨迹 | 基础时序通路已实现，scoreboard、寄存器数据与 collector/读请求仲裁已可选接入 RTL；原 7 项 C++/35 项 Python 检查及后续实际指令复跑见 HARDWARE_SM.md / RTL_SCOREBOARD.md，尚非完整 GPU |
 | 14 | 分拍 Tensor 数据通路、乘法/累加单元、操作数供给、TMEM bank、异步完成 | 不再一条宿主循环完成 MMA；数值差分、带宽和流水线反压测试 | 分拍阵列/供数/TMEM 已接入并验证，另可选择实际 RTL 数值/阵列后端，见 HARDWARE_TENSOR.md / RTL_BACKEND.md；当前发起 warp 阻塞到完成，PTX 异步提交协议未实现 |

@@ -330,3 +330,13 @@
 - 四种主机负载各两次 Graph 重放，另两次监控 GEMM；十份报告的写回预约/完成/退休数量匹配 issued，全部占用归零。两次规约各有三条同分区 LDS 因单个 memory 完成端口晚一拍退休；最终架构状态、总周期与其他统计相同。其余同拍事件有顺序变化，不声称原始 trace 全量相等。原版 nvidia-smi 经 NVML 桥接确认实卡共存、7 MiB→0 与退出移除。
 - 十份 RTL 清单与两份实际网表哈希核对通过，产物在 `rtl-writeback-final`、`rtl-writeback-host` 和相应单模块目录。阶段结构说明为 RTL_WRITEBACK.md；源时钟/有效工作周期与工艺时钟门控明确区分。
 - 完整目标保持 active。执行流水线及各生产端口的输入选择仍有 C++；完整谓词寄存器存储、跨分区共享单元仲裁、其余 RTL 整机连接、实卡校准、PTX 异步矩阵协议和最终要求审计仍需继续。
+
+
+## 阶段 11/12：4070 SUPER 的存储行为证据（2026-10-30）
+
+- 从干净的 `1ef8cfc` 接续，按 coding-standards 使用短职责函数、入口调用和相邻英中注释。新增手写 CUDA/内联 PTX 基准及正式 C++ 存储模型探针，没有 Triton、CUTLASS 或 CUTE 依赖；性能采集工具由 kernel-performance-port 原样接入并保留来源和许可证。
+- 完成 118 组/590 个真实 GPU 样本及 30 组模型实验。使用完整环预热、最终数据校验、两种 seed、0/4096/16384 次计时控制、随机实验顺序、carveout 和 4 KiB 访问局部性对照；保存原始数据、SASS、编译/环境/遥测、命令和冻结源码/二进制哈希。
+- 实测 shared 的 32 路冲突循环约为 stride 1 的 3.07 倍，直接模型请求则为 11.33 倍。缓存曲线随 carveout 偏好变化，但 L2 的 48 MiB 容量只由 CUDA 属性查询确认，延迟曲线未独立辨识出边界。不把 GPU 循环时钟与模型请求时钟等同，也不据此盲改延迟参数。
+- 原生 Nsight 接口检查和 benchmark-only 成功；NCU 实际采集失败于 ERR_NVGPUCTRPERM，硬件 sector 数保持未知。保留原生成功与采集失败的独立状态；修复向外层构建日志转交 ptxas 输出，未改变驱动权限。
+- 默认 Debug 27 套件、279 项运行（277 通过，2 跳过），新增 5 项真实行为检查；CUDA memcheck 10 项零错误、shared racecheck 零 hazards。没有重跑未变化的 RTL 综合。证据与复现说明见 MEMORY_CALIBRATION.md 和 VALIDATION.md。
+- 此阶段补齐实卡实验工具和首批正反例，整体目标保持 active。硬件参数进一步辨识、NCU 计数、其余执行/控制电路、整机 RTL 和最终审计仍需继续。

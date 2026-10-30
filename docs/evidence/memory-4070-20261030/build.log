@@ -1,0 +1,21 @@
+ptxas info    : 0 bytes gmem
+ptxas info    : Compiling entry function '_ZN11calibration12chase_kernelILb0EEEvPKjjjjPNS_6SampleE' for 'sm_89'
+ptxas info    : Function properties for _ZN11calibration12chase_kernelILb0EEEvPKjjjjPNS_6SampleE
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 12 registers, used 0 barriers, 384 bytes cmem[0]
+ptxas info    : Compile time = 2.079 ms
+ptxas info    : Compiling entry function '_ZN11calibration12chase_kernelILb1EEEvPKjjjjPNS_6SampleE' for 'sm_89'
+ptxas info    : Function properties for _ZN11calibration12chase_kernelILb1EEEvPKjjjjPNS_6SampleE
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 12 registers, used 0 barriers, 384 bytes cmem[0]
+ptxas info    : Compile time = 1.242 ms
+ptxas info    : Compiling entry function '_ZN11calibration15coalesce_kernelEPKjjjjjPj' for 'sm_89'
+ptxas info    : Function properties for _ZN11calibration15coalesce_kernelEPKjjjjjPj
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 18 registers, used 0 barriers, 384 bytes cmem[0]
+ptxas info    : Compile time = 1.215 ms
+ptxas info    : Compiling entry function '_ZN11calibration13shared_kernelEjjjPNS_6SampleE' for 'sm_89'
+ptxas info    : Function properties for _ZN11calibration13shared_kernelEjjjPNS_6SampleE
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 18 registers, used 1 barriers, 16384 bytes smem, 376 bytes cmem[0]
+ptxas info    : Compile time = 2.633 ms

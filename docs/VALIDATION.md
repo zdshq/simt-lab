@@ -422,6 +422,29 @@ SFU、控制/访存执行电路、完整谓词值存储、整数内部算术流�
 
 谓词存储和读写通路完成本阶段验证不等于完整 SM：调度、解码、PC 与集合运算仍为 C++，SFU、控制/访存电路、跨分区共享单元、整数内部算术流水级、整机 RTL、实卡校准和 PTX 异步矩阵协议仍须继续，完整目标保持 active。
 
+## 阶段 11/12：真实 4070 SUPER 存储实验（2026-10-30）
+
+从 `1ef8cfc` 接续，新增 CUDA/PTX 微基准与调用正式 `simt_hardware` 的 C++ 探针，没有修改现有 RTL 或模型参数。方法与解释边界见 [MEMORY_CALIBRATION.md](MEMORY_CALIBRATION.md)，Git 内原始证据见 `docs/evidence/memory-4070-20261030/`。
+
+```sh
+python3 tools/calibrate_memory.py --mode full --out artifacts/memory-4070-locality --repeats 5
+python3 tools/calibrate_memory.py --mode check --out artifacts/memory-4070-check
+cmake -S . -B build
+cmake --build build -j4
+ctest --test-dir build --output-on-failure
+python3 tools/kernel_perf/perf.py run --config tools/kernel_perf/configs/memory-coalescing.json --benchmark-only
+python3 tools/kernel_perf/perf.py run --config tools/kernel_perf/configs/memory-coalescing.json
+```
+
+- 最终原生实验：118 组/590 个样本，全部逐次验证数值；包括两种 seed、carveout 偏好、局部性分组和随机化实验顺序。模型探针 30 组检查通过，6 组 coalescer 与独立地址枚举比较，8 组 shared 和 16 组 cache 读出真实数据。
+- 探索轮 `memory-4070-full` 的 106 组原生点和最终轮分开存储，不将重复实验计为独立覆盖。两个非零迭代长度的差分斜率与零迭代分布单独保存；原生 event 和 profiler event 不混用。
+- CUDA Compute Sanitizer：10 项 memcheck 均零错误，shared racecheck 零 errors/零 warnings。包含分组指针链、零次加载、513 次奇数循环、broadcast、32 路冲突、stride 33 和错位/最大合法地址组合。
+- 默认 Debug：27 套件全部通过，9.34 秒；279 项中 277 通过、2 项因未构建 RTL 跳过。新增 5 项验证探针的真实路径、数值和报告口径。没有为了注释、函数行数或画图格式写测试。
+- `kernel_perf` 的 doctor 与原生 benchmark-only 成功。最终原生记录 `f9e644432ed4419f88bc21fa31b6992f` 含编译输出与二进制哈希；先前 `a7fca69319a5438590e356592a7f376e` 原生成功但没有向外层 build.log 透传 ptxas 输出，已保留并修复该日志交接。
+- NCU 记录 `c38553e449d04715bda7ef3843aca4d9` 明确失败于 `ERR_NVGPUCTRPERM`，其原生 check 和 benchmark 成功。hardware sectors 为未知；没有声称指标名称已由本卡成功查询或采到 counter。没有改变驱动设置或提升采集权限。
+- 最终工具复跑 `memory-4070-final-smoke`：46 组/92 个原生样本及 30 组模型探针通过；另检查超时保留部分日志、缺少样本明确失败。它不与主实验的 590 样本合并统计。
+- 结果审计核对了冻结源码和两个可执行文件的 SHA-256，原始样本/模型结果和本次实际编译代码一致。后续增加测试注册、文档、工具日志透传和采集结果完整性检查，没有改动已测 CUDA/C++ kernel 源码。完整硬件目标保持 active。
+
 ## 明确边界
 
 - 功能模式和时序模式都在 CPU 上执行；不会利用 RTX 4070 SUPER 来获得模拟 GPU 的实际吞吐。

@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "id": "my-kernel",
+  "label": "待接入的 kernel",
+  "project_root": "../../..",
+  "data_dir": ".kernel-perf",
+  "commands": {},
+  "source_files": [],
+  "workload": {},
+  "implementation": {},
+  "timing": {},
+  "build": {},
+  "systems": {
+    "enabled": false,
+    "trace": ["cuda", "nvtx", "osrt"],
+    "sample": "none",
+    "cpuctxsw": "none",
+    "capture_range": "none",
+    "max_events": 12000
+  },
+  "profile": {
+    "enabled": false,
+    "set": "detailed",
+    "sections": ["SchedulerStats", "WarpStateStats", "MemoryWorkloadAnalysis_Tables"],
+    "kernel_regex": "",
+    "name_base": "demangled",
+    "launch_skip": 0,
+    "launch_count": 1,
+    "replay": "kernel",
+    "cache": "all",
+    "clock": "none"
+  }
+}

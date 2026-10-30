@@ -1,0 +1,232 @@
+{
+  "schema_version": 1,
+  "id": "a7fca69319a5438590e356592a7f376e",
+  "label": "memory-native",
+  "created_at": "2026-10-30T07:16:49.975625+00:00",
+  "status": "succeeded",
+  "config": {
+    "schema_version": 1,
+    "id": "memory-coalescing",
+    "label": "CUDA PTX global load sectors, aligned stride 1",
+    "project_root": "../../..",
+    "data_dir": ".kernel-perf",
+    "repeats": 3,
+    "commands": {
+      "build": [
+        "python3",
+        "tools/calibrate_memory.py",
+        "--mode",
+        "build",
+        "--out",
+        "artifacts/memory-perf"
+      ],
+      "check": [
+        "artifacts/memory-perf/memory-bench",
+        "coalesce",
+        "1",
+        "0",
+        "64",
+        "16",
+        "128",
+        "1",
+        "0"
+      ],
+      "benchmark": [
+        "artifacts/memory-perf/memory-bench",
+        "coalesce",
+        "1",
+        "0",
+        "64",
+        "16",
+        "128",
+        "9",
+        "0"
+      ],
+      "profile": [
+        "artifacts/memory-perf/memory-bench",
+        "coalesce",
+        "1",
+        "0",
+        "64",
+        "16",
+        "128",
+        "1",
+        "0"
+      ]
+    },
+    "source_files": [
+      "benchmarks/cuda/memory.cu",
+      "benchmarks/cuda/common.cuh",
+      "benchmarks/cuda/coalesce.cuh",
+      "benchmarks/cuda/shared.cuh",
+      "benchmarks/cuda/chase.cuh",
+      "benchmarks/memory_pattern.hpp"
+    ],
+    "binary_files": [
+      "artifacts/memory-perf/memory-bench"
+    ],
+    "workload": {
+      "dtype": "uint32",
+      "blocks": 64,
+      "threads": 32,
+      "rows_per_block": 16,
+      "iterations": 128,
+      "stride_words": 1,
+      "offset_words": 0,
+      "input": "word index * 1664525 + 1013904223, modulo 2^32",
+      "expected_warp_load_requests": 8192,
+      "expected_sectors_per_request": 4,
+      "useful_bytes_scope": "logical lane read bytes, excluding stores; not measured DRAM traffic"
+    },
+    "implementation": {
+      "language": "CUDA C++17 and inline PTX",
+      "load": "ld.global.cg.u32"
+    },
+    "timing": {
+      "method": "CUDA events around one kernel, mean of 9 individually validated launches per process",
+      "scope": "full kernel, excluding allocations, transfers, CPU validation and profiler",
+      "warmup_launches": 1,
+      "clocks": "unlocked",
+      "purpose": "measurement plumbing; not a bandwidth saturation benchmark"
+    },
+    "build": {
+      "type": "Release",
+      "architecture": "native",
+      "flags": "-O3 -std=c++17 -lineinfo"
+    },
+    "systems": {
+      "enabled": false
+    },
+    "profile": {
+      "enabled": true,
+      "kernel_regex": "coalesce_kernel",
+      "name_base": "function",
+      "launch_skip": 1,
+      "launch_count": 1,
+      "replay": "kernel",
+      "cache": "all",
+      "clock": "none",
+      "metrics": [
+        "l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum",
+        "l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum"
+      ]
+    }
+  },
+  "native": {
+    "time_ms": 0.04741803333333333,
+    "check_passed": true,
+    "useful_bytes": 1048576,
+    "samples": [
+      {
+        "time_ms": 0.0410844,
+        "check_passed": true,
+        "useful_bytes": 1048576
+      },
+      {
+        "time_ms": 0.0605084,
+        "check_passed": true,
+        "useful_bytes": 1048576
+      },
+      {
+        "time_ms": 0.0406613,
+        "check_passed": true,
+        "useful_bytes": 1048576
+      }
+    ],
+    "min_ms": 0.0406613,
+    "max_ms": 0.0605084,
+    "stdev_ms": 0.011338563753991653,
+    "effective_gb_s": 22.113443478957723
+  },
+  "launches": [],
+  "systems": null,
+  "analyses": {},
+  "environment": {
+    "python": "3.13.5",
+    "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.35",
+    "gpu": [
+      {
+        "name": "NVIDIA GeForce RTX 4070 SUPER",
+        "uuid": "GPU-dd9ae0df-b609-3725-361d-898e6097234b",
+        "driver": "575.57.08"
+      }
+    ],
+    "gpu_probe": {
+      "ok": true,
+      "text": "NVIDIA GeForce RTX 4070 SUPER, GPU-dd9ae0df-b609-3725-361d-898e6097234b, 575.57.08"
+    },
+    "ncu": {
+      "ok": true,
+      "text": "NVIDIA (R) Nsight Compute Command Line Profiler\nCopyright (c) 2018-2025 NVIDIA Corporation\nVersion 2025.2.1.0 (build 35987062) (public-release)"
+    },
+    "nsys": {
+      "ok": true,
+      "text": "NVIDIA Nsight Systems version 2025.1.3.140-251335620677v0"
+    },
+    "ncu_ui": "/usr/local/cuda/bin/ncu-ui",
+    "nsys_ui": "/usr/local/cuda/bin/nsight-sys",
+    "nvcc": {
+      "ok": true,
+      "text": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2025 NVIDIA Corporation\nBuilt on Tue_May_27_02:21:03_PDT_2025\nCuda compilation tools, release 12.9, V12.9.86\nBuild cuda_12.9.r12.9/compiler.36037853_0"
+    }
+  },
+  "build": {
+    "type": "Release",
+    "architecture": "native",
+    "flags": "-O3 -std=c++17 -lineinfo",
+    "source_sha256": {
+      "benchmarks/cuda/memory.cu": "168aa7a59ee78ffcf62726ce26db836496316fd41e1cb304c854bdb432f53f62",
+      "benchmarks/cuda/common.cuh": "81813213f92f97323594ac4531f4dda122fa08d7b98191fbcb2cea9ab6f416b9",
+      "benchmarks/cuda/coalesce.cuh": "208b4b4ecd4843dda706e62e5100a2df2342e408b3e0ad62c50fcd22dc02e243",
+      "benchmarks/cuda/shared.cuh": "5db4520d7ee0a64aa3f381f1800a4134bca5b2fe79d68242373b05c6b16e5098",
+      "benchmarks/cuda/chase.cuh": "81452791bf2fbc5f348c09a5a0371f10e80c3f09899c94fe0fb44bab92fbeb28",
+      "benchmarks/memory_pattern.hpp": "da5f52b190c418381f0024ae8e59846c49a861700164311998ea8715e64245be"
+    },
+    "binary_sha256": {
+      "artifacts/memory-perf/memory-bench": "f58299db96a16f87c83b5776da412dac43cd0e772c16a146c77da03966e55d2f"
+    }
+  },
+  "artifacts": {
+    "check.command.json": {
+      "sha256": "845d3bac34008847701c9e4e19d7d3fc9e5d898745198f4d27791e44d9ea8e12",
+      "bytes": 195
+    },
+    "build.command.json": {
+      "sha256": "10d8831d7aaac521d2a7d2ddd0efac4cb17d647b8b48d52c58385580ce05c507",
+      "bytes": 187
+    },
+    "benchmark-0.log": {
+      "sha256": "2a938be29f288d6794ef05dfc2d3cf286296b6fd6f6e027ae751691d9bfc0e39",
+      "bytes": 2301
+    },
+    "benchmark-0.command.json": {
+      "sha256": "83752ee151d15b18c82f385ceaf8c9e4a963da04e27d5252cb8c6077072f08d3",
+      "bytes": 195
+    },
+    "check.log": {
+      "sha256": "55e2ab2343b0ef342c4394a253ce50103658f13223b66136f76eb7d8089f4c6c",
+      "bytes": 584
+    },
+    "benchmark-1.log": {
+      "sha256": "0b9f9db3f73cf02041768b7d4af07b5bd04cb4f2d4406bad7f8c74e497a376f8",
+      "bytes": 2301
+    },
+    "build.log": {
+      "sha256": "61cf5211d979ab1a1e388496471598ef25bcd48881f1069ab0a7b97e354c4d4c",
+      "bytes": 61
+    },
+    "benchmark-2.log": {
+      "sha256": "09af7470557db5f9c3c3a04b2b1da3e3a7a0c33c0c6e53f53a08b9673101ce42",
+      "bytes": 2303
+    },
+    "benchmark-1.command.json": {
+      "sha256": "83752ee151d15b18c82f385ceaf8c9e4a963da04e27d5252cb8c6077072f08d3",
+      "bytes": 195
+    },
+    "benchmark-2.command.json": {
+      "sha256": "83752ee151d15b18c82f385ceaf8c9e4a963da04e27d5252cb8c6077072f08d3",
+      "bytes": 195
+    }
+  },
+  "check_command_passed": true
+}

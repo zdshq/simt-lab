@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "compute-sanitizer",
+    "--tool",
+    "memcheck",
+    "--error-exitcode",
+    "3",
+    "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-check/memory-bench",
+    "shared",
+    "32",
+    "513",
+    "1",
+    "0"
+  ],
+  "utc": "2026-10-30T07:26:03.823263+00:00",
+  "returncode": 0,
+  "log": "memcheck-5.log"
+}

@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "cmake",
+    "--build",
+    "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build",
+    "--target",
+    "simt-memory-probe",
+    "-j",
+    "4"
+  ],
+  "utc": "2026-10-30T07:21:54.788381+00:00",
+  "returncode": 0,
+  "log": "model-build.log"
+}

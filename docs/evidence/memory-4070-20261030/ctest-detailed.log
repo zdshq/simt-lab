@@ -1,0 +1,790 @@
+Start testing: Oct 30 02:26 CDT
+----------------------------------------------------------
+1/27 Testing: memory_calibration_probe
+1/27 Test: memory_calibration_probe
+Command: "/home/zeke/miniconda3/bin/python3.1" "/home/zeke/data/project/mytry/simt-lab/tests/test_memory_calibration.py" "/home/zeke/data/project/mytry/simt-lab/build/simt-memory-probe"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"memory_calibration_probe" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.031s
+
+OK
+<end of output>
+Test time =   0.06 sec
+----------------------------------------------------------
+Test Passed.
+"memory_calibration_probe" end time: Oct 30 02:26 CDT
+"memory_calibration_probe" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/27 Testing: hardware_memory_units
+2/27 Test: hardware_memory_units
+Command: "/home/zeke/data/project/mytry/simt-lab/build/test-hardware-memory"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"hardware_memory_units" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+PASS dram_row_timing
+PASS dram_write_visibility_and_capacity
+PASS cold_hit_and_real_cache_bytes
+PASS independent_sector_valid_bits
+PASS lru_replacement_and_conflict
+PASS mshr_merge_and_limit
+PASS reserved_way_and_bank_backpressure
+PASS lower_backpressure_preserves_misses
+PASS write_through_and_read_hazard
+PASS coalescing_transactions
+PASS coalescing_store_bytes_and_validation
+PASS shared_banks_and_broadcast
+PASS shared_partial_words_and_store_conflicts
+PASS hierarchy_shared_l2_and_coherence
+PASS hierarchy_capacity_and_invalidation
+PASS randomized_hierarchy_data
+PASS malformed_configs_and_tickets
+<end of output>
+Test time =   0.23 sec
+----------------------------------------------------------
+Test Passed.
+"hardware_memory_units" end time: Oct 30 02:26 CDT
+"hardware_memory_units" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/27 Testing: hardware_pipeline_units
+3/27 Test: hardware_pipeline_units
+Command: "/home/zeke/data/project/mytry/simt-lab/build/test-hardware-pipeline"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"hardware_pipeline_units" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+PASS masked writers
+PASS reader lifetime
+PASS read modify write
+PASS predicate writers
+PASS register admission and reuse
+PASS shared and warp admission
+PASS register bank ports
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"hardware_pipeline_units" end time: Oct 30 02:26 CDT
+"hardware_pipeline_units" time elapsed: 00:00:00
+----------------------------------------------------------
+
+4/27 Testing: hardware_tensor_array
+4/27 Test: hardware_tensor_array
+Command: "/home/zeke/data/project/mytry/simt-lab/build/test-hardware-tensor"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"hardware_tensor_array" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+PASS rectangular wavefront
+PASS bounded queue and response
+PASS scaling pipeline
+PASS sparse and integer
+PASS input gaps and array reuse
+PASS fused rounding
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"hardware_tensor_array" end time: Oct 30 02:26 CDT
+"hardware_tensor_array" time elapsed: 00:00:00
+----------------------------------------------------------
+
+5/27 Testing: hardware_atomic_local
+5/27 Test: hardware_atomic_local
+Command: "/home/zeke/data/project/mytry/simt-lab/build/test-hardware-atomic"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"hardware_atomic_local" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+PASS shared_atomic_exact_clock
+PASS shared_atomic_banks_and_store_exclusion
+PASS shared_atomic_external_owners
+PASS global_atomic_queue_and_old_values
+PASS atomic_cache_coherence
+PASS mixed_atomic_store_order
+PASS local_translation_and_sector_data
+PASS local_write_visibility_and_global_isolation
+PASS randomized_mixed_atomic_stream
+<end of output>
+Test time =   0.03 sec
+----------------------------------------------------------
+Test Passed.
+"hardware_atomic_local" end time: Oct 30 02:26 CDT
+"hardware_atomic_local" time elapsed: 00:00:00
+----------------------------------------------------------
+
+6/27 Testing: hardware_context_lifetime
+6/27 Test: hardware_context_lifetime
+Command: "/home/zeke/data/project/mytry/simt-lab/build/test-hardware-context"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"hardware_context_lifetime" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+PASS range_invalidation_preserves_neighbors
+PASS invalidation_rejects_overlap_and_preserves_unrelated_fill
+PASS owner_drain_preserves_other_engine
+PASS local_generations_keep_old_tags_disjoint
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"hardware_context_lifetime" end time: Oct 30 02:26 CDT
+"hardware_context_lifetime" time elapsed: 00:00:00
+----------------------------------------------------------
+
+7/27 Testing: isa_and_execution
+7/27 Test: isa_and_execution
+Command: "/usr/bin/cmake" "-E" "env" "PYTHONPATH=/home/zeke/data/project/mytry/simt-lab/build/generated:/home/zeke/data/project/mytry/simt-lab/python" "SIMT_RUNNER=/home/zeke/data/project/mytry/simt-lab/build/simt-run" "/home/zeke/miniconda3/bin/python3.1" "/home/zeke/data/project/mytry/simt-lab/tests/test_simulator.py"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"isa_and_execution" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+test_control_bits_decode_without_timing_effect (__main__.SimulationTest.test_control_bits_decode_without_timing_effect) ... ok
+test_encoding_known_layout (__main__.SimulationTest.test_encoding_known_layout) ... ok
+test_encoding_roundtrip (__main__.SimulationTest.test_encoding_roundtrip) ... ok
+test_errors_are_contextual (__main__.SimulationTest.test_errors_are_contextual) ... ok
+test_floating_operations_and_fused_rounding (__main__.SimulationTest.test_floating_operations_and_fused_rounding) ... ok
+test_integer_comparison_modes (__main__.SimulationTest.test_integer_comparison_modes) ... ok
+test_integer_programs_against_scalar_reference (__main__.SimulationTest.test_integer_programs_against_scalar_reference) ... ok
+test_invalid_encodings (__main__.SimulationTest.test_invalid_encodings) ... ok
+test_predicated_exit_and_partial_predicate_write (__main__.SimulationTest.test_predicated_exit_and_partial_predicate_write) ... ok
+test_predicates_and_zero_register (__main__.SimulationTest.test_predicates_and_zero_register) ... ok
+test_schema_rejects_overlap_and_duplicate_opcodes (__main__.SimulationTest.test_schema_rejects_overlap_and_duplicate_opcodes) ... ok
+test_two_sms_multiwarp_partial_warp_and_block_retirement (__main__.SimulationTest.test_two_sms_multiwarp_partial_warp_and_block_retirement) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.154s
+
+OK
+<end of output>
+Test time =   0.19 sec
+----------------------------------------------------------
+Test Passed.
+"isa_and_execution" end time: Oct 30 02:26 CDT
+"isa_and_execution" time elapsed: 00:00:00
+----------------------------------------------------------
+
+8/27 Testing: timed_sm_execution
+8/27 Test: timed_sm_execution
+Command: "/usr/bin/cmake" "-E" "env" "PYTHONPATH=/home/zeke/data/project/mytry/simt-lab/build/generated:/home/zeke/data/project/mytry/simt-lab/python" "SIMT_RUNNER=/home/zeke/data/project/mytry/simt-lab/build/simt-run" "/home/zeke/miniconda3/bin/python3.1" "/home/zeke/data/project/mytry/simt-lab/tests/test_timing.py"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"timed_sm_execution" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+test_all_members_break_and_yield_alone (__main__.TimedControlTest.test_all_members_break_and_yield_alone) ... ok
+test_deadlock_and_unbounded_loop (__main__.TimedControlTest.test_deadlock_and_unbounded_loop) ... ok
+test_divergent_loop_and_token_reuse (__main__.TimedControlTest.test_divergent_loop_and_token_reuse) ... ok
+test_elect_vote_and_subgroup_shuffle (__main__.TimedControlTest.test_elect_vote_and_subgroup_shuffle) ... ok
+test_exit_releases_waiting_join (__main__.TimedControlTest.test_exit_releases_waiting_join) ... ok
+test_invalid_collective_participation (__main__.TimedControlTest.test_invalid_collective_participation) ... ok
+test_invalid_control_operations (__main__.TimedControlTest.test_invalid_control_operations) ... ok
+test_nested_reconvergence (__main__.TimedControlTest.test_nested_reconvergence) ... ok
+test_shuffle_reads_old_registers (__main__.TimedControlTest.test_shuffle_reads_old_registers) ... ok
+test_arrival_misuse (__main__.TimedMemoryTest.test_arrival_misuse) ... ok
+test_barrier_reuse (__main__.TimedMemoryTest.test_barrier_reuse) ... ok
+test_early_exit (__main__.TimedMemoryTest.test_early_exit) ... ok
+test_memory_faults (__main__.TimedMemoryTest.test_memory_faults) ... ok
+test_producer_consumer (__main__.TimedMemoryTest.test_producer_consumer) ... ok
+test_sparse_addresses (__main__.TimedMemoryTest.test_sparse_addresses) ... ok
+test_subwords_and_constants (__main__.TimedMemoryTest.test_subwords_and_constants) ... ok
+test_comparison_modes (__main__.TimedScalarTest.test_comparison_modes) ... ok
+test_errors (__main__.TimedScalarTest.test_errors) ... ok
+test_fused_rounding (__main__.TimedScalarTest.test_fused_rounding) ... ok
+test_integer_reference (__main__.TimedScalarTest.test_integer_reference) ... ok
+test_predicated_exit (__main__.TimedScalarTest.test_predicated_exit) ... ok
+test_predicates (__main__.TimedScalarTest.test_predicates) ... ok
+test_dependency_chain (__main__.TimingTest.test_dependency_chain) ... ok
+test_explicit_limits_and_memory_errors (__main__.TimingTest.test_explicit_limits_and_memory_errors) ... ok
+test_load_latency_and_waw (__main__.TimingTest.test_load_latency_and_waw) ... ok
+test_multi_cta_residency (__main__.TimingTest.test_multi_cta_residency) ... ok
+test_operand_collection_war (__main__.TimingTest.test_operand_collection_war) ... ok
+test_randomized_integer_dependencies (__main__.TimingTest.test_randomized_integer_dependencies) ... ok
+test_real_cache_and_store_invalidation (__main__.TimingTest.test_real_cache_and_store_invalidation) ... ok
+test_register_banks_and_duplicate_sources (__main__.TimingTest.test_register_banks_and_duplicate_sources) ... ok
+test_sfu_throughput_and_collectors (__main__.TimingTest.test_sfu_throughput_and_collectors) ... ok
+test_shared_conflicts_and_broadcast (__main__.TimingTest.test_shared_conflicts_and_broadcast) ... ok
+test_shared_reduction (__main__.TimingTest.test_shared_reduction) ... ok
+test_subwords_and_generic_shared (__main__.TimingTest.test_subwords_and_generic_shared) ... ok
+test_writeback_contention (__main__.TimingTest.test_writeback_contention) ... ok
+
+----------------------------------------------------------------------
+Ran 35 tests in 0.740s
+
+OK
+<end of output>
+Test time =   0.78 sec
+----------------------------------------------------------
+Test Passed.
+"timed_sm_execution" end time: Oct 30 02:26 CDT
+"timed_sm_execution" time elapsed: 00:00:00
+----------------------------------------------------------
+
+9/27 Testing: timed_tensor_execution
+9/27 Test: timed_tensor_execution
+Command: "/usr/bin/cmake" "-E" "env" "PYTHONPATH=/home/zeke/data/project/mytry/simt-lab/build/generated:/home/zeke/data/project/mytry/simt-lab/python" "SIMT_RUNNER=/home/zeke/data/project/mytry/simt-lab/build/simt-run" "/home/zeke/miniconda3/bin/python3.1" "/home/zeke/data/project/mytry/simt-lab/tests/test_timed_tensor.py"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"timed_tensor_execution" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+test_allocation_zeroing_uses_ports (__main__.TensorPipelineTest.test_allocation_zeroing_uses_ports) ... ok
+test_maximum_descriptor_shape (__main__.TensorPipelineTest.test_maximum_descriptor_shape) ... ok
+test_microtiles_and_array_geometry (__main__.TensorPipelineTest.test_microtiles_and_array_geometry) ... ok
+test_other_warp_progresses_during_mma (__main__.TensorPipelineTest.test_other_warp_progresses_during_mma) ... ok
+test_shared_operand_supply_and_array_latency (__main__.TensorPipelineTest.test_shared_operand_supply_and_array_latency) ... ok
+test_sparse_rows_and_absent_nan (__main__.TensorPipelineTest.test_sparse_rows_and_absent_nan) ... ok
+test_tiled_gemm_end_to_end (__main__.TensorPipelineTest.test_tiled_gemm_end_to_end) ... ok
+test_tmem_bank_conflicts_and_broadcast (__main__.TensorPipelineTest.test_tmem_bank_conflicts_and_broadcast) ... ok
+test_tmem_capacity_is_shared_between_ctas (__main__.TensorPipelineTest.test_tmem_capacity_is_shared_between_ctas) ... ok
+test_accumulator_fused_rounding_and_integer_wrap (__main__.TimedTensorSemantics.test_accumulator_fused_rounding_and_integer_wrap) ... ok
+test_dense_formats_against_exact_reference (__main__.TimedTensorSemantics.test_dense_formats_against_exact_reference) ... ok
+test_fp4_block_scales (__main__.TimedTensorSemantics.test_fp4_block_scales) ... ok
+test_half_bfloat_and_float_subnormals (__main__.TimedTensorSemantics.test_half_bfloat_and_float_subnormals) ... ok
+test_invalid_tensor_descriptors (__main__.TimedTensorSemantics.test_invalid_tensor_descriptors) ... ok
+test_reference_rounding_boundaries (__main__.TimedTensorSemantics.test_reference_rounding_boundaries) ... ok
+test_repeated_mma_accumulates_in_tmem (__main__.TimedTensorSemantics.test_repeated_mma_accumulates_in_tmem) ... ok
+test_sparse_metadata_positions_and_rejection (__main__.TimedTensorSemantics.test_sparse_metadata_positions_and_rejection) ... ok
+test_sparse_scaled_rounding_and_invalid_scale (__main__.TimedTensorSemantics.test_sparse_scaled_rounding_and_invalid_scale) ... ok
+test_tmem_allocation_transfer_and_reuse (__main__.TimedTensorSemantics.test_tmem_allocation_transfer_and_reuse) ... ok
+
+----------------------------------------------------------------------
+Ran 19 tests in 2.334s
+
+OK
+<end of output>
+Test time =   2.38 sec
+----------------------------------------------------------
+Test Passed.
+"timed_tensor_execution" end time: Oct 30 02:26 CDT
+"timed_tensor_execution" time elapsed: 00:00:02
+----------------------------------------------------------
+
+10/27 Testing: timed_async_execution
+10/27 Test: timed_async_execution
+Command: "/usr/bin/cmake" "-E" "env" "PYTHONPATH=/home/zeke/data/project/mytry/simt-lab/build/generated:/home/zeke/data/project/mytry/simt-lab/python" "SIMT_RUNNER=/home/zeke/data/project/mytry/simt-lab/build/simt-run" "/home/zeke/miniconda3/bin/python3.1" "/home/zeke/data/project/mytry/simt-lab/tests/test_timed_async.py"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"timed_async_execution" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+test_aligned_unaligned_tails_and_maximum_size (__main__.DmaPipelineTest.test_aligned_unaligned_tails_and_maximum_size) ... ok
+test_barrier_capacity_is_shared_across_resident_ctas (__main__.DmaPipelineTest.test_barrier_capacity_is_shared_across_resident_ctas) ... ok
+test_barrier_entries_are_released_on_cta_retirement (__main__.DmaPipelineTest.test_barrier_entries_are_released_on_cta_retirement) ... ok
+test_concurrent_ctas_keep_distinct_shared_payloads (__main__.DmaPipelineTest.test_concurrent_ctas_keep_distinct_shared_payloads) ... ok
+test_distinct_wait_addresses_share_the_control_engine (__main__.DmaPipelineTest.test_distinct_wait_addresses_share_the_control_engine) ... ok
+test_empty_masks_do_not_allocate_or_access_memory (__main__.DmaPipelineTest.test_empty_masks_do_not_allocate_or_access_memory) ... ok
+test_exit_waits_for_background_dma (__main__.DmaPipelineTest.test_exit_waits_for_background_dma) ... ok
+test_expected_byte_and_arrival_overflow (__main__.DmaPipelineTest.test_expected_byte_and_arrival_overflow) ... ok
+test_fragment_capacity_changes_throughput (__main__.DmaPipelineTest.test_fragment_capacity_changes_throughput) ... ok
+test_full_queue_releases_completion_credits (__main__.DmaPipelineTest.test_full_queue_releases_completion_credits) ... ok
+test_invalid_ranges_and_overlapping_records (__main__.DmaPipelineTest.test_invalid_ranges_and_overlapping_records) ... ok
+test_invalid_sizes_and_configuration (__main__.DmaPipelineTest.test_invalid_sizes_and_configuration) ... ok
+test_new_record_cannot_overlap_pending_dma (__main__.DmaPipelineTest.test_new_record_cannot_overlap_pending_dma) ... ok
+test_payload_completes_before_arrival (__main__.DmaPipelineTest.test_payload_completes_before_arrival) ... ok
+test_random_fragment_boundaries (__main__.DmaPipelineTest.test_random_fragment_boundaries) ... ok
+test_record_reservation_protects_pending_and_future_stores (__main__.DmaPipelineTest.test_record_reservation_protects_pending_and_future_stores) ... ok
+test_repeated_source_uses_l1 (__main__.DmaPipelineTest.test_repeated_source_uses_l1) ... ok
+test_submission_retirement_and_consumer_order (__main__.DmaPipelineTest.test_submission_retirement_and_consumer_order) ... ok
+test_two_arrivals_are_required (__main__.DmaPipelineTest.test_two_arrivals_are_required) ... ok
+test_async_shared_matrix_pipeline_across_warps (__main__.TimedAsyncTest.test_async_shared_matrix_pipeline_across_warps) ... ok
+test_deferred_copy_and_wait (__main__.TimedAsyncTest.test_deferred_copy_and_wait) ... ok
+test_exit_drains_outstanding_copy (__main__.TimedAsyncTest.test_exit_drains_outstanding_copy) ... ok
+test_invalid_transaction_usage (__main__.TimedAsyncTest.test_invalid_transaction_usage) ... ok
+test_missing_transaction_deadlocks (__main__.TimedAsyncTest.test_missing_transaction_deadlocks) ... ok
+test_repeated_transaction_phases (__main__.TimedAsyncTest.test_repeated_transaction_phases) ... ok
+test_shared_reduction (__main__.TimedWorkloadTest.test_shared_reduction) ... ok
+test_tiled_gemm (__main__.TimedWorkloadTest.test_tiled_gemm) ... ok
+test_tiny_transformer_block (__main__.TimedWorkloadTest.test_tiny_transformer_block) ... ok
+test_vector_add (__main__.TimedWorkloadTest.test_vector_add) ... ok
+
+----------------------------------------------------------------------
+Ran 29 tests in 1.444s
+
+OK
+<end of output>
+Test time =   1.49 sec
+----------------------------------------------------------
+Test Passed.
+"timed_async_execution" end time: Oct 30 02:26 CDT
+"timed_async_execution" time elapsed: 00:00:01
+----------------------------------------------------------
+
+11/27 Testing: timed_memory_execution
+11/27 Test: timed_memory_execution
+Command: "/usr/bin/cmake" "-E" "env" "PYTHONPATH=/home/zeke/data/project/mytry/simt-lab/build/generated:/home/zeke/data/project/mytry/simt-lab/python" "SIMT_RUNNER=/home/zeke/data/project/mytry/simt-lab/build/simt-run" "/home/zeke/miniconda3/bin/python3.1" "/home/zeke/data/project/mytry/simt-lab/tests/test_timed_memory.py"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"timed_memory_execution" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+test_atomic_banks_and_latency (__main__.MemoryPipelineTest.test_atomic_banks_and_latency) ... ok
+test_atomic_dependency_and_independent_alu_overlap (__main__.MemoryPipelineTest.test_atomic_dependency_and_independent_alu_overlap) ... ok
+test_atomic_errors_and_opaque_barriers (__main__.MemoryPipelineTest.test_atomic_errors_and_opaque_barriers) ... ok
+test_atomic_queue_backpressure_and_bank_configuration (__main__.MemoryPipelineTest.test_atomic_queue_backpressure_and_bank_configuration) ... ok
+test_cache_is_invalidated_after_atomic_write (__main__.MemoryPipelineTest.test_cache_is_invalidated_after_atomic_write) ... ok
+test_compare_exchange_uses_collected_replacement (__main__.MemoryPipelineTest.test_compare_exchange_uses_collected_replacement) ... ok
+test_generic_mixed_local_shared_global (__main__.MemoryPipelineTest.test_generic_mixed_local_shared_global) ... ok
+test_global_and_shared_random_atomic_modes (__main__.MemoryPipelineTest.test_global_and_shared_random_atomic_modes) ... ok
+test_local_coalescing_and_cache_reuse (__main__.MemoryPipelineTest.test_local_coalescing_and_cache_reuse) ... ok
+test_local_divergent_offsets_generate_more_sectors (__main__.MemoryPipelineTest.test_local_divergent_offsets_generate_more_sectors) ... ok
+test_local_predication_bounds_and_alignment (__main__.MemoryPipelineTest.test_local_predication_bounds_and_alignment) ... ok
+test_local_slot_reuse_preserves_cta_ownership (__main__.MemoryPipelineTest.test_local_slot_reuse_preserves_cta_ownership) ... ok
+test_local_subwords_and_last_word (__main__.MemoryPipelineTest.test_local_subwords_and_last_word) ... ok
+test_reduction_and_masked_atomics (__main__.MemoryPipelineTest.test_reduction_and_masked_atomics) ... ok
+test_atomic_modes (__main__.TimedMemoryContracts.test_atomic_modes) ... ok
+test_atomic_tickets (__main__.TimedMemoryContracts.test_atomic_tickets) ... ok
+test_spaces (__main__.TimedMemoryContracts.test_spaces) ... ok
+
+----------------------------------------------------------------------
+Ran 17 tests in 1.672s
+
+OK
+<end of output>
+Test time =   1.71 sec
+----------------------------------------------------------
+Test Passed.
+"timed_memory_execution" end time: Oct 30 02:26 CDT
+"timed_memory_execution" time elapsed: 00:00:01
+----------------------------------------------------------
+
+12/27 Testing: control_and_collectives
+12/27 Test: control_and_collectives
+Command: "/usr/bin/cmake" "-E" "env" "PYTHONPATH=/home/zeke/data/project/mytry/simt-lab/build/generated:/home/zeke/data/project/mytry/simt-lab/python" "SIMT_RUNNER=/home/zeke/data/project/mytry/simt-lab/build/simt-run" "/home/zeke/miniconda3/bin/python3.1" "/home/zeke/data/project/mytry/simt-lab/tests/test_control.py"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"control_and_collectives" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+test_all_members_break_and_yield_alone (__main__.ControlTest.test_all_members_break_and_yield_alone) ... ok
+test_deadlock_and_unbounded_loop (__main__.ControlTest.test_deadlock_and_unbounded_loop) ... ok
+test_divergent_loop_and_token_reuse (__main__.ControlTest.test_divergent_loop_and_token_reuse) ... ok
+test_elect_vote_and_subgroup_shuffle (__main__.ControlTest.test_elect_vote_and_subgroup_shuffle) ... ok
+test_exit_releases_waiting_join (__main__.ControlTest.test_exit_releases_waiting_join) ... ok
+test_invalid_collective_participation (__main__.ControlTest.test_invalid_collective_participation) ... ok
+test_invalid_control_operations (__main__.ControlTest.test_invalid_control_operations) ... ok
+test_nested_reconvergence (__main__.ControlTest.test_nested_reconvergence) ... ok
+test_shuffle_reads_old_registers (__main__.ControlTest.test_shuffle_reads_old_registers) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.037s
+
+OK
+<end of output>
+Test time =   0.08 sec
+----------------------------------------------------------
+Test Passed.
+"control_and_collectives" end time: Oct 30 02:26 CDT
+"control_and_collectives" time elapsed: 00:00:00
+----------------------------------------------------------
+
+13/27 Testing: memory_and_barriers
+13/27 Test: memory_and_barriers
+Command: "/usr/bin/cmake" "-E" "env" "PYTHONPATH=/home/zeke/data/project/mytry/simt-lab/build/generated:/home/zeke/data/project/mytry/simt-lab/python" "SIMT_RUNNER=/home/zeke/data/project/mytry/simt-lab/build/simt-run" "/home/zeke/miniconda3/bin/python3.1" "/home/zeke/data/project/mytry/simt-lab/tests/test_memory.py"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"memory_and_barriers" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+test_arrival_only_and_misuse (__main__.MemoryTest.test_arrival_only_and_misuse) ... ok
+test_atomic_compare_exchange_and_modes (__main__.MemoryTest.test_atomic_compare_exchange_and_modes) ... ok
+test_divergent_barrier_and_generation_reuse (__main__.MemoryTest.test_divergent_barrier_and_generation_reuse) ... ok
+test_early_exit_and_explicit_count (__main__.MemoryTest.test_early_exit_and_explicit_count) ... ok
+test_fair_producer_consumer_progress (__main__.MemoryTest.test_fair_producer_consumer_progress) ... ok
+test_global_atomic_tickets_and_shared_reduction (__main__.MemoryTest.test_global_atomic_tickets_and_shared_reduction) ... ok
+test_memory_faults_and_predicated_off_access (__main__.MemoryTest.test_memory_faults_and_predicated_off_access) ... ok
+test_multiwarp_shared_reduction (__main__.MemoryTest.test_multiwarp_shared_reduction) ... ok
+test_spaces_and_generic_translation (__main__.MemoryTest.test_spaces_and_generic_translation) ... ok
+test_sparse_zero_normalization_and_high_address (__main__.MemoryTest.test_sparse_zero_normalization_and_high_address) ... ok
+test_subwords_and_constants (__main__.MemoryTest.test_subwords_and_constants) ... ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 0.072s
+
+OK
+<end of output>
+Test time =   0.11 sec
+----------------------------------------------------------
+Test Passed.
+"memory_and_barriers" end time: Oct 30 02:26 CDT
+"memory_and_barriers" time elapsed: 00:00:00
+----------------------------------------------------------
+
+14/27 Testing: tensor_numeric
+14/27 Test: tensor_numeric
+Command: "/usr/bin/cmake" "-E" "env" "PYTHONPATH=/home/zeke/data/project/mytry/simt-lab/build/generated:/home/zeke/data/project/mytry/simt-lab/python" "SIMT_RUNNER=/home/zeke/data/project/mytry/simt-lab/build/simt-run" "/home/zeke/miniconda3/bin/python3.1" "/home/zeke/data/project/mytry/simt-lab/tests/test_tensor.py"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"tensor_numeric" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+test_accumulator_fused_rounding_and_integer_wrap (__main__.TensorTest.test_accumulator_fused_rounding_and_integer_wrap) ... ok
+test_dense_formats_against_exact_reference (__main__.TensorTest.test_dense_formats_against_exact_reference) ... ok
+test_fp4_block_scales (__main__.TensorTest.test_fp4_block_scales) ... ok
+test_half_bfloat_and_float_subnormals (__main__.TensorTest.test_half_bfloat_and_float_subnormals) ... ok
+test_invalid_tensor_descriptors (__main__.TensorTest.test_invalid_tensor_descriptors) ... ok
+test_reference_rounding_boundaries (__main__.TensorTest.test_reference_rounding_boundaries) ... ok
+test_repeated_mma_accumulates_in_tmem (__main__.TensorTest.test_repeated_mma_accumulates_in_tmem) ... ok
+test_sparse_metadata_positions_and_rejection (__main__.TensorTest.test_sparse_metadata_positions_and_rejection) ... ok
+test_sparse_scaled_rounding_and_invalid_scale (__main__.TensorTest.test_sparse_scaled_rounding_and_invalid_scale) ... ok
+test_tmem_allocation_transfer_and_reuse (__main__.TensorTest.test_tmem_allocation_transfer_and_reuse) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.107s
+
+OK
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Passed.
+"tensor_numeric" end time: Oct 30 02:26 CDT
+"tensor_numeric" time elapsed: 00:00:00
+----------------------------------------------------------
+
+15/27 Testing: async_transactions
+15/27 Test: async_transactions
+Command: "/usr/bin/cmake" "-E" "env" "PYTHONPATH=/home/zeke/data/project/mytry/simt-lab/build/generated:/home/zeke/data/project/mytry/simt-lab/python" "SIMT_RUNNER=/home/zeke/data/project/mytry/simt-lab/build/simt-run" "/home/zeke/miniconda3/bin/python3.1" "/home/zeke/data/project/mytry/simt-lab/tests/test_async.py"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"async_transactions" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+test_async_shared_matrix_pipeline_across_warps (__main__.AsyncTest.test_async_shared_matrix_pipeline_across_warps) ... ok
+test_deferred_copy_and_wait (__main__.AsyncTest.test_deferred_copy_and_wait) ... ok
+test_exit_drains_outstanding_copy (__main__.AsyncTest.test_exit_drains_outstanding_copy) ... ok
+test_invalid_transaction_usage (__main__.AsyncTest.test_invalid_transaction_usage) ... ok
+test_missing_transaction_deadlocks (__main__.AsyncTest.test_missing_transaction_deadlocks) ... ok
+test_repeated_transaction_phases (__main__.AsyncTest.test_repeated_transaction_phases) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.031s
+
+OK
+<end of output>
+Test time =   0.07 sec
+----------------------------------------------------------
+Test Passed.
+"async_transactions" end time: Oct 30 02:26 CDT
+"async_transactions" time elapsed: 00:00:00
+----------------------------------------------------------
+
+16/27 Testing: compositional_workloads
+16/27 Test: compositional_workloads
+Command: "/usr/bin/cmake" "-E" "env" "PYTHONPATH=/home/zeke/data/project/mytry/simt-lab/build/generated:/home/zeke/data/project/mytry/simt-lab/python" "SIMT_RUNNER=/home/zeke/data/project/mytry/simt-lab/build/simt-run" "/home/zeke/miniconda3/bin/python3.1" "/home/zeke/data/project/mytry/simt-lab/tests/test_workloads.py"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"compositional_workloads" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+test_shared_reduction (__main__.WorkloadTest.test_shared_reduction) ... ok
+test_tiled_gemm (__main__.WorkloadTest.test_tiled_gemm) ... ok
+test_tiny_transformer_block (__main__.WorkloadTest.test_tiny_transformer_block) ... ok
+test_vector_add (__main__.WorkloadTest.test_vector_add) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.115s
+
+OK
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Passed.
+"compositional_workloads" end time: Oct 30 02:26 CDT
+"compositional_workloads" time elapsed: 00:00:00
+----------------------------------------------------------
+
+17/27 Testing: native_host_protocol
+17/27 Test: native_host_protocol
+Command: "/usr/bin/cmake" "-E" "env" "PYTHONPATH=/home/zeke/data/project/mytry/simt-lab/build/generated:/home/zeke/data/project/mytry/simt-lab/python" "SIMT_RUNNER=/home/zeke/data/project/mytry/simt-lab/build/simt-run" "/home/zeke/miniconda3/bin/python3.1" "/home/zeke/data/project/mytry/simt-lab/tests/test_protocol.py"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"native_host_protocol" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+test_native_graph_expansion (__main__.ProtocolTest.test_native_graph_expansion) ... ok
+test_native_queue_protocol (__main__.ProtocolTest.test_native_queue_protocol) ... ok
+test_native_recovery_after_invalid_requests (__main__.ProtocolTest.test_native_recovery_after_invalid_requests) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.004s
+
+OK
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"native_host_protocol" end time: Oct 30 02:26 CDT
+"native_host_protocol" time elapsed: 00:00:00
+----------------------------------------------------------
+
+18/27 Testing: host_command_processor
+18/27 Test: host_command_processor
+Command: "/usr/bin/cmake" "-E" "env" "PYTHONPATH=/home/zeke/data/project/mytry/simt-lab/build/generated:/home/zeke/data/project/mytry/simt-lab/python" "SIMT_RUNNER=/home/zeke/data/project/mytry/simt-lab/build/simt-run" "/home/zeke/miniconda3/bin/python3.1" "/home/zeke/data/project/mytry/simt-lab/tests/test_host.py"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"host_command_processor" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+test_bounded_ring_and_wraparound (__main__.HostTest.test_bounded_ring_and_wraparound) ... ok
+test_buffer_lifetime_reuse_and_host_snapshot (__main__.HostTest.test_buffer_lifetime_reuse_and_host_snapshot) ... ok
+test_copy_compute_overlap_and_cross_stream_events (__main__.HostTest.test_copy_compute_overlap_and_cross_stream_events) ... ok
+test_copy_ranges_memset_and_overlap (__main__.HostTest.test_copy_ranges_memset_and_overlap) ... ok
+test_device_ownership (__main__.HostTest.test_device_ownership) ... ok
+test_doorbell_fetch_and_completion_are_distinct (__main__.HostTest.test_doorbell_fetch_and_completion_are_distinct) ... ok
+test_failure_propagation_and_independent_progress (__main__.HostTest.test_failure_propagation_and_independent_progress) ... ok
+test_persistent_memory_multiple_kernels_and_two_sms (__main__.HostTest.test_persistent_memory_multiple_kernels_and_two_sms) ... ok
+test_protocol_validation_and_wait_timeout (__main__.HostTest.test_protocol_validation_and_wait_timeout) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.028s
+
+OK
+<end of output>
+Test time =   0.07 sec
+----------------------------------------------------------
+Test Passed.
+"host_command_processor" end time: Oct 30 02:26 CDT
+"host_command_processor" time elapsed: 00:00:00
+----------------------------------------------------------
+
+19/27 Testing: graph_submission_and_capture
+19/27 Test: graph_submission_and_capture
+Command: "/usr/bin/cmake" "-E" "env" "PYTHONPATH=/home/zeke/data/project/mytry/simt-lab/build/generated:/home/zeke/data/project/mytry/simt-lab/python" "SIMT_RUNNER=/home/zeke/data/project/mytry/simt-lab/build/simt-run" "/home/zeke/miniconda3/bin/python3.1" "/home/zeke/data/project/mytry/simt-lab/tests/test_graph.py"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"graph_submission_and_capture" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+test_capture_misuse_and_recovery (__main__.GraphTest.test_capture_misuse_and_recovery) ... ok
+test_cross_stream_capture (__main__.GraphTest.test_cross_stream_capture) ... ok
+test_freed_buffer_invalidates_replay (__main__.GraphTest.test_freed_buffer_invalidates_replay) ... ok
+test_graph_branch_overlap_and_join (__main__.GraphTest.test_graph_branch_overlap_and_join) ... ok
+test_graph_failure_and_resource_release (__main__.GraphTest.test_graph_failure_and_resource_release) ... ok
+test_instantiate_snapshot_and_replay (__main__.GraphTest.test_instantiate_snapshot_and_replay) ... ok
+test_invalid_topology_and_empty_graph (__main__.GraphTest.test_invalid_topology_and_empty_graph) ... ok
+test_non_topological_node_order (__main__.GraphTest.test_non_topological_node_order) ... ok
+test_same_executable_serializes_replays (__main__.GraphTest.test_same_executable_serializes_replays) ... ok
+test_single_stream_capture_and_replay (__main__.GraphTest.test_single_stream_capture_and_replay) ... ok
+test_updates_and_inflight_exclusion (__main__.GraphTest.test_updates_and_inflight_exclusion) ... ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 0.035s
+
+OK
+<end of output>
+Test time =   0.07 sec
+----------------------------------------------------------
+Test Passed.
+"graph_submission_and_capture" end time: Oct 30 02:26 CDT
+"graph_submission_and_capture" time elapsed: 00:00:00
+----------------------------------------------------------
+
+20/27 Testing: timed_host_and_graph
+20/27 Test: timed_host_and_graph
+Command: "/usr/bin/cmake" "-E" "env" "PYTHONPATH=/home/zeke/data/project/mytry/simt-lab/build/generated:/home/zeke/data/project/mytry/simt-lab/python" "SIMT_RUNNER=/home/zeke/data/project/mytry/simt-lab/build/simt-run" "/home/zeke/miniconda3/bin/python3.1" "/home/zeke/data/project/mytry/simt-lab/tests/test_timed_host.py"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"timed_host_and_graph" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+test_all_compositional_workloads_through_graph (__main__.PersistentHardwareTest.test_all_compositional_workloads_through_graph) ... ok
+test_cache_retained_between_readonly_kernels (__main__.PersistentHardwareTest.test_cache_retained_between_readonly_kernels) ... ok
+test_decoded_packet_capacity_applies_backpressure (__main__.PersistentHardwareTest.test_decoded_packet_capacity_applies_backpressure) ... ok
+test_fault_drains_accepted_atomic_before_releasing_pins (__main__.PersistentHardwareTest.test_fault_drains_accepted_atomic_before_releasing_pins) ... ok
+test_fault_retains_local_backing_until_write_acknowledgement (__main__.PersistentHardwareTest.test_fault_retains_local_backing_until_write_acknowledgement) ... ok
+test_graph_decoder_and_dispatch_have_finite_bandwidth (__main__.PersistentHardwareTest.test_graph_decoder_and_dispatch_have_finite_bandwidth) ... ok
+test_graph_replay_runs_dma_tensor_and_host_copies (__main__.PersistentHardwareTest.test_graph_replay_runs_dma_tensor_and_host_copies) ... ok
+test_host_link_latency_and_bounded_copy_chunks (__main__.PersistentHardwareTest.test_host_link_latency_and_bounded_copy_chunks) ... ok
+test_local_cache_tags_do_not_alias_later_launches (__main__.PersistentHardwareTest.test_local_cache_tags_do_not_alias_later_launches) ... ok
+test_one_clock_for_both_engines_and_idle (__main__.PersistentHardwareTest.test_one_clock_for_both_engines_and_idle) ... ok
+test_random_unaligned_copies_and_overlapping_memmove (__main__.PersistentHardwareTest.test_random_unaligned_copies_and_overlapping_memmove) ... ok
+test_reallocation_clears_l1_and_l2 (__main__.PersistentHardwareTest.test_reallocation_clears_l1_and_l2) ... ok
+test_upload_invalidates_warm_kernel_cache (__main__.PersistentHardwareTest.test_upload_invalidates_warm_kernel_cache) ... ok
+test_capture_misuse_and_recovery (__main__.TimedGraphContracts.test_capture_misuse_and_recovery) ... ok
+test_cross_stream_capture (__main__.TimedGraphContracts.test_cross_stream_capture) ... ok
+test_freed_buffer_invalidates_replay (__main__.TimedGraphContracts.test_freed_buffer_invalidates_replay) ... ok
+test_graph_branch_overlap_and_join (__main__.TimedGraphContracts.test_graph_branch_overlap_and_join) ... ok
+test_graph_failure_and_resource_release (__main__.TimedGraphContracts.test_graph_failure_and_resource_release) ... ok
+test_instantiate_snapshot_and_replay (__main__.TimedGraphContracts.test_instantiate_snapshot_and_replay) ... ok
+test_invalid_topology_and_empty_graph (__main__.TimedGraphContracts.test_invalid_topology_and_empty_graph) ... ok
+test_non_topological_node_order (__main__.TimedGraphContracts.test_non_topological_node_order) ... ok
+test_same_executable_serializes_replays (__main__.TimedGraphContracts.test_same_executable_serializes_replays) ... ok
+test_single_stream_capture_and_replay (__main__.TimedGraphContracts.test_single_stream_capture_and_replay) ... ok
+test_updates_and_inflight_exclusion (__main__.TimedGraphContracts.test_updates_and_inflight_exclusion) ... ok
+test_bounded_ring_and_wraparound (__main__.TimedHostContracts.test_bounded_ring_and_wraparound) ... ok
+test_buffer_lifetime_reuse_and_host_snapshot (__main__.TimedHostContracts.test_buffer_lifetime_reuse_and_host_snapshot) ... ok
+test_copy_compute_overlap_and_cross_stream_events (__main__.TimedHostContracts.test_copy_compute_overlap_and_cross_stream_events) ... ok
+test_copy_ranges_memset_and_overlap (__main__.TimedHostContracts.test_copy_ranges_memset_and_overlap) ... ok
+test_device_ownership (__main__.TimedHostContracts.test_device_ownership) ... ok
+test_doorbell_fetch_and_completion_are_distinct (__main__.TimedHostContracts.test_doorbell_fetch_and_completion_are_distinct) ... ok
+test_failure_propagation_and_independent_progress (__main__.TimedHostContracts.test_failure_propagation_and_independent_progress) ... ok
+test_persistent_memory_multiple_kernels_and_two_sms (__main__.TimedHostContracts.test_persistent_memory_multiple_kernels_and_two_sms) ... ok
+test_protocol_validation_and_wait_timeout (__main__.TimedHostContracts.test_protocol_validation_and_wait_timeout) ... ok
+
+----------------------------------------------------------------------
+Ran 33 tests in 0.572s
+
+OK
+<end of output>
+Test time =   0.61 sec
+----------------------------------------------------------
+Test Passed.
+"timed_host_and_graph" end time: Oct 30 02:26 CDT
+"timed_host_and_graph" time elapsed: 00:00:00
+----------------------------------------------------------
+
+21/27 Testing: tensor_backend_selection
+21/27 Test: tensor_backend_selection
+Command: "/usr/bin/cmake" "-E" "env" "PYTHONPATH=/home/zeke/data/project/mytry/simt-lab/build/generated:/home/zeke/data/project/mytry/simt-lab/python" "SIMT_RUNNER=/home/zeke/data/project/mytry/simt-lab/build/simt-run" "/home/zeke/miniconda3/bin/python3.1" "/home/zeke/data/project/mytry/simt-lab/tests/test_tensor_backend.py"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"tensor_backend_selection" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+..
+----------------------------------------------------------------------
+Ran 2 tests in 0.007s
+
+OK
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"tensor_backend_selection" end time: Oct 30 02:26 CDT
+"tensor_backend_selection" time elapsed: 00:00:00
+----------------------------------------------------------
+
+22/27 Testing: cache_backend_selection
+22/27 Test: cache_backend_selection
+Command: "/usr/bin/cmake" "-E" "env" "PYTHONPATH=/home/zeke/data/project/mytry/simt-lab/build/generated:/home/zeke/data/project/mytry/simt-lab/python" "SIMT_RUNNER=/home/zeke/data/project/mytry/simt-lab/build/simt-run" "/home/zeke/miniconda3/bin/python3.1" "/home/zeke/data/project/mytry/simt-lab/tests/test_cache_backend.py"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"cache_backend_selection" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+test_cache_rtl_is_explicit (__main__.CacheBackendSelection.test_cache_rtl_is_explicit) ... ok
+test_cache_rtl_requires_timing (__main__.CacheBackendSelection.test_cache_rtl_requires_timing) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.007s
+
+OK
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"cache_backend_selection" end time: Oct 30 02:26 CDT
+"cache_backend_selection" time elapsed: 00:00:00
+----------------------------------------------------------
+
+23/27 Testing: scoreboard_backend_selection
+23/27 Test: scoreboard_backend_selection
+Command: "/usr/bin/cmake" "-E" "env" "PYTHONPATH=/home/zeke/data/project/mytry/simt-lab/build/generated:/home/zeke/data/project/mytry/simt-lab/python" "SIMT_RUNNER=/home/zeke/data/project/mytry/simt-lab/build/simt-run" "/home/zeke/miniconda3/bin/python3.1" "/home/zeke/data/project/mytry/simt-lab/tests/test_scoreboard_backend.py"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"scoreboard_backend_selection" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+test_build_capability_and_geometry (__main__.ScoreboardSelection.test_build_capability_and_geometry) ... ok
+test_requires_timing (__main__.ScoreboardSelection.test_requires_timing) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.008s
+
+OK
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"scoreboard_backend_selection" end time: Oct 30 02:26 CDT
+"scoreboard_backend_selection" time elapsed: 00:00:00
+----------------------------------------------------------
+
+24/27 Testing: register_backend_selection
+24/27 Test: register_backend_selection
+Command: "/usr/bin/cmake" "-E" "env" "PYTHONPATH=/home/zeke/data/project/mytry/simt-lab/build/generated:/home/zeke/data/project/mytry/simt-lab/python" "SIMT_RUNNER=/home/zeke/data/project/mytry/simt-lab/build/simt-run" "/home/zeke/miniconda3/bin/python3.1" "/home/zeke/data/project/mytry/simt-lab/tests/test_register_backend.py"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"register_backend_selection" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+test_physical_slot_reuse_and_actual_port_events (__main__.RegisterSelection.test_physical_slot_reuse_and_actual_port_events) ... skipped 'register RTL not built'
+test_requires_timing_and_available_backend (__main__.RegisterSelection.test_requires_timing_and_available_backend) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.012s
+
+OK (skipped=1)
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"register_backend_selection" end time: Oct 30 02:26 CDT
+"register_backend_selection" time elapsed: 00:00:00
+----------------------------------------------------------
+
+25/27 Testing: collector_backend_selection
+25/27 Test: collector_backend_selection
+Command: "/usr/bin/cmake" "-E" "env" "PYTHONPATH=/home/zeke/data/project/mytry/simt-lab/build/generated:/home/zeke/data/project/mytry/simt-lab/python" "SIMT_RUNNER=/home/zeke/data/project/mytry/simt-lab/build/simt-run" "/home/zeke/miniconda3/bin/python3.1" "/home/zeke/data/project/mytry/simt-lab/tests/test_collector_backend.py"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"collector_backend_selection" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+test_hardware_capacity_and_lifecycle (__main__.CollectorSelection.test_hardware_capacity_and_lifecycle) ... skipped 'register/collector circuit not built'
+test_requires_register_backend (__main__.CollectorSelection.test_requires_register_backend) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.006s
+
+OK (skipped=1)
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"collector_backend_selection" end time: Oct 30 02:26 CDT
+"collector_backend_selection" time elapsed: 00:00:00
+----------------------------------------------------------
+
+26/27 Testing: native_nvidia_smi
+26/27 Test: native_nvidia_smi
+Command: "/usr/bin/cmake" "-E" "env" "PYTHONPATH=/home/zeke/data/project/mytry/simt-lab/build/generated:/home/zeke/data/project/mytry/simt-lab/python" "SIMT_RUNNER=/home/zeke/data/project/mytry/simt-lab/build/simt-run" "/home/zeke/miniconda3/bin/python3.1" "/home/zeke/data/project/mytry/simt-lab/tests/test_nvml.py"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"native_nvidia_smi" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+test_corrupt_snapshot_is_not_a_device (__main__.NvmlTest.test_corrupt_snapshot_is_not_a_device) ... ok
+test_crash_rejects_stale_files_and_handles (__main__.NvmlTest.test_crash_rejects_stale_files_and_handles) ... ok
+test_multiple_sessions_and_clean_exit (__main__.NvmlTest.test_multiple_sessions_and_clean_exit) ... ok
+test_native_list_default_and_live_memory (__main__.NvmlTest.test_native_list_default_and_live_memory) ... ok
+test_public_abi_and_exact_allocated_bytes (__main__.NvmlTest.test_public_abi_and_exact_allocated_bytes) ... ok
+test_unknown_physical_properties_are_unavailable (__main__.NvmlTest.test_unknown_physical_properties_are_unavailable) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.049s
+
+OK
+<end of output>
+Test time =   0.09 sec
+----------------------------------------------------------
+Test Passed.
+"native_nvidia_smi" end time: Oct 30 02:26 CDT
+"native_nvidia_smi" time elapsed: 00:00:00
+----------------------------------------------------------
+
+27/27 Testing: merged_nvidia_smi
+27/27 Test: merged_nvidia_smi
+Command: "/usr/bin/cmake" "-E" "env" "PYTHONPATH=/home/zeke/data/project/mytry/simt-lab/build/generated:/home/zeke/data/project/mytry/simt-lab/python" "SIMT_RUNNER=/home/zeke/data/project/mytry/simt-lab/build/simt-run" "/home/zeke/miniconda3/bin/python3.1" "/home/zeke/data/project/mytry/simt-lab/tests/test_nvml_merge.py"
+Directory: /home/zeke/data/project/mytry/simt-lab/build
+"merged_nvidia_smi" start time: Oct 30 02:26 CDT
+Output:
+----------------------------------------------------------
+test_abi_routing_and_reference_counts (__main__.MergedNvmlTest.test_abi_routing_and_reference_counts) ... ok
+test_crash_keeps_native_handles_alive (__main__.MergedNvmlTest.test_crash_keeps_native_handles_alive) ... ok
+test_installed_command_and_reversible_removal (__main__.MergedNvmlTest.test_installed_command_and_reversible_removal) ... ok
+test_installer_preserves_unrelated_and_modified_files (__main__.MergedNvmlTest.test_installer_preserves_unrelated_and_modified_files) ... ok
+test_multiple_simulators_keep_native_indices (__main__.MergedNvmlTest.test_multiple_simulators_keep_native_indices) ... ok
+test_real_metadata_and_live_simulated_memory (__main__.MergedNvmlTest.test_real_metadata_and_live_simulated_memory) ... ok
+test_uuid_index_pci_and_original_process_table (__main__.MergedNvmlTest.test_uuid_index_pci_and_original_process_table) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.714s
+
+OK
+<end of output>
+Test time =   0.75 sec
+----------------------------------------------------------
+Test Passed.
+"merged_nvidia_smi" end time: Oct 30 02:26 CDT
+"merged_nvidia_smi" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Oct 30 02:26 CDT

@@ -1,0 +1,2 @@
+timestamp, name, uuid, driver_version, pstate, clocks.current.sm [MHz], clocks.current.memory [MHz], temperature.gpu, power.draw [W], utilization.gpu [%], memory.used [MiB]
+2026/10/30 02:21:52.251, NVIDIA GeForce RTX 4070 SUPER, GPU-dd9ae0df-b609-3725-361d-898e6097234b, 575.57.08, P5, 465 MHz, 810 MHz, 48, 19.69 W, 50 %, 1247 MiB

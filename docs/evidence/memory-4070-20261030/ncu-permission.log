@@ -1,0 +1,7 @@
+==WARNING== Note: Running with unmodified GPU clocks. If not controlled otherwise, profiling results may be inconsistent.
+==PROF== Connected to process 2086660 (/home/zeke/data/project/mytry/simt-lab/artifacts/memory-perf/memory-bench)
+==ERROR== ERR_NVGPUCTRPERM - The user does not have permission to access NVIDIA GPU Performance Counters on the target device 0. For instructions on enabling permissions and to get more information see https://developer.nvidia.com/ERR_NVGPUCTRPERM
+{"kind":"device","name":"NVIDIA GeForce RTX 4070 SUPER","pci_bus_id":"0000:01:00.0","compute_capability":"8.9","device_ordinal":0,"sms":56,"l2_bytes":50331648,"shared_per_sm":102400,"registers_per_sm":65536,"global_bytes":12447776768,"runtime_version":12090,"driver_api_version":12090}
+{"kind":"sample","experiment":"coalesce","stride_words":1,"offset_words":0,"blocks":64,"rows":16,"iterations":128,"repeat":0,"cycles":null,"sm":null,"final_value":3034263424,"event_ms":0.09616,"check_passed":true}
+KERNEL_PERF_RESULT {"time_ms":0.09616,"check_passed":true,"useful_bytes":1048576}
+==PROF== Disconnected from process 2086660

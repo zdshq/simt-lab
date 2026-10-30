@@ -58,6 +58,11 @@ if(SIMT_CACHE_RTL)
     simt_enable_cache_rtl()
 endif()
 target_compile_options(simt_hardware PRIVATE -Wall -Wextra -Wpedantic -Werror)
+# This probe uses the production memory model and does not require a CUDA installation.
+# 此探针使用正式访存模型，不要求安装 CUDA。
+add_executable(simt-memory-probe benchmarks/model_memory.cpp)
+target_link_libraries(simt-memory-probe PRIVATE simt_hardware)
+target_compile_options(simt-memory-probe PRIVATE -Wall -Wextra -Wpedantic -Werror)
 option(SIMT_SCOREBOARD_RTL "Build the optional clocked warp scoreboard backend" OFF)
 if(SIMT_SCOREBOARD_RTL)
     include(cmake/ScoreboardRtl.cmake)
@@ -113,6 +118,9 @@ if(SIMT_SANITIZE)
 endif()
 
 enable_testing()
+add_test(NAME memory_calibration_probe COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_memory_calibration.py $<TARGET_FILE:simt-memory-probe>)
+set_tests_properties(memory_calibration_probe PROPERTIES TIMEOUT 90)
 add_executable(test-hardware-memory tests/test_hardware_memory.cpp)
 target_link_libraries(test-hardware-memory PRIVATE simt_hardware)
 target_compile_options(test-hardware-memory PRIVATE -Wall -Wextra -Wpedantic -Werror)

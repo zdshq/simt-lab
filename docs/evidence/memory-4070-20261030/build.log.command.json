@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "nvcc",
+    "-std=c++17",
+    "-O3",
+    "-arch=native",
+    "-lineinfo",
+    "-Xptxas=-v",
+    "benchmarks/cuda/memory.cu",
+    "-o",
+    "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/memory-bench"
+  ],
+  "utc": "2026-10-30T07:21:52.258180+00:00",
+  "returncode": 0,
+  "log": "build.log"
+}

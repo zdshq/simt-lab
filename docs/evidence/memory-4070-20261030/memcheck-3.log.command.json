@@ -1,0 +1,22 @@
+{
+  "argv": [
+    "compute-sanitizer",
+    "--tool",
+    "memcheck",
+    "--error-exitcode",
+    "3",
+    "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-check/memory-bench",
+    "chase",
+    "cg",
+    "524288",
+    "513",
+    "1",
+    "123",
+    "0",
+    "4096",
+    "0"
+  ],
+  "utc": "2026-10-30T07:26:03.204227+00:00",
+  "returncode": 0,
+  "log": "memcheck-3.log"
+}

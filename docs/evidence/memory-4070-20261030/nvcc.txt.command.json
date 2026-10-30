@@ -1,0 +1,9 @@
+{
+  "argv": [
+    "nvcc",
+    "--version"
+  ],
+  "utc": "2026-10-30T07:21:52.213657+00:00",
+  "returncode": 0,
+  "log": "nvcc.txt"
+}

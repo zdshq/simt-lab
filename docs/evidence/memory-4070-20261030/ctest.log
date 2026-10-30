@@ -1,0 +1,60 @@
+Internal ctest changing into directory: /home/zeke/data/project/mytry/simt-lab/build
+Test project /home/zeke/data/project/mytry/simt-lab/build
+      Start  1: memory_calibration_probe
+ 1/27 Test  #1: memory_calibration_probe .........   Passed    0.06 sec
+      Start  2: hardware_memory_units
+ 2/27 Test  #2: hardware_memory_units ............   Passed    0.23 sec
+      Start  3: hardware_pipeline_units
+ 3/27 Test  #3: hardware_pipeline_units ..........   Passed    0.00 sec
+      Start  4: hardware_tensor_array
+ 4/27 Test  #4: hardware_tensor_array ............   Passed    0.00 sec
+      Start  5: hardware_atomic_local
+ 5/27 Test  #5: hardware_atomic_local ............   Passed    0.03 sec
+      Start  6: hardware_context_lifetime
+ 6/27 Test  #6: hardware_context_lifetime ........   Passed    0.01 sec
+      Start  7: isa_and_execution
+ 7/27 Test  #7: isa_and_execution ................   Passed    0.19 sec
+      Start  8: timed_sm_execution
+ 8/27 Test  #8: timed_sm_execution ...............   Passed    0.78 sec
+      Start  9: timed_tensor_execution
+ 9/27 Test  #9: timed_tensor_execution ...........   Passed    2.38 sec
+      Start 10: timed_async_execution
+10/27 Test #10: timed_async_execution ............   Passed    1.49 sec
+      Start 11: timed_memory_execution
+11/27 Test #11: timed_memory_execution ...........   Passed    1.71 sec
+      Start 12: control_and_collectives
+12/27 Test #12: control_and_collectives ..........   Passed    0.08 sec
+      Start 13: memory_and_barriers
+13/27 Test #13: memory_and_barriers ..............   Passed    0.11 sec
+      Start 14: tensor_numeric
+14/27 Test #14: tensor_numeric ...................   Passed    0.15 sec
+      Start 15: async_transactions
+15/27 Test #15: async_transactions ...............   Passed    0.07 sec
+      Start 16: compositional_workloads
+16/27 Test #16: compositional_workloads ..........   Passed    0.15 sec
+      Start 17: native_host_protocol
+17/27 Test #17: native_host_protocol .............   Passed    0.04 sec
+      Start 18: host_command_processor
+18/27 Test #18: host_command_processor ...........   Passed    0.07 sec
+      Start 19: graph_submission_and_capture
+19/27 Test #19: graph_submission_and_capture .....   Passed    0.07 sec
+      Start 20: timed_host_and_graph
+20/27 Test #20: timed_host_and_graph .............   Passed    0.61 sec
+      Start 21: tensor_backend_selection
+21/27 Test #21: tensor_backend_selection .........   Passed    0.05 sec
+      Start 22: cache_backend_selection
+22/27 Test #22: cache_backend_selection ..........   Passed    0.05 sec
+      Start 23: scoreboard_backend_selection
+23/27 Test #23: scoreboard_backend_selection .....   Passed    0.05 sec
+      Start 24: register_backend_selection
+24/27 Test #24: register_backend_selection .......   Passed    0.05 sec
+      Start 25: collector_backend_selection
+25/27 Test #25: collector_backend_selection ......   Passed    0.04 sec
+      Start 26: native_nvidia_smi
+26/27 Test #26: native_nvidia_smi ................   Passed    0.09 sec
+      Start 27: merged_nvidia_smi
+27/27 Test #27: merged_nvidia_smi ................   Passed    0.75 sec
+
+100% tests passed, 0 tests failed out of 27
+
+Total Test time (real) =   9.34 sec

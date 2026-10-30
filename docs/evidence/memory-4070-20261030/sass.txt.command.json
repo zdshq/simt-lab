@@ -1,0 +1,10 @@
+{
+  "argv": [
+    "cuobjdump",
+    "--dump-sass",
+    "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/memory-bench"
+  ],
+  "utc": "2026-10-30T07:21:54.153525+00:00",
+  "returncode": 0,
+  "log": "sass.txt"
+}

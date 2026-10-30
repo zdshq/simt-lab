@@ -1,0 +1,32 @@
+
+Fatbin elf code:
+================
+arch = sm_89
+code version = [1,7]
+host = linux
+compile_size = 64bit
+identifier = benchmarks/cuda/memory.cu 
+
+Resource usage:
+ Common:
+  GLOBAL:0
+
+Fatbin elf code:
+================
+arch = sm_89
+code version = [1,7]
+host = linux
+compile_size = 64bit
+identifier = benchmarks/cuda/memory.cu
+
+Resource usage:
+ Common:
+  GLOBAL:0
+ Function _ZN11calibration12chase_kernelILb0EEEvPKjjjjPNS_6SampleE:
+  REG:12 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:384 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function _ZN11calibration12chase_kernelILb1EEEvPKjjjjPNS_6SampleE:
+  REG:12 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:384 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function _ZN11calibration15coalesce_kernelEPKjjjjjPj:
+  REG:18 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:384 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function _ZN11calibration13shared_kernelEjjjPNS_6SampleE:
+  REG:18 STACK:0 SHARED:16384 LOCAL:0 CONSTANT[0]:376 TEXTURE:0 SURFACE:0 SAMPLER:0

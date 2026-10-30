@@ -1,0 +1,806 @@
+[
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "coalesce",
+      "0",
+      "0"
+    ],
+    "log": "model-000.jsonl",
+    "records": [
+      {
+        "experiment": "coalesce",
+        "stride_words": 0,
+        "offset_words": 0,
+        "sectors": 1,
+        "addresses": [
+          0
+        ]
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "coalesce",
+      "1",
+      "0"
+    ],
+    "log": "model-001.jsonl",
+    "records": [
+      {
+        "experiment": "coalesce",
+        "stride_words": 1,
+        "offset_words": 0,
+        "sectors": 4,
+        "addresses": [
+          0,
+          32,
+          64,
+          96
+        ]
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "coalesce",
+      "1",
+      "1"
+    ],
+    "log": "model-002.jsonl",
+    "records": [
+      {
+        "experiment": "coalesce",
+        "stride_words": 1,
+        "offset_words": 1,
+        "sectors": 5,
+        "addresses": [
+          0,
+          32,
+          64,
+          96,
+          128
+        ]
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "coalesce",
+      "2",
+      "0"
+    ],
+    "log": "model-003.jsonl",
+    "records": [
+      {
+        "experiment": "coalesce",
+        "stride_words": 2,
+        "offset_words": 0,
+        "sectors": 8,
+        "addresses": [
+          0,
+          32,
+          64,
+          96,
+          128,
+          160,
+          192,
+          224
+        ]
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "coalesce",
+      "4",
+      "0"
+    ],
+    "log": "model-004.jsonl",
+    "records": [
+      {
+        "experiment": "coalesce",
+        "stride_words": 4,
+        "offset_words": 0,
+        "sectors": 16,
+        "addresses": [
+          0,
+          32,
+          64,
+          96,
+          128,
+          160,
+          192,
+          224,
+          256,
+          288,
+          320,
+          352,
+          384,
+          416,
+          448,
+          480
+        ]
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "coalesce",
+      "8",
+      "0"
+    ],
+    "log": "model-005.jsonl",
+    "records": [
+      {
+        "experiment": "coalesce",
+        "stride_words": 8,
+        "offset_words": 0,
+        "sectors": 32,
+        "addresses": [
+          0,
+          32,
+          64,
+          96,
+          128,
+          160,
+          192,
+          224,
+          256,
+          288,
+          320,
+          352,
+          384,
+          416,
+          448,
+          480,
+          512,
+          544,
+          576,
+          608,
+          640,
+          672,
+          704,
+          736,
+          768,
+          800,
+          832,
+          864,
+          896,
+          928,
+          960,
+          992
+        ]
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "shared",
+      "0",
+      "4096"
+    ],
+    "log": "model-006.jsonl",
+    "records": [
+      {
+        "experiment": "shared",
+        "stride_words": 0,
+        "iterations": 4096,
+        "model_cycles": 12288,
+        "bank_services": 4096,
+        "broadcast_lanes": 126976,
+        "check_passed": true
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "shared",
+      "1",
+      "4096"
+    ],
+    "log": "model-007.jsonl",
+    "records": [
+      {
+        "experiment": "shared",
+        "stride_words": 1,
+        "iterations": 4096,
+        "model_cycles": 12288,
+        "bank_services": 131072,
+        "broadcast_lanes": 0,
+        "check_passed": true
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "shared",
+      "2",
+      "4096"
+    ],
+    "log": "model-008.jsonl",
+    "records": [
+      {
+        "experiment": "shared",
+        "stride_words": 2,
+        "iterations": 4096,
+        "model_cycles": 16384,
+        "bank_services": 131072,
+        "broadcast_lanes": 0,
+        "check_passed": true
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "shared",
+      "4",
+      "4096"
+    ],
+    "log": "model-009.jsonl",
+    "records": [
+      {
+        "experiment": "shared",
+        "stride_words": 4,
+        "iterations": 4096,
+        "model_cycles": 24576,
+        "bank_services": 131072,
+        "broadcast_lanes": 0,
+        "check_passed": true
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "shared",
+      "8",
+      "4096"
+    ],
+    "log": "model-010.jsonl",
+    "records": [
+      {
+        "experiment": "shared",
+        "stride_words": 8,
+        "iterations": 4096,
+        "model_cycles": 40960,
+        "bank_services": 131072,
+        "broadcast_lanes": 0,
+        "check_passed": true
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "shared",
+      "16",
+      "4096"
+    ],
+    "log": "model-011.jsonl",
+    "records": [
+      {
+        "experiment": "shared",
+        "stride_words": 16,
+        "iterations": 4096,
+        "model_cycles": 73728,
+        "bank_services": 131072,
+        "broadcast_lanes": 0,
+        "check_passed": true
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "shared",
+      "32",
+      "4096"
+    ],
+    "log": "model-012.jsonl",
+    "records": [
+      {
+        "experiment": "shared",
+        "stride_words": 32,
+        "iterations": 4096,
+        "model_cycles": 139264,
+        "bank_services": 131072,
+        "broadcast_lanes": 0,
+        "check_passed": true
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "shared",
+      "33",
+      "4096"
+    ],
+    "log": "model-013.jsonl",
+    "records": [
+      {
+        "experiment": "shared",
+        "stride_words": 33,
+        "iterations": 4096,
+        "model_cycles": 12288,
+        "bank_services": 131072,
+        "broadcast_lanes": 0,
+        "check_passed": true
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "chase",
+      "ca",
+      "4096",
+      "8192",
+      "123"
+    ],
+    "log": "model-014.jsonl",
+    "records": [
+      {
+        "experiment": "chase",
+        "policy": "ca",
+        "bytes": 4096,
+        "iterations": 8192,
+        "seed": 123,
+        "model_cycles": 40960,
+        "l1_reads": 8192,
+        "l1_hits": 8192,
+        "l2_reads": 0,
+        "l2_hits": 0,
+        "l1_bytes": 65536,
+        "l2_bytes": 262144,
+        "final_value": 0,
+        "check_passed": true
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "chase",
+      "ca",
+      "32768",
+      "8192",
+      "123"
+    ],
+    "log": "model-015.jsonl",
+    "records": [
+      {
+        "experiment": "chase",
+        "policy": "ca",
+        "bytes": 32768,
+        "iterations": 8192,
+        "seed": 123,
+        "model_cycles": 40960,
+        "l1_reads": 8192,
+        "l1_hits": 8192,
+        "l2_reads": 0,
+        "l2_hits": 0,
+        "l1_bytes": 65536,
+        "l2_bytes": 262144,
+        "final_value": 0,
+        "check_passed": true
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "chase",
+      "ca",
+      "65536",
+      "8192",
+      "123"
+    ],
+    "log": "model-016.jsonl",
+    "records": [
+      {
+        "experiment": "chase",
+        "policy": "ca",
+        "bytes": 65536,
+        "iterations": 8192,
+        "seed": 123,
+        "model_cycles": 40960,
+        "l1_reads": 8192,
+        "l1_hits": 8192,
+        "l2_reads": 0,
+        "l2_hits": 0,
+        "l1_bytes": 65536,
+        "l2_bytes": 262144,
+        "final_value": 0,
+        "check_passed": true
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "chase",
+      "ca",
+      "98304",
+      "8192",
+      "123"
+    ],
+    "log": "model-017.jsonl",
+    "records": [
+      {
+        "experiment": "chase",
+        "policy": "ca",
+        "bytes": 98304,
+        "iterations": 8192,
+        "seed": 123,
+        "model_cycles": 170368,
+        "l1_reads": 8192,
+        "l1_hits": 104,
+        "l2_reads": 8088,
+        "l2_hits": 8088,
+        "l1_bytes": 65536,
+        "l2_bytes": 262144,
+        "final_value": 19328,
+        "check_passed": true
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "chase",
+      "ca",
+      "131072",
+      "8192",
+      "123"
+    ],
+    "log": "model-018.jsonl",
+    "records": [
+      {
+        "experiment": "chase",
+        "policy": "ca",
+        "bytes": 131072,
+        "iterations": 8192,
+        "seed": 123,
+        "model_cycles": 172032,
+        "l1_reads": 8192,
+        "l1_hits": 0,
+        "l2_reads": 8192,
+        "l2_hits": 8192,
+        "l1_bytes": 65536,
+        "l2_bytes": 262144,
+        "final_value": 0,
+        "check_passed": true
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "chase",
+      "ca",
+      "262144",
+      "8192",
+      "123"
+    ],
+    "log": "model-019.jsonl",
+    "records": [
+      {
+        "experiment": "chase",
+        "policy": "ca",
+        "bytes": 262144,
+        "iterations": 8192,
+        "seed": 123,
+        "model_cycles": 172032,
+        "l1_reads": 8192,
+        "l1_hits": 0,
+        "l2_reads": 8192,
+        "l2_hits": 8192,
+        "l1_bytes": 65536,
+        "l2_bytes": 262144,
+        "final_value": 0,
+        "check_passed": true
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "chase",
+      "ca",
+      "393216",
+      "8192",
+      "123"
+    ],
+    "log": "model-020.jsonl",
+    "records": [
+      {
+        "experiment": "chase",
+        "policy": "ca",
+        "bytes": 393216,
+        "iterations": 8192,
+        "seed": 123,
+        "model_cycles": 597272,
+        "l1_reads": 8192,
+        "l1_hits": 0,
+        "l2_reads": 8192,
+        "l2_hits": 16,
+        "l1_bytes": 65536,
+        "l2_bytes": 262144,
+        "final_value": 3936,
+        "check_passed": true
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "chase",
+      "ca",
+      "524288",
+      "8192",
+      "123"
+    ],
+    "log": "model-021.jsonl",
+    "records": [
+      {
+        "experiment": "chase",
+        "policy": "ca",
+        "bytes": 524288,
+        "iterations": 8192,
+        "seed": 123,
+        "model_cycles": 600880,
+        "l1_reads": 8192,
+        "l1_hits": 0,
+        "l2_reads": 8192,
+        "l2_hits": 0,
+        "l1_bytes": 65536,
+        "l2_bytes": 262144,
+        "final_value": 82744,
+        "check_passed": true
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "chase",
+      "cg",
+      "4096",
+      "8192",
+      "123"
+    ],
+    "log": "model-022.jsonl",
+    "records": [
+      {
+        "experiment": "chase",
+        "policy": "cg",
+        "bytes": 4096,
+        "iterations": 8192,
+        "seed": 123,
+        "model_cycles": 106496,
+        "l1_reads": 0,
+        "l1_hits": 0,
+        "l2_reads": 8192,
+        "l2_hits": 8192,
+        "l1_bytes": 65536,
+        "l2_bytes": 262144,
+        "final_value": 0,
+        "check_passed": true
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "chase",
+      "cg",
+      "32768",
+      "8192",
+      "123"
+    ],
+    "log": "model-023.jsonl",
+    "records": [
+      {
+        "experiment": "chase",
+        "policy": "cg",
+        "bytes": 32768,
+        "iterations": 8192,
+        "seed": 123,
+        "model_cycles": 106496,
+        "l1_reads": 0,
+        "l1_hits": 0,
+        "l2_reads": 8192,
+        "l2_hits": 8192,
+        "l1_bytes": 65536,
+        "l2_bytes": 262144,
+        "final_value": 0,
+        "check_passed": true
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "chase",
+      "cg",
+      "65536",
+      "8192",
+      "123"
+    ],
+    "log": "model-024.jsonl",
+    "records": [
+      {
+        "experiment": "chase",
+        "policy": "cg",
+        "bytes": 65536,
+        "iterations": 8192,
+        "seed": 123,
+        "model_cycles": 106496,
+        "l1_reads": 0,
+        "l1_hits": 0,
+        "l2_reads": 8192,
+        "l2_hits": 8192,
+        "l1_bytes": 65536,
+        "l2_bytes": 262144,
+        "final_value": 0,
+        "check_passed": true
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "chase",
+      "cg",
+      "98304",
+      "8192",
+      "123"
+    ],
+    "log": "model-025.jsonl",
+    "records": [
+      {
+        "experiment": "chase",
+        "policy": "cg",
+        "bytes": 98304,
+        "iterations": 8192,
+        "seed": 123,
+        "model_cycles": 106496,
+        "l1_reads": 0,
+        "l1_hits": 0,
+        "l2_reads": 8192,
+        "l2_hits": 8192,
+        "l1_bytes": 65536,
+        "l2_bytes": 262144,
+        "final_value": 19328,
+        "check_passed": true
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "chase",
+      "cg",
+      "131072",
+      "8192",
+      "123"
+    ],
+    "log": "model-026.jsonl",
+    "records": [
+      {
+        "experiment": "chase",
+        "policy": "cg",
+        "bytes": 131072,
+        "iterations": 8192,
+        "seed": 123,
+        "model_cycles": 106496,
+        "l1_reads": 0,
+        "l1_hits": 0,
+        "l2_reads": 8192,
+        "l2_hits": 8192,
+        "l1_bytes": 65536,
+        "l2_bytes": 262144,
+        "final_value": 0,
+        "check_passed": true
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "chase",
+      "cg",
+      "262144",
+      "8192",
+      "123"
+    ],
+    "log": "model-027.jsonl",
+    "records": [
+      {
+        "experiment": "chase",
+        "policy": "cg",
+        "bytes": 262144,
+        "iterations": 8192,
+        "seed": 123,
+        "model_cycles": 106496,
+        "l1_reads": 0,
+        "l1_hits": 0,
+        "l2_reads": 8192,
+        "l2_hits": 8192,
+        "l1_bytes": 65536,
+        "l2_bytes": 262144,
+        "final_value": 0,
+        "check_passed": true
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "chase",
+      "cg",
+      "393216",
+      "8192",
+      "123"
+    ],
+    "log": "model-028.jsonl",
+    "records": [
+      {
+        "experiment": "chase",
+        "policy": "cg",
+        "bytes": 393216,
+        "iterations": 8192,
+        "seed": 123,
+        "model_cycles": 531736,
+        "l1_reads": 0,
+        "l1_hits": 0,
+        "l2_reads": 8192,
+        "l2_hits": 16,
+        "l1_bytes": 65536,
+        "l2_bytes": 262144,
+        "final_value": 3936,
+        "check_passed": true
+      }
+    ]
+  },
+  {
+    "argv": [
+      "/home/zeke/data/project/mytry/simt-lab/artifacts/memory-4070-locality/model-build/simt-memory-probe",
+      "chase",
+      "cg",
+      "524288",
+      "8192",
+      "123"
+    ],
+    "log": "model-029.jsonl",
+    "records": [
+      {
+        "experiment": "chase",
+        "policy": "cg",
+        "bytes": 524288,
+        "iterations": 8192,
+        "seed": 123,
+        "model_cycles": 535344,
+        "l1_reads": 0,
+        "l1_hits": 0,
+        "l2_reads": 8192,
+        "l2_hits": 0,
+        "l1_bytes": 65536,
+        "l2_bytes": 262144,
+        "final_value": 82744,
+        "check_passed": true
+      }
+    ]
+  }
+]

@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "id": "memory-coalescing",
+  "label": "CUDA PTX global load sectors, aligned stride 1",
+  "project_root": "../../..",
+  "data_dir": ".kernel-perf",
+  "repeats": 3,
+  "commands": {
+    "build": ["python3", "tools/calibrate_memory.py", "--mode", "build", "--out", "artifacts/memory-perf"],
+    "check": ["artifacts/memory-perf/memory-bench", "coalesce", "1", "0", "64", "16", "128", "1", "0"],
+    "benchmark": ["artifacts/memory-perf/memory-bench", "coalesce", "1", "0", "64", "16", "128", "9", "0"],
+    "profile": ["artifacts/memory-perf/memory-bench", "coalesce", "1", "0", "64", "16", "128", "1", "0"]
+  },
+  "source_files": ["benchmarks/cuda/memory.cu", "benchmarks/cuda/common.cuh", "benchmarks/cuda/coalesce.cuh", "benchmarks/cuda/shared.cuh", "benchmarks/cuda/chase.cuh", "benchmarks/memory_pattern.hpp"],
+  "binary_files": ["artifacts/memory-perf/memory-bench"],
+  "workload": {
+    "dtype": "uint32", "blocks": 64, "threads": 32, "rows_per_block": 16,
+    "iterations": 128, "stride_words": 1, "offset_words": 0,
+    "input": "word index * 1664525 + 1013904223, modulo 2^32",
+    "expected_warp_load_requests": 8192, "expected_sectors_per_request": 4,
+    "useful_bytes_scope": "logical lane read bytes, excluding stores; not measured DRAM traffic"
+  },
+  "implementation": {"language": "CUDA C++17 and inline PTX", "load": "ld.global.cg.u32"},
+  "timing": {
+    "method": "CUDA events around one kernel, mean of 9 individually validated launches per process",
+    "scope": "full kernel, excluding allocations, transfers, CPU validation and profiler",
+    "warmup_launches": 1, "clocks": "unlocked", "purpose": "measurement plumbing; not a bandwidth saturation benchmark"
+  },
+  "build": {"type": "Release", "architecture": "native", "flags": "-O3 -std=c++17 -lineinfo"},
+  "systems": {"enabled": false},
+  "profile": {
+    "enabled": true,
+    "kernel_regex": "coalesce_kernel", "name_base": "function",
+    "launch_skip": 1, "launch_count": 1, "replay": "kernel", "cache": "all", "clock": "none",
+    "metrics": ["l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum", "l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum"]
+  }
+}

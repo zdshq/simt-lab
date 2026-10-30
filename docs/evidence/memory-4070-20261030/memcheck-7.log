@@ -1,0 +1,5 @@
+========= COMPUTE-SANITIZER
+{"kind":"device","name":"NVIDIA GeForce RTX 4070 SUPER","pci_bus_id":"0000:01:00.0","compute_capability":"8.9","device_ordinal":0,"sms":56,"l2_bytes":50331648,"shared_per_sm":102400,"registers_per_sm":65536,"global_bytes":12447776768,"runtime_version":12090,"driver_api_version":12090}
+{"kind":"sample","experiment":"coalesce","stride_words":0,"offset_words":0,"blocks":3,"rows":7,"iterations":513,"repeat":0,"cycles":null,"sm":null,"final_value":2103016799,"event_ms":0.928768,"check_passed":true}
+KERNEL_PERF_RESULT {"time_ms":0.928768,"check_passed":true,"useful_bytes":196992}
+========= ERROR SUMMARY: 0 errors

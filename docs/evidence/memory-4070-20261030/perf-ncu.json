@@ -1,0 +1,246 @@
+{
+  "schema_version": 1,
+  "id": "c38553e449d04715bda7ef3843aca4d9",
+  "label": "memory-counter-attempt",
+  "created_at": "2026-10-30T07:24:01.024848+00:00",
+  "status": "failed",
+  "config": {
+    "schema_version": 1,
+    "id": "memory-coalescing",
+    "label": "CUDA PTX global load sectors, aligned stride 1",
+    "project_root": "../../..",
+    "data_dir": ".kernel-perf",
+    "repeats": 3,
+    "commands": {
+      "build": [
+        "python3",
+        "tools/calibrate_memory.py",
+        "--mode",
+        "build",
+        "--out",
+        "artifacts/memory-perf"
+      ],
+      "check": [
+        "artifacts/memory-perf/memory-bench",
+        "coalesce",
+        "1",
+        "0",
+        "64",
+        "16",
+        "128",
+        "1",
+        "0"
+      ],
+      "benchmark": [
+        "artifacts/memory-perf/memory-bench",
+        "coalesce",
+        "1",
+        "0",
+        "64",
+        "16",
+        "128",
+        "9",
+        "0"
+      ],
+      "profile": [
+        "artifacts/memory-perf/memory-bench",
+        "coalesce",
+        "1",
+        "0",
+        "64",
+        "16",
+        "128",
+        "1",
+        "0"
+      ]
+    },
+    "source_files": [
+      "benchmarks/cuda/memory.cu",
+      "benchmarks/cuda/common.cuh",
+      "benchmarks/cuda/coalesce.cuh",
+      "benchmarks/cuda/shared.cuh",
+      "benchmarks/cuda/chase.cuh",
+      "benchmarks/memory_pattern.hpp"
+    ],
+    "binary_files": [
+      "artifacts/memory-perf/memory-bench"
+    ],
+    "workload": {
+      "dtype": "uint32",
+      "blocks": 64,
+      "threads": 32,
+      "rows_per_block": 16,
+      "iterations": 128,
+      "stride_words": 1,
+      "offset_words": 0,
+      "input": "word index * 1664525 + 1013904223, modulo 2^32",
+      "expected_warp_load_requests": 8192,
+      "expected_sectors_per_request": 4,
+      "useful_bytes_scope": "logical lane read bytes, excluding stores; not measured DRAM traffic"
+    },
+    "implementation": {
+      "language": "CUDA C++17 and inline PTX",
+      "load": "ld.global.cg.u32"
+    },
+    "timing": {
+      "method": "CUDA events around one kernel, mean of 9 individually validated launches per process",
+      "scope": "full kernel, excluding allocations, transfers, CPU validation and profiler",
+      "warmup_launches": 1,
+      "clocks": "unlocked",
+      "purpose": "measurement plumbing; not a bandwidth saturation benchmark"
+    },
+    "build": {
+      "type": "Release",
+      "architecture": "native",
+      "flags": "-O3 -std=c++17 -lineinfo"
+    },
+    "systems": {
+      "enabled": false
+    },
+    "profile": {
+      "enabled": true,
+      "kernel_regex": "coalesce_kernel",
+      "name_base": "function",
+      "launch_skip": 1,
+      "launch_count": 1,
+      "replay": "kernel",
+      "cache": "all",
+      "clock": "none",
+      "metrics": [
+        "l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum",
+        "l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum"
+      ]
+    }
+  },
+  "native": {
+    "time_ms": 0.021301333333333332,
+    "check_passed": true,
+    "useful_bytes": 1048576,
+    "samples": [
+      {
+        "time_ms": 0.0212729,
+        "check_passed": true,
+        "useful_bytes": 1048576
+      },
+      {
+        "time_ms": 0.0214222,
+        "check_passed": true,
+        "useful_bytes": 1048576
+      },
+      {
+        "time_ms": 0.0212089,
+        "check_passed": true,
+        "useful_bytes": 1048576
+      }
+    ],
+    "min_ms": 0.0212089,
+    "max_ms": 0.0214222,
+    "stdev_ms": 0.00010945575970835542,
+    "effective_gb_s": 49.22583875813721
+  },
+  "launches": [],
+  "systems": null,
+  "analyses": {
+    "ncu": {
+      "status": "failed",
+      "error": "退出码 1，日志 profile.log\n==WARNING== Note: Running with unmodified GPU clocks. If not controlled otherwise, profiling results may be inconsistent.\n==PROF== Connected to process 2086660 (/home/zeke/data/project/mytry/simt-lab/artifacts/memory-perf/memory-bench)\n==ERROR== ERR_NVGPUCTRPERM - The user does not have permission to access NVIDIA GPU Performance Counters on the target device 0. For instructions on enabling permissions and to get more information see https://developer.nvidia.com/ERR_NVGPUCTRPERM\n{\"kind\":\"device\",\"name\":\"NVIDIA GeForce RTX 4070 SUPER\",\"pci_bus_id\":\"0000:01:00.0\",\"compute_capability\":\"8.9\",\"device_ordinal\":0,\"sms\":56,\"l2_bytes\":50331648,\"shared_per_sm\":102400,\"registers_per_sm\":65536,\"global_bytes\":12447776768,\"runtime_version\":12090,\"driver_api_version\":12090}\n{\"kind\":\"sample\",\"experiment\":\"coalesce\",\"stride_words\":1,\"offset_words\":0,\"blocks\":64,\"rows\":16,\"iterations\":128,\"repeat\":0,\"cycles\":null,\"sm\":null,\"final_value\":3034263424,\"event_ms\":0.09616,\"check_passed\":true}\nKERNEL_PERF_RESULT {\"time_ms\":0.09616,\"check_passed\":true,\"useful_bytes\":1048576}\n==PROF== Disconnected from process 2086660\n"
+    }
+  },
+  "environment": {
+    "python": "3.13.5",
+    "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.35",
+    "gpu": [
+      {
+        "name": "NVIDIA GeForce RTX 4070 SUPER",
+        "uuid": "GPU-dd9ae0df-b609-3725-361d-898e6097234b",
+        "driver": "575.57.08"
+      }
+    ],
+    "gpu_probe": {
+      "ok": true,
+      "text": "NVIDIA GeForce RTX 4070 SUPER, GPU-dd9ae0df-b609-3725-361d-898e6097234b, 575.57.08"
+    },
+    "ncu": {
+      "ok": true,
+      "text": "NVIDIA (R) Nsight Compute Command Line Profiler\nCopyright (c) 2018-2025 NVIDIA Corporation\nVersion 2025.2.1.0 (build 35987062) (public-release)"
+    },
+    "nsys": {
+      "ok": true,
+      "text": "NVIDIA Nsight Systems version 2025.1.3.140-251335620677v0"
+    },
+    "ncu_ui": "/usr/local/cuda/bin/ncu-ui",
+    "nsys_ui": "/usr/local/cuda/bin/nsight-sys",
+    "nvcc": {
+      "ok": true,
+      "text": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2025 NVIDIA Corporation\nBuilt on Tue_May_27_02:21:03_PDT_2025\nCuda compilation tools, release 12.9, V12.9.86\nBuild cuda_12.9.r12.9/compiler.36037853_0"
+    }
+  },
+  "build": {
+    "type": "Release",
+    "architecture": "native",
+    "flags": "-O3 -std=c++17 -lineinfo",
+    "source_sha256": {
+      "benchmarks/cuda/memory.cu": "168aa7a59ee78ffcf62726ce26db836496316fd41e1cb304c854bdb432f53f62",
+      "benchmarks/cuda/common.cuh": "81813213f92f97323594ac4531f4dda122fa08d7b98191fbcb2cea9ab6f416b9",
+      "benchmarks/cuda/coalesce.cuh": "208b4b4ecd4843dda706e62e5100a2df2342e408b3e0ad62c50fcd22dc02e243",
+      "benchmarks/cuda/shared.cuh": "5db4520d7ee0a64aa3f381f1800a4134bca5b2fe79d68242373b05c6b16e5098",
+      "benchmarks/cuda/chase.cuh": "c18184ca4b2c8bcf3aeb4915aef8c7c7c9022a35a7635235b6f6b302805728d8",
+      "benchmarks/memory_pattern.hpp": "0bae631151fd52c8f9d11845369aae522a677f025439010d63b0f38d857e2bec"
+    },
+    "binary_sha256": {
+      "artifacts/memory-perf/memory-bench": "3cf05af1b8c2d7e939636be1fb0d389dc9ad5fe14de9edb5b8dccd99adadc02e"
+    }
+  },
+  "artifacts": {
+    "check.command.json": {
+      "sha256": "845d3bac34008847701c9e4e19d7d3fc9e5d898745198f4d27791e44d9ea8e12",
+      "bytes": 195
+    },
+    "build.command.json": {
+      "sha256": "10d8831d7aaac521d2a7d2ddd0efac4cb17d647b8b48d52c58385580ce05c507",
+      "bytes": 187
+    },
+    "profile.command.json": {
+      "sha256": "026bc37f64811d5e00678683096e26ad810f3a14149d3e9c75656d85fea32ea4",
+      "bytes": 792
+    },
+    "benchmark-0.log": {
+      "sha256": "b9f7882c99e992a1d3b7798396fee948bc2cdc59a2797cfc4fcee4f738815c09",
+      "bytes": 2303
+    },
+    "benchmark-0.command.json": {
+      "sha256": "83752ee151d15b18c82f385ceaf8c9e4a963da04e27d5252cb8c6077072f08d3",
+      "bytes": 195
+    },
+    "check.log": {
+      "sha256": "cd71af59a144b46c4988470674dbfe67924f1fb21d510011019fb2538e865d91",
+      "bytes": 584
+    },
+    "profile.log": {
+      "sha256": "f0658f5d3a17968990ca8ed4cae6dbed03af3742f3f10b182625b5d7c16c1cbd",
+      "bytes": 1109
+    },
+    "benchmark-1.log": {
+      "sha256": "3ba0f3b8b447cbdf0fceb37ab7b67f6c4dea66b66d7bb2ff74a66fb12b2c970a",
+      "bytes": 2303
+    },
+    "build.log": {
+      "sha256": "61cf5211d979ab1a1e388496471598ef25bcd48881f1069ab0a7b97e354c4d4c",
+      "bytes": 61
+    },
+    "benchmark-2.log": {
+      "sha256": "8177654866d85f5e5ec74e13e7d9ff4152af0074f7410a3262fb49b0152ba242",
+      "bytes": 2303
+    },
+    "benchmark-1.command.json": {
+      "sha256": "83752ee151d15b18c82f385ceaf8c9e4a963da04e27d5252cb8c6077072f08d3",
+      "bytes": 195
+    },
+    "benchmark-2.command.json": {
+      "sha256": "83752ee151d15b18c82f385ceaf8c9e4a963da04e27d5252cb8c6077072f08d3",
+      "bytes": 195
+    }
+  },
+  "check_command_passed": true,
+  "error": "ncu: 退出码 1，日志 profile.log\n==WARNING== Note: Running with unmodified GPU clocks. If not controlled otherwise, profiling results may be inconsistent.\n==PROF== Connected to process 2086660 (/home/zeke/data/project/mytry/simt-lab/artifacts/memory-perf/memory-bench)\n==ERROR== ERR_NVGPUCTRPERM - The user does not have permission to access NVIDIA GPU Performance Counters on the target device 0. For instructions on enabling permissions and to get more information see https://developer.nvidia.com/ERR_NVGPUCTRPERM\n{\"kind\":\"device\",\"name\":\"NVIDIA GeForce RTX 4070 SUPER\",\"pci_bus_id\":\"0000:01:00.0\",\"compute_capability\":\"8.9\",\"device_ordinal\":0,\"sms\":56,\"l2_bytes\":50331648,\"shared_per_sm\":102400,\"registers_per_sm\":65536,\"global_bytes\":12447776768,\"runtime_version\":12090,\"driver_api_version\":12090}\n{\"kind\":\"sample\",\"experiment\":\"coalesce\",\"stride_words\":1,\"offset_words\":0,\"blocks\":64,\"rows\":16,\"iterations\":128,\"repeat\":0,\"cycles\":null,\"sm\":null,\"final_value\":3034263424,\"event_ms\":0.09616,\"check_passed\":true}\nKERNEL_PERF_RESULT {\"time_ms\":0.09616,\"check_passed\":true,\"useful_bytes\":1048576}\n==PROF== Disconnected from process 2086660\n"
+}

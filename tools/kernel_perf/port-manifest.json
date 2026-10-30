@@ -1,0 +1,16 @@
+{
+  "skill": "kernel-performance-port",
+  "version": 1,
+  "files": {
+    "LICENSE.txt": "ad1513ca983da737a6843364ad19e8424a56d860736c2da773b8c5be527e1475",
+    "PROVENANCE.md": "e872b6b923a21bdd8e58109c9cff55541f6374ba91e2846c3537a3e79ba9c8cc",
+    "catalog.py": "b009e546b36d60e12ab28b2b20bd0be03089bd8a6040be0406569e93eb524d20",
+    "configs/example.json": "4db62be5b8ce4edef88c4e7e487dd96b5c01c70fa014d3251cd2a8837db73c9c",
+    "diagnostics.py": "201fe8eb5e9ff36f57f04ce770e07a327acf5110f87776ed09d5c12feedf186c",
+    "learning.py": "d40ad1321046abb314e1b471867e142abf051bd190cad575ffd074a093ad5cb5",
+    "metrics.py": "d97226c8a0c808ab2cfff1281e1271c244b0c32246b6de804170801cfc883d3d",
+    "nsys_analysis.py": "888d17cb8c802a4bc4cb07a09071405484718efaf9057b10f9c58030f71a4e8c",
+    "perf.py": "f0267b7dd5a81d28204ee23091eb53b7564c45f7576f3926689981a3f7abb8fc",
+    "static/dashboard.html": "31be3284f59bf6fb2fa8ff678c347709ab907c8cca0a29841017004829ad0be3"
+  }
+}
