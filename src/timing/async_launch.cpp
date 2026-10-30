@@ -26,6 +26,7 @@ BarrierAction action(Op op) {
 bool TimingMachine::async_available(const Inflight& entry) {
     if (!entry.mask) return true;
     auto& sm = *sms_[entry.sm];
+    if (sm.transaction_retiring) { ++sm.async_stats.barrier_stalls; return false; }
     if (sm.barrier_job) { ++sm.async_stats.barrier_stalls; return false; }
     if (entry.instruction.op == Op::CP_ASYNC && sm.copies.size() == machine_.config_.async.commands) {
         ++sm.async_stats.command_stalls; return false;
@@ -59,7 +60,7 @@ void TimingMachine::reserve_barrier_record(const Inflight& entry, uint32_t addre
     if (!expected || expected > 1024) throw std::runtime_error("invalid_mbarrier_count");
     cta.shared.check(address, 32, 16); check_shared_write(cta, address, 32);
     check_pending_shared_writes(entry.cta, address, 32);
-    if (sm.barrier_entries == machine_.config_.async.barrier_slots) throw std::runtime_error("mbarrier_table_full");
+    if (!sm.transactions && sm.barrier_entries == machine_.config_.async.barrier_slots) throw std::runtime_error("mbarrier_table_full");
     cta.reserved_transactions.insert(address); ++sm.barrier_entries;
 }
 
@@ -79,11 +80,12 @@ void TimingMachine::start_async(Inflight& entry) {
     entry.stage = Stage::async;
 }
 
-// Waiting lanes commit their continuation PCs before they sleep; an already completed phase wakes them immediately.
-// 等待 lane 先提交后续 PC 再休眠，已经完成的阶段会立即唤醒它们。
+// Retirement advances continuation PCs; hardware wait state retains any completion received after its query.
+// 退休推进后续 PC；硬件等待状态保留查询之后已经收到的完成事件。
 void TimingMachine::commit_async_instruction(Inflight& entry) {
     auto& cta = machine_.ctas_[entry.cta]; auto& warp = cta.warps[entry.warp];
     advance_warp_pc(entry);
+    if (sms_[entry.sm]->transactions) { observe_frontend(entry.cta, entry.warp); return; }
     for (uint32_t lane = 0; lane < lanes; ++lane) {
         if (entry.instruction.op != Op::MB_WAIT || !(entry.mask & lane_bit(lane))) continue;
         warp.state[lane] = entry.result.state[lane]; warp.blocked_token[lane] = entry.result.blocked_token[lane];

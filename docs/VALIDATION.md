@@ -569,3 +569,32 @@ sanitizer 工具的 `--module` 是单值选项，最初同时填写两次只运�
 原版 nvidia-smi 经已安装入口实测显示 RTX 4070 SUPER 和活模拟器，实际分配 7 MiB、释放归零、关闭后移除；直接系统二进制只见实卡，仍属于 NVML 管理接口。结果在 `artifacts/rtl-cta-final/{list,table,native-list}.txt` 与 `{allocated,freed,exited}.csv`。
 
 八份模块清单、两个实际网表哈希、两适配器 sanitizer 清单、十份主机报告、290 个源码文件和四个联合二进制已核对，记录在 `artifacts/rtl-cta-final/evidence-audit.json`。同目录 `audit.py` 可复查，保留默认/联合完整日志；适配器精确编译命令在 `artifacts/rtl-cta-adapter-sanitize/manifest.json`。这轮完成 CTA 屏障局部电路，不代表整机 RTL、实卡校准或 PTX 异步矩阵协议已经完成。
+
+
+## 阶段 16：同步 RAM 事务表、发布确认与异步阶段唤醒（2026-10-30）
+
+从 `9cd618a` 接续，将异步事务的权威状态、串行地址查询、人数/字节算术、发布确认和 CTA 清理接入实际 RTL；前端新增原始阶段查询与完成总线。DMA 数据分片、shared bank 服务、等待地址分组和跨实例路由仍有 C++，详见 [RTL_TRANSACTION_TABLE.md](RTL_TRANSACTION_TABLE.md)。
+
+| 本轮实际运行 | 结果与范围 |
+|---|---|
+| `cmake --build build -j4` / `ctest --test-dir build --output-on-failure` | 默认 Debug 27 套件/279 项运行，236 Python / 43 C++；277 通过、2 跳过，10.03 秒 |
+| `cmake --build build-cache-rtl -j4` / `ctest --test-dir build-cache-rtl --output-on-failure` | 最终联合 Release 55 套件/930 项全部通过，840 Python / 90 C++，32.33 秒；各套件选择其目标后端 |
+| 完整 1,024 条事务表 RTL 与 ASan/UBSan | 相同四项全部通过；覆盖全部物理槽、最高槽位、CTA 地址别名、发布/响应反压、回收原子性、2,400 条随机命令 |
+| 事务算术 RTL / sanitizer / 实际网表 | 相同两项通过，含 20,000 组宽整数参考及 phase/count/byte 边界；3,192 组合 generic cells |
+| 修改后的前端 RTL / sanitizer / 实际网表 | 相同六项通过，含新阶段等待、完整地址、等待类型隔离、同拍释放和未来令牌整查询原子拒绝；125,662 generic cells / 4,801 FF 位 |
+| 完整表存储推断 | `--module transaction_table --synth --infer-only`：1,024×224 位单同步读/单写 RAM，229,376 数据位；RAM 外 1,410 FF 位，`check -assert` 通过 |
+| 16 条小配置完整门映射与网表 | `--transaction-slots 16 --synth` 后单独 `--gate-sim`，四项通过；12,533 generic cells / 4,192 FF 位。不把此数当作完整表面积 |
+| 两实际 C++ 适配器 | 事务表四项/前端六项在联合 Release 与独立 ASan/UBSan 中通过，含真实表→前端阶段总线与发布确认前不唤醒 |
+| 新增 ISA/主机套件 | 28 项通过：25 项既有事务/DMA 场景，加全部记录/尾 warp/7 CTA 复用、容量/退出错误，以及失败后 Graph 重放 |
+
+四类完整主机负载各两次 Graph 重放通过，另外运行两次带监控的 Transformer。十份报告将实际 `barrier_publish/copy_complete`、查询和已初始化 CTA 与硬件命令/发布/响应数对照，所有硬件表最终占用归零，无错误；前端外部等待字段写计数均为零。下载字节与上一阶段独立数学结果一致。
+
+Transformer 每次为 8 条表命令、54 次搜索读、5 次发布、一次阶段完成，64 个 lane 检查/阻塞/唤醒。完整工作负载的两次 kernel 为 5,730/5,738 模型周期，上阶段 5,614/5,734；其他三个负载的周期保持相同。不宣称完整 trace 相同，也不将模型周期当作实卡性能。产物在 `artifacts/rtl-transaction-host/`。
+
+监控会话实际完成 Transformer 图重放，再验证普通 `nvidia-smi` 中真实显卡与模拟器共存、7 MiB 分配、释放归零和退出移除；直接 `/usr/bin/nvidia-smi` 只显示真实设备。证据保存在 `artifacts/rtl-transaction-final/{list,table,native-list}.txt` 和 `{allocated,freed,exited}.csv`，这仍是 NVML 管理接口接入。
+
+最初新增适配器测试因修改观察副本后没有读取该局部变量，被 `-Werror=unused-but-set-variable` 拒绝编译。保留 `initial-adapter-build-failure.log`，补充副本与实际输出不相等的断言后通过，没有关闭告警。后续前端检查加强为任一未来令牌使整个地址查询在 RTL 内拒绝，普通仿真、sanitizer、综合和网表均使用最终版本重新运行。
+
+本轮共复跑受影响的 12 项独立电路场景，其余独立模块未全部重跑；完整表没有做 1,024 条通用门展开/网表仿真，完整联合 sanitizer 与整 GPU 综合也未执行。13 份模块清单、三份实际网表哈希、完整 RAM 几何、两个适配器 sanitizer 结果、十份主机报告、301 个源码文件与四个联合二进制审计见 `artifacts/rtl-transaction-final/evidence-audit.json`；同目录保留 `audit.py`、全量 CTest 日志和适配器构建脚本。
+
+最后只修正异步退休函数的英中注释，使其描述已经验证的 RTL 等待顺序，不改变执行代码。重新编译后四个已验收可执行文件的 SHA-256 完全相同，记录在 `comment-rebuild.json`，因此没有重复运行同一批测试。整个硬件目标仍未完成：DMA 片段与返回、跨 warp/跨分区仲裁、SFU/访存电路、整机 RTL、实机参数辨识和 PTX 异步矩阵协议继续按总计划推进。

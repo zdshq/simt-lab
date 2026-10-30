@@ -196,7 +196,8 @@ void frontend_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedSm
                 << ",\"clocks\":" << s.clocks << ",\"active_clocks\":" << s.active_clocks
                 << ",\"issued\":" << s.issued << ",\"retire_advances\":" << s.advances
                 << ",\"external_lanes\":" << s.external_lanes << ",\"resumed_lanes\":" << s.resumed_lanes
-                << ",\"cta_blocked\":" << s.cta_blocked << ",\"cta_woken\":" << s.cta_woken << '}';
+                << ",\"cta_blocked\":" << s.cta_blocked << ",\"cta_woken\":" << s.cta_woken
+                << ",\"async_checked\":" << s.async_checked << ",\"async_blocked\":" << s.async_blocked << ",\"async_woken\":" << s.async_woken << '}';
         }
     out << ']';
 }

@@ -43,7 +43,10 @@ TimingMachine::TimingMachine(Machine& machine, std::shared_ptr<hw::HardwareConte
     memory_ = &hardware_->memory;
     owner_ = hardware_->new_owner(); local_base_ = hardware_->reserve_local(uint64_t{config.blocks} * 32);
     started_ = cycle_ = hardware_->cycle();
-    for (uint32_t sm = 0; sm < config.sms; ++sm) sms_.push_back(std::make_unique<TimedSm>(config.pipeline, config.tensor, config.atomic));
+    for (uint32_t sm = 0; sm < config.sms; ++sm) {
+        sms_.push_back(std::make_unique<TimedSm>(config.pipeline, config.tensor, config.atomic));
+        if (config.pipeline.collector_rtl) sms_.back()->transactions = hw::make_transaction_table(config.async.barrier_slots);
+    }
     warps_.resize(config.blocks); cta_slots_.resize(config.blocks);
 }
 
@@ -120,11 +123,12 @@ bool TimingMachine::cta_drained(const Cta& cta) const {
 void TimingMachine::retire_ctas() {
     for (auto& cta : machine_.ctas_) {
         if (!cta_drained(cta)) continue;
-        for (const auto& [address, barrier] : cta.transactions) {
+        if (!retire_transaction_cta(cta)) continue;
+        auto& sm = *sms_[cta.sm_id];
+        if (!sm.transactions) for (const auto& [address, barrier] : cta.transactions) {
             static_cast<void>(address);
             if (barrier.bytes || barrier.issued) throw std::runtime_error("incomplete_async_transaction");
         }
-        auto& sm = *sms_[cta.sm_id];
         for (const auto& warp : warps_[cta.block_id]) sm.owners[warp.slot].reset();
         sm.resources.release(cta.block_id);
         if (!sm.cta_owners.empty()) sm.cta_owners[cta_slots_[cta.block_id]].reset();
@@ -177,6 +181,7 @@ bool TimingMachine::advance() {
         for (auto& board : sm->scoreboards) if (board) board->tick();
         for (auto& control : sm->controls) if (control) control->tick();
         for (auto& table : sm->cta_tables) if (table) table->tick();
+        if (sm->transactions) sm->transactions->tick();
         for (auto& partition : sm->partitions) if (partition.registers) partition.registers->tick();
     }
     retire_ctas();

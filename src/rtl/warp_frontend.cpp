@@ -33,6 +33,8 @@ public:
     void advance(FrontendGroup group) override;
     void external(const FrontendWait& waits) override;
     void cta_barrier(uint32_t block_mask, uint32_t barrier, uint32_t release_mask) override;
+    void async_wait(uint32_t mask, uint32_t address, uint32_t current, const std::array<uint32_t,32>& phases) override;
+    void async_release(uint32_t address, uint32_t phase) override;
     void tick() override;
     const ControlStats& stats() const override { return control_stats_; }
     const FrontendStats& frontend_stats() const override { return stats_; }
@@ -51,6 +53,7 @@ void RtlWarpFrontend::clear_pins() {
     dut_.resume_idle = 0; dut_.issue_valid = 0;
     dut_.write_state_mask = 0; dut_.write_blocked_mask = 0; dut_.write_phase_mask = 0;
     dut_.cta_block_mask = 0; dut_.cta_release_mask = 0;
+    dut_.async_wait_mask = 0; dut_.async_release_valid = 0;
 }
 void RtlWarpFrontend::initialize(uint32_t mask) {
     if (dut_.clock_enable) throw std::runtime_error("frontend_initialize_phase");
@@ -144,6 +147,22 @@ void RtlWarpFrontend::cta_barrier(uint32_t block_mask, uint32_t barrier, uint32_
     dut_.cta_release_mask = release_mask; dut_.eval();
 }
 
+// Future-token rejection withdraws the entire query, so no lane is partially put to sleep.
+// 未来令牌错误撤销整次查询，避免部分 lane 被置为休眠。
+void RtlWarpFrontend::async_wait(uint32_t mask, uint32_t address, uint32_t current, const std::array<uint32_t,32>& phases) {
+    if (dut_.issue_valid || dut_.resume_idle || dut_.async_wait_mask) throw std::runtime_error("frontend_async_wait_phase");
+    dut_.async_wait_mask=mask; dut_.async_wait_address=address; dut_.async_query_phase=current;
+    for (uint32_t lane=0; lane<32; ++lane) dut_.async_wait_phases[lane]=phases[lane];
+    dut_.eval();
+    if (dut_.async_future_mask) {
+        dut_.async_wait_mask=0; dut_.eval(); throw std::runtime_error("mbarrier_future_phase");
+    }
+}
+void RtlWarpFrontend::async_release(uint32_t address, uint32_t phase) {
+    if (dut_.issue_valid || dut_.resume_idle || dut_.async_release_valid) throw std::runtime_error("frontend_async_release_phase");
+    dut_.async_release_valid=1; dut_.async_release_address=address; dut_.async_release_phase=phase; dut_.eval();
+}
+
 // Sample accepted events once, commit one edge, then remove all forwarding transactions.
 // 只统计一次已接受事件，提交一个边沿，然后撤销全部旁路事务。
 void RtlWarpFrontend::tick() {
@@ -156,6 +175,9 @@ void RtlWarpFrontend::tick() {
     stats_.resumed_lanes += std::popcount(uint32_t{dut_.resumed_mask});
     stats_.cta_blocked += std::popcount(uint32_t{dut_.cta_block_mask});
     stats_.cta_woken += std::popcount(uint32_t{dut_.cta_wake_mask});
+    stats_.async_checked += std::popcount(uint32_t{dut_.async_wait_mask});
+    stats_.async_blocked += std::popcount(uint32_t{dut_.async_block_mask});
+    stats_.async_woken += std::popcount(uint32_t{dut_.async_wake_mask});
     if (dut_.clock_enable) { ++stats_.active_clocks; edge(); }
     clear_pins(); dut_.eval();
 }

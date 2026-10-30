@@ -2,7 +2,7 @@
 
 `--timing --register-rtl --collector-rtl` 已将 BAR_SYNC、BAR_ARRIVE 和 EXIT 对 CTA 屏障的更新接入实际 RTL。每个驻留 CTA 使用独立物理表，保存最多 1,024 个线程的存活状态和 16 个屏障的到达记录。完成位直接送到各 warp 前端，由前端电路判断并唤醒等待线程；C++ 不再计算这条路径的到达数或唤醒掩码。
 
-这是本项目自定义 ISA 的实现，不能称为 NVIDIA 屏障单元的精确逆向。CTA 准入、跨分区提交次序、实例之间的引脚路由仍由 C++ 驱动；异步 mbarrier、CP_ASYNC 的事务与字节计数也仍是软件时序模型。没有新增完整 SM/GPU 的可综合顶层。
+这是本项目自定义 ISA 的实现，不能称为 NVIDIA 屏障单元的精确逆向。CTA 准入、跨分区提交次序、实例之间的引脚路由仍由 C++ 驱动；异步 mbarrier/CP_ASYNC 的事务表与字节计数现已另接入 [事务 RTL](RTL_TRANSACTION_TABLE.md)，DMA 片段和 shared 服务仍为 C++。没有新增完整 SM/GPU 的可综合顶层。
 
 ```mermaid
 flowchart LR
@@ -55,7 +55,7 @@ BAR_ARRIVE 只更新表，BAR_SYNC 还把参与线程置为 CTA 等待。最后�
 
 CTA 退休后，物理表保留实例；同一 kernel 内新 CTA 复用前通过初始化端清槽。默认 SM 准入额度决定表槽上限，实际只为用过的槽创建 Verilator 实例；软件惰性实例化不能被解释为芯片动态制造电路。下一次 kernel 会建立新的表实例。
 
-`hardware.cta_barriers` 按 SM/物理槽报告时钟、初始化、命令、到达、退出、完成次数和 16 条记录。事件计数跨槽复用累积；记录快照只描述最近占用该槽的 CTA，不是所有逻辑 block 的历史。`hardware.warp_frontends` 新增 `cta_blocked` 和 `cta_woken`，外部字段写计数保留给仍由软件计算的异步等待更新。
+`hardware.cta_barriers` 按 SM/物理槽报告时钟、初始化、命令、到达、退出、完成次数和 16 条记录。事件计数跨槽复用累积；记录快照只描述最近占用该槽的 CTA，不是所有逻辑 block 的历史。`hardware.warp_frontends` 新增 `cta_blocked` 和 `cta_woken`，外部字段写接口仍保留，后续事务 RTL 接入后，实际 CTA/异步路径均通过专用信号更新等待状态。
 
 源文件职责：`src/timing/cta_barrier.cpp` 管理槽位与事件路由，`src/rtl/cta_barrier.cpp` 负责引脚生命周期，`rtl/cta_barrier*.sv` 保存并更新屏障状态，`rtl/warp_frontend.sv` 执行本地阻塞/唤醒。跨实例路由仍经 C++，尚未综合为完整互连。
 

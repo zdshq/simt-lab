@@ -16,6 +16,7 @@ void pins(TestBench& b) {
     auto& d=b.dut; d.initialize=0; d.command_valid=0; d.retire_advance=0; d.resume_idle=0; d.issue_valid=0;
     d.write_state_mask=0; d.write_blocked_mask=0; d.write_phase_mask=0; d.eval();
     d.cta_block_mask=0; d.cta_release_mask=0; d.eval();
+    d.async_wait_mask=0; d.async_release_valid=0; d.eval();
 }
 void check(TestBench& b, const simt::Warp& w) {
     const auto& d=b.dut;
@@ -168,12 +169,39 @@ void cta_ports_immediate_release_and_wait_isolation() {
     b.dut.eval(); require(b.dut.cta_wake_mask==0x80000401,"same-cycle CTA block/release lost waiters"); tick(b,w);
 }
 
+// A raw query stores only current-phase waiters; completion compares full addresses and strictly newer phases.
+// 原始查询只保存当前阶段等待者；完成操作比较完整地址及严格更新的阶段。
+void async_ports_phase_comparison_and_immediate_release() {
+    TestBench b("frontend-async.vcd"); simt::Warp w; initialize(b,w,UINT32_MAX); tick(b,w);
+    const uint32_t address=0xfedcbab0, mask=0x80000401;
+    b.dut.async_wait_mask=mask; b.dut.async_wait_address=address; b.dut.async_query_phase=5;
+    b.dut.async_wait_phases[0]=5; b.dut.async_wait_phases[10]=4; b.dut.async_wait_phases[31]=5;
+    for (uint32_t lane : {0,31}) { w.state[lane]=simt::LaneState::async_barrier; w.blocked_token[lane]=address; w.waiting_phase[lane]=5; }
+    b.dut.eval(); require(b.dut.async_block_mask==0x80000001 && !b.dut.async_future_mask,"query phase comparison"); tick(b,w);
+    waits(b,w,0,2,3,address,0); tick(b,w);
+    for (uint32_t destination : {address^0x10000,address}) {
+        b.dut.async_release_valid=1; b.dut.async_release_address=destination; b.dut.async_release_phase=5;
+        b.dut.eval(); require(!b.dut.async_wake_mask,"equal phase or different address woke waiter"); tick(b,w);
+    }
+    b.dut.async_release_valid=1; b.dut.async_release_address=address; b.dut.async_release_phase=6;
+    w.state[0]=w.state[31]=simt::LaneState::active;
+    b.dut.eval(); require(b.dut.async_wake_mask==0x80000001,"async release crossed wait kind");
+    auto group=probe(b,w,0); require(group && group->mask==(UINT32_MAX^2u),"async wake-to-select forwarding"); tick(b,w);
+    b.dut.async_wait_mask=mask; b.dut.async_wait_address=address; b.dut.async_query_phase=7;
+    for (uint32_t lane : {0,10,31}) { b.dut.async_wait_phases[lane]=7; w.blocked_token[lane]=address; w.waiting_phase[lane]=7; }
+    b.dut.async_release_valid=1; b.dut.async_release_address=address; b.dut.async_release_phase=8;
+    b.dut.eval(); require(b.dut.async_block_mask==mask && b.dut.async_wake_mask==mask,"same-cycle async block/release"); tick(b,w);
+    b.dut.async_wait_mask=mask; b.dut.async_query_phase=7; b.dut.async_wait_phases[31]=UINT32_MAX;
+    b.dut.eval(); require(b.dut.async_future_mask==0x80000000 && !b.dut.async_block_mask,"future phase diagnostic/atomicity"); tick(b,w);
+}
+
 void run_cases() {
     initialization_forwarding_and_idle_storage(); std::cout<<"PASS frontend initialization, first issue, partial lanes and idle storage\n";
     random_selection_wait_metadata_and_wrapping_pc(); std::cout<<"PASS frontend 6000 random ordered cycles, selection policies, waits and PC wrap\n";
     nested_tokens_exit_and_same_cycle_issue(); std::cout<<"PASS frontend connected token storage, EXIT wakeup, same-cycle issue and yield\n";
     ordered_external_ports_errors_and_clear(); std::cout<<"PASS frontend pre/control/post ordering, rejected branch, slot reuse and reset\n";
     cta_ports_immediate_release_and_wait_isolation(); std::cout<<"PASS frontend CTA block/release ports, immediate wakeup and async isolation\n";
+    async_ports_phase_comparison_and_immediate_release(); std::cout<<"PASS frontend async phases, address matching, immediate release and wait isolation\n";
 }
 int run_application() {
     try { run_cases(); return 0; } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }

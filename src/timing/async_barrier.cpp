@@ -107,6 +107,7 @@ void TimingMachine::progress_barrier(uint32_t sm_id) {
     const auto warp = origin ? origin->warp : find_copy(sm_id, job.copy).warp;
     const auto pc = origin ? origin->group.pc : find_copy(sm_id, job.copy).pc;
     try {
+        if (sm.transactions) { progress_transaction_rtl(sm_id, job); return; }
         if (job.action == BarrierAction::wait) { query_async_wait(sm_id, job); return; }
         if (!job.prepared) prepare_barrier_job(sm_id, job);
         publish_barrier_job(sm_id, job);

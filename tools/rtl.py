@@ -17,6 +17,8 @@ MODULES = {'cache': ('sector_cache', 'test_cache.cpp', ['sector_sram.sv', 'cache
                             ['register_bank.sv', 'predicate_file.sv', 'register_file.sv', 'collector_dispatch.sv', 'collector_payload.sv', 'operand_collector.sv',
                              'integer_lane.sv', 'integer_vector.sv', 'integer_execute.sv', 'fp32_fma.sv', 'fp32_misc.sv', 'fp32_scalar_lane.sv', 'floating_execute.sv', 'collective_execute.sv',
                              'writeback_payload.sv', 'writeback_unit.sv', 'register_operand_unit.sv']),
+           'transaction_update': ('transaction_update', 'test_transaction_update.cpp', ['transaction_update.sv']),
+           'transaction_table': ('transaction_table', 'test_transaction_table.cpp', ['transaction_update.sv', 'transaction_table.sv']),
            'cta_barrier': ('cta_barrier', 'test_cta_barrier.cpp', ['lane_popcount.sv', 'cta_barrier_record.sv', 'cta_barrier.sv']),
            'warp_frontend': ('warp_frontend', 'test_warp_frontend.cpp', ['warp_control.sv', 'warp_group.sv', 'warp_frontend.sv']),
            'warp_control': ('warp_control', 'test_warp_control.cpp', ['warp_control.sv']),
@@ -117,6 +119,7 @@ def simulation_sources(options, name, destination):
                 str(ROOT/'tests/rtl'/test)]
     parameters = [f'-GSETS={options.sets}', f'-GWAYS={options.ways}'] if name == 'cache' else []
     if name in ('register_file', 'operand_unit', 'predicate'): parameters = [f'-GSLOTS={options.rf_slots}']
+    if name == 'transaction_table': parameters = [f'-GSLOTS={options.transaction_slots}']
     if name in ('collector', 'dispatch', 'writeback', 'integer', 'floating'): parameters = [f'-GENTRIES={options.collector_entries}']
     return parameters+[str(ROOT/'rtl'/file) for file in files]+[str(ROOT/'tests/rtl'/test)]
 
@@ -134,6 +137,7 @@ def simulation(options, name):
     label, objects = ('gate', 'gate-obj') if options.gate_sim else ('simulation', 'obj')
     flags, libraries = compiler_flags(options)
     if name == 'predicate': flags += f' -DSIMT_RTL_SLOTS={options.rf_slots}'
+    if name == 'transaction_table': flags += f' -DTRANSACTION_SLOTS={options.transaction_slots}'
     if name in ('collector', 'dispatch', 'writeback', 'integer', 'floating'): flags += f' -DCOLLECTOR_ENTRIES={options.collector_entries}'
     command = [tool('verilator'), '--cc', '--exe', '--build', '-j', str(options.jobs),
                '-Wall', '--unroll-count', '4096', '--top-module', top, '--Mdir', str(destination/objects),
@@ -171,6 +175,7 @@ def verify_netlist(destination, files, parameters):
 
 
 def cache_parameters(options, name):
+    if name == 'transaction_table': return {'SLOTS': options.transaction_slots}
     if name in ('register_file', 'operand_unit', 'predicate'): return {'SLOTS': options.rf_slots}
     if name in ('collector', 'dispatch', 'writeback', 'integer', 'floating'): return {'ENTRIES': options.collector_entries}
     return {'SETS': options.sets, 'WAYS': options.ways} if name == 'cache' else {}
@@ -188,6 +193,7 @@ def synthesis(options, name):
     lines = ['read_verilog -sv '+' '.join(yosys_string(ROOT/'rtl'/file) for file in files)]
     if name in ('collector', 'dispatch', 'writeback', 'integer', 'floating'): lines.append(f'chparam -set ENTRIES {options.collector_entries} {top}')
     if name in ('register_file', 'operand_unit', 'predicate'): lines.append(f'chparam -set SLOTS {options.rf_slots} {top}')
+    if name == 'transaction_table': lines.append(f'chparam -set SLOTS {options.transaction_slots} {top}')
     if name == 'cache': lines.append(f'chparam -set SETS {options.sets} -set WAYS {options.ways} {top}')
     lines += [f'synth -top {top} -run begin:fine', 'check -assert',
               'write_json inferred.json', 'tee -o inferred-stat.json stat -json']
@@ -248,6 +254,7 @@ def parse_options():
     parser.add_argument('--ways', type=int, choices=(4, 8), default=4)
     parser.add_argument('--collector-entries', type=int, choices=(2, 4, 8, 16, 32), default=32)
     parser.add_argument('--rf-slots', type=int, choices=(2, 4, 8, 16, 32), default=8)
+    parser.add_argument('--transaction-slots', type=int, choices=(16, 1024), default=1024)
     parser.add_argument('--jobs', type=int, default=4)
     parser.add_argument('--synth', action='store_true')
     parser.add_argument('--infer-only', action='store_true')

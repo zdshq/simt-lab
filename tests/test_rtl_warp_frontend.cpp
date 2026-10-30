@@ -100,12 +100,28 @@ void cta_signal_routing_and_async_isolation() {
     require(stored.control.lanes.pc[0]==5 && stored.control.lanes.state[8]==4 && stored.control.lanes.state[9]==3,"CTA/async state isolation");
     require(unit->frontend_stats().cta_blocked==8 && unit->frontend_stats().cta_woken==8,"CTA event accounting");
 }
+void asynchronous_query_rejection_and_publication() {
+    auto unit=make_warp_frontend(); unit->initialize(UINT32_MAX); unit->tick();
+    std::array<uint32_t,32> phases{}; phases[0]=3; phases[31]=4;
+    rejects([&]{unit->async_wait(0x80000001,0xffff0000,3,phases);},"mbarrier_future_phase");
+    require(unit->read().control.lanes.state[0]==0,"future phase partially blocked other lanes");
+    phases[31]=3; unit->async_wait(0x80000001,0xffff0000,3,phases);
+    rejects([&]{unit->async_wait(1,0,0,phases);},"frontend_async_wait_phase"); unit->tick();
+    unit->async_release(0x00000000,4); unit->tick();
+    require(unit->read().control.lanes.state[31]==4,"address comparison truncated");
+    unit->async_release(0xffff0000,4); auto group=unit->select(0);
+    require(group && group->mask==UINT32_MAX,"new phase did not wake stored waiters"); unit->issue(*group,true);
+    rejects([&]{unit->async_release(0,1);},"frontend_async_release_phase"); unit->tick();
+    require(unit->frontend_stats().async_checked==2 && unit->frontend_stats().async_blocked==2 &&
+        unit->frontend_stats().async_woken==2,"async adapter event accounting");
+}
 void run_cases() {
     persistent_pc_grouping_and_read_isolation(); std::cout<<"PASS frontend adapter stored PCs, selection cursor and observation isolation\n";
     ordered_wait_writes_and_same_cycle_issue(); std::cout<<"PASS frontend adapter pre/control/post/issue ordering and packed metadata\n";
     yielded_lane_lifetime_and_slot_reuse(); std::cout<<"PASS frontend adapter yielded lifetime, stalled resume and physical slot reuse\n";
     phase_guards_and_rejected_transactions(); std::cout<<"PASS frontend adapter phase guards, rejected writes and preserved token ownership\n";
     cta_signal_routing_and_async_isolation(); std::cout<<"PASS frontend adapter CTA signal routing, wakeup and asynchronous isolation\n";
+    asynchronous_query_rejection_and_publication(); std::cout<<"PASS frontend adapter async phase rejection, full addresses and completion wakeup\n";
 }
 int run_application() {
     try { run_cases(); return 0; } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }

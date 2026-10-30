@@ -14,6 +14,7 @@ struct FrontendWait { std::array<uint32_t,32> state{}, blocked{}, phase{}; };
 struct FrontendStats {
     uint64_t clocks = 0, active_clocks = 0, issued = 0, advances = 0, external_lanes = 0, resumed_lanes = 0;
     uint64_t cta_blocked = 0, cta_woken = 0;
+    uint64_t async_checked = 0, async_blocked = 0, async_woken = 0;
 };
 
 // Hardware owns PC, lane states, wait metadata, the PC-group cursor and all reconvergence tokens.
@@ -29,6 +30,8 @@ public:
     virtual void advance(FrontendGroup group) = 0;
     virtual void external(const FrontendWait& waits) = 0;
     virtual void cta_barrier(uint32_t block_mask, uint32_t barrier, uint32_t release_mask) = 0;
+    virtual void async_wait(uint32_t mask, uint32_t address, uint32_t current, const std::array<uint32_t,32>& phases) = 0;
+    virtual void async_release(uint32_t address, uint32_t phase) = 0;
     virtual void tick() = 0;
     virtual const ControlStats& stats() const = 0;
     virtual const FrontendStats& frontend_stats() const = 0;

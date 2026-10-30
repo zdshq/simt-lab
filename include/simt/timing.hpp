@@ -13,6 +13,7 @@
 #include "simt/collective_execution.hpp"
 #include "simt/warp_frontend.hpp"
 #include "simt/cta_barrier.hpp"
+#include "simt/transaction_table.hpp"
 #include <deque>
 
 namespace simt {
@@ -61,6 +62,9 @@ struct TimedSm {
     uint32_t allocated_columns = 0;
     std::deque<DmaCommand> copies;
     std::optional<BarrierJob> barrier_job;
+    std::unique_ptr<hw::TransactionTable> transactions;
+    std::optional<uint32_t> transaction_retiring;
+    bool transaction_released = false;
     AsyncStats async_stats;
     uint32_t copy_cursor = 0, copy_fragments = 0, barrier_entries = 0;
     explicit TimedSm(const hw::PipelineConfig& config, const hw::TensorConfig& tensor, const hw::AtomicConfig& atomic);
@@ -202,6 +206,14 @@ private:
     void progress_async_units();
     void progress_barrier(uint32_t sm);
     void prepare_barrier_job(uint32_t sm, BarrierJob& job);
+    void progress_transaction_rtl(uint32_t sm, BarrierJob& job);
+    void submit_transaction_rtl(uint32_t sm, BarrierJob& job);
+    void publish_transaction_rtl(uint32_t sm, BarrierJob& job);
+    void finish_transaction_rtl(uint32_t sm, BarrierJob& job, const hw::TransactionResult& result);
+    void query_transaction_rtl(uint32_t sm, BarrierJob& job, uint32_t phase);
+    void progress_transaction_retirement(uint32_t sm);
+    bool retire_transaction_cta(const Cta& cta);
+    void route_transaction_release(uint32_t cta, uint32_t address, uint32_t phase);
     void prepare_copy_issue(BarrierJob& job, const Inflight& entry);
     void publish_barrier_job(uint32_t sm, BarrierJob& job);
     void finish_barrier_job(uint32_t sm, BarrierJob& job);

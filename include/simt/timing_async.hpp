@@ -24,6 +24,7 @@ struct BarrierJob {
     TransactionBarrier next{};
     std::optional<hw::Ticket> ticket{};
     bool prepared = false, phase_advanced = false;
+    bool submitted = false, publication_done = false;
 };
 struct AsyncStats {
     uint64_t copies = 0, completed = 0, read_bytes = 0, write_bytes = 0, fragments = 0;
