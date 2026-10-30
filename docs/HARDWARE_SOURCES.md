@@ -50,7 +50,7 @@ L1/L2 RTL 现已接入 ISA 和主机链路；L2 选择 256 sets/8 ways、256 KiB
 
 LRU 的每组独立 rank 寄存器、局部更新 mux 和组写使能是本项目为完整 L2 综合实现的电路组织，保留原精确 LRU 策略。L1/L2 的 1,024/6,144 个 rank 状态位已由 Yosys 中间网表核对，不能据此声称 NVIDIA 使用同样的替换算法或布局。数据 SRAM 的单读/单写推断已验证；多读口 tag 等元数据尚未映射到具体 SRAM/BRAM。
 
-Tensor RTL 的四级 FP32 FMA、77 位对齐通路、完整次正规数和最近偶数舍入、独立 INT8 流水线、两项 FIFO、16 个 PE 及反馈旁路都是项目自己的电路设计。它们实现既定数值约定，不是 NVIDIA 内部电路、精度模式或延迟的逆向结论。当前已通过可选 [RTL 后端](RTL_BACKEND.md) 接入 ISA/TMEM/主机 Graph，前端和存储层次仍是 C++。加入事件观测端口后的完整阵列为 217,928 个 generic cells，来自实际 Yosys/ABC 层次统计，不能用于声称整 SM 或显卡门数，见 [RTL_TENSOR.md](RTL_TENSOR.md)。
+Tensor RTL 的四级 FP32 FMA、77 位对齐通路、完整次正规数和最近偶数舍入、独立 INT8 流水线、两项 FIFO、16 个 PE 及反馈旁路都是项目自己的电路设计。它们实现既定数值约定，不是 NVIDIA 内部电路、精度模式或延迟的逆向结论。当前已通过可选 [RTL 后端](RTL_BACKEND.md) 接入 ISA/TMEM/主机 Graph，前端仍有 C++，存储层次可选 L1/L2 RTL。加入 FMA 逐级有效写使能后，完整阵列为 218,054 个 generic cells，来自实际 Yosys/ABC 层次统计，不能用于声称整 SM 或显卡门数，见 [RTL_TENSOR.md](RTL_TENSOR.md)。
 
 仍需实现 CUDA pointer-chase、合并和 shared bank 微基准，记录原始结果、GPU/驱动/编译器信息、样本分布和计时开销。结果用于判断模型能否解释趋势，不通过调参强行宣称结构唯一可识别。
 
@@ -63,3 +63,5 @@ Tensor RTL 的四级 FP32 FMA、77 位对齐通路、完整次正规数和最近
 七类执行端口、每条目 3 位 pipe 字段、年龄优先选择及候选/确认协议是本项目设计选择，详见 [RTL_DISPATCH.md](RTL_DISPATCH.md)。不从 NVIDIA 指令类别推断其物理端口数量，也不把本项目综合成本当作 NVIDIA 芯片数据。
 
 整数执行的 32 lane 组合 ALU、32 项结果 FIFO、逐项倒计数和 collector→整数→写回直连也是项目设计，见 [RTL_INTEGER.md](RTL_INTEGER.md)。默认四拍是模型配置，不代表乘法器内部已经划分四级，也没有根据公开微基准确认 NVIDIA 使用相同队列或数据通路。S2R/CVTA 实现的是自定义 ISA 的上下文和地址窗口，不是 NVIDIA 特殊寄存器、MMU 或 TLB 的完整实现。
+
+普通浮点执行实例化 32 份四级 FMA，转换/比较使用组合电路和四级对齐寄存器，32 项预约队列保存结果和额外延迟，见 [RTL_FLOATING.md](RTL_FLOATING.md)。四级最短时延与默认六拍均为项目设计；没有声称 NVIDIA 采用相同加乘复用、队列、端口数、转换流水划分或舍入精度实现。

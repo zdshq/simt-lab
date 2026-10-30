@@ -1,6 +1,7 @@
 #include "simt/writeback.hpp"
 #include "simt/operand_collector.hpp"
 #include "simt/integer_execution.hpp"
+#include "simt/floating_execution.hpp"
 #include <iostream>
 #include <stdexcept>
 
@@ -112,7 +113,39 @@ void connected_integer_execution_and_persistent_results() {
     }
 }
 
+// Fused cancellation and masked RF persistence expose both numerical shortcuts and missing stage clocks.
+// 融合抵消与掩码 RF 持久性同时揭示数值捷径和缺失的流水级时钟。
+void connected_floating_execution_and_persistent_results() {
+    for (uint32_t partitions : {1,2,4,8}) {
+        auto file = make_register_file(partitions,4,4); auto& wb = *file->writeback();
+        auto& col = *file->collector(); auto& floating = *file->floating(); const auto slot = file->slots()-1;
+        const uint32_t bits[] = {0x3f800001,0x3f7ffffe,0xbf800000};
+        for (uint32_t source = 0; source < 3; ++source) {
+            RegisterVector data; data.fill(bits[source]); file->write(slot,source+1,UINT32_MAX,data); file->tick();
+        }
+        const auto completion = wb.reserve({slot,1,1,5,0x80000001});
+        const RegisterUse sources[] = {{1,0x80000001},{2,0x80000001},{3,0x80000001}};
+        const auto collector = col.allocate(slot,sources,1); file->tick(); col.collect(); col.dispatch(UINT32_MAX);
+        FloatingCommand command{collector,completion,18,0,1,2,3,0x80000001,3};
+        rejects([&] { floating.launch(command); }); require(col.selected(collector),"invalid latency consumed collector");
+        command.latency = 4; const auto clocks = file->stats().clocks;
+        require(floating.launch(command) && !col.selected(collector),"floating handshake failed to transfer collector");
+        require(file->stats().clocks == clocks,"floating launch inserted hidden clock");
+        for (uint32_t tick = 0; tick < 4; ++tick) { require(!wb.completed(completion),"floating completion skipped a physical stage"); file->tick(); }
+        require(wb.completed(completion),"floating completion did not reach WB");
+        require(!wb.complete(completion,1,values(999)),"host producer replaced floating result");
+        wb.arbitrate(); const auto result = wb.take(completion); file->tick();
+        require(result[0] == 0xa8800000 && result[31] == 0xa8800000 && result[1] == 0,"floating fused/masked result differs");
+        const RegisterUse reader[] = {{5,UINT32_MAX}};
+        const auto id = col.allocate(slot,reader); file->tick(); col.collect(); col.dispatch(UINT32_MAX);
+        require(col.take(id)[0].values == result,"floating result did not persist in RF"); file->tick();
+        require(floating.occupancy() == 0 && floating.floating_stats().accepted == 1 && floating.floating_stats().completed == 1,
+                "floating ownership or counters differ");
+    }
+}
+
 void run_cases() {
+    connected_floating_execution_and_persistent_results(); std::cout << "PASS floating four-stage collector-to-FMA-to-WB-to-RF route across four geometries\n";
     connected_integer_execution_and_persistent_results(); std::cout << "PASS integer collector-to-ALU-to-WB-to-RF route across four geometries\n";
     direct_register_route_and_lane_masks(); std::cout << "PASS writeback actual RF bypass, storage and lane masks across four geometries\n";
     held_results_and_phase_errors(); std::cout << "PASS writeback retained results, finite ports and phase errors\n";

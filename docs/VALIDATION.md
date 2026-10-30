@@ -361,10 +361,44 @@ PCI 选择在原程序私有路径中假定所有设备都有 PCI 状态，模�
 
 完整目标仍未完成：整数算术内部流水级、浮点/SFU/控制执行、完整谓词值存储、跨分区共享单元仲裁、其余 GPU RTL 连接、实卡参数校准和 PTX 异步矩阵协议仍需继续。
 
+## 阶段 16：普通浮点四级电路、转换比较与结果预约（2026-10-30）
+
+从 `eff0684` 接续。FADD/FMUL/FFMA 直接使用每分区 32 份四级 FMA，FSETP/I2F/F2I 用位电路及四级对齐寄存器；结果发射前预约 32 项有界存储。collector 端口 1 到算术，再到写回端口 1 和 RF 的数值通路全部直连，C++ 不复制源向量、不调用浮点数值函数、不按 `due` 时间产生结果。默认六拍保留，四拍是物理下限，额外延迟由 RTL 倒计数推进；小于四拍明确拒绝，见 [RTL_FLOATING.md](RTL_FLOATING.md)。
+
+| 验证 | 实际结果与范围 |
+|---|---|
+| 默认 Debug | `ctest --test-dir build --output-on-failure -j3`：26 套件、274 项（231 Python / 43 C++），272 通过、2 跳过，3.20 秒 |
+| 联合 Release | `ctest --test-dir build-cache-rtl --output-on-failure -j3`：最终 45 套件、847 项（778 Python / 69 C++）全部通过，8.56 秒；分组增加两个套件，没有增加或遗漏原有场景 |
+| 寄存器联合 RTL Debug ASan/UBSan | `ctest --test-dir build-register-sanitize --output-on-failure -j3`：最终 36 套件、553 项（498 Python / 55 C++）全部通过，600.32 秒；包含寄存器、collector、整数、浮点及写回 RTL，Tensor/cache/scoreboard 为 C++ 后端，独立 Tensor RTL sanitizer 另见下方 |
+| 完整 32 槽浮点 RTL / sanitizer | 相同五项独立检查通过，包括六种操作、NaN/带符号零、融合舍入、随机整数与舍入边界、越界转换、掩码、有限容量、同拍复用、在途复位和 6,000 拍随机流；产物 `rtl-floating` / `rtl-floating-sanitize` |
+| 完整 32 槽浮点综合与网表 | `--module floating --synth`：588,501 generic cells / 53,809 FF 位，`check -assert` 及相同五项实际 `--gate-sim` 通过，产物 `rtl-floating-synth` |
+| 两项小队列 | `--module floating --collector-entries 2` 同五项 RTL 检查通过，包括物理流水级仍在推进时队列满、出队复用和绕回；未对小配置另做门级仿真 |
+| 组合顶层 | `--module operand_unit` 普通/sanitizer 各六项通过，新增最后源同拍送入浮点、四级算术加两拍等待、真实 RF 写回及后续读取；产物 `rtl-floating-connected` / `rtl-floating-connected-sanitize` |
+| 四种分区几何 | 写回适配器新增检查 1/2/4/8 分区下 masked fused cancellation、低延迟拒绝后重试、完成端口归属、无隐藏时钟和持久 RF；已包含在 CTest 总数中 |
+| FMA / PE / Tensor 回归 | 因新增 FMA 各级有效写使能，三模块普通 RTL、sanitizer、重新综合及同一实际网表分别通过四/三/六项。FMA 保留 250,000 随机/抵消、13,824 边界组合及 12,000 有理数参考；完整 Tensor 网格和输入/输出反压也复跑 |
+| FMA / PE / Tensor 实际成本 | 新 generic cells 分别 11,504 / 13,099 / 218,054，FF 位保持 478 / 794 / 16,636；产物 `rtl-floating-fma` / `rtl-floating-pe` / `rtl-floating-tensor`，旧阶段成本记录保留其当时范围 |
+| 组合顶层保留存储综合 | RF 8 warp 槽 + collector 32 项 + 整数 32 项 + 浮点 32 项 + 写回 32 项的 `--infer-only` 和 `check -assert` 通过；层次展开 147 个数组 / 598,048 数组位，另 167,612 FF 位，没有宣称整个组合顶层完成通用门仿真 |
+| 主机 Graph | 四负载各重放两次，全部数值、原有统计、模型周期及原始 trace 与 `rtl-integer-host` 全量相等，新增 `floating_units` 单独审计；主机仍为 64,500 模型周期，证据 `rtl-floating-host/backend-audit.json` |
+| 原版 nvidia-smi | 另一个联合 RTL 活设备完成两次 Transformer Graph，每次普通浮点 RTL 接收/完成均为 70、Tensor 后端为 RTL，验证 32 个输出；实卡共存、7 MiB→0 MiB→退出移除通过，绝对系统路径只显示实卡。脚本与证据 `rtl-floating-host/check_monitor.py` / `monitor/` |
+
+主机 vector 每次包含 10 条普通浮点指令，Transformer 每次 70 条；对应实际电路 accepted/completed 与 trace 逐条匹配，所有结果队列最终为空。reduction 和 Tensor GEMM 的普通浮点计数为零，不能用它们冒充新增普通浮点通路覆盖。新 ISA 浮点套件包含五项测试，另覆盖 4/6/100 拍依赖链、lane 转换边界、40 条独立浮点指令填满 32 个完成槽、异常和低于物理流水级数的配置拒绝。
+
+独立工具集合由 64 增至 70 个场景，本阶段运行受影响的 24 项：浮点 5、组合顶层 6、FMA 4、PE 3、Tensor 6。不同构建和综合网表复跑不重复计数；没有宣称重跑全部独立模块。20 份当前源码清单和四份实际网表 SHA-256 已核对，见 `rtl-floating-final/evidence-audit.json`。完整浮点单元的门数不等于整个 SM，更不等于两个 SM 或整张显卡。
+
+长任务期间增加两行 FMA 解释注释，使首次普通浮点 simulation/synthesis 清单与最终源码哈希不同；数值逻辑没有变化，仍重新执行当前源码的仿真、综合和网表检查。`tools/rtl.py` 现在在调用前保存源码哈希，结束后若有变化则拒绝发布成功清单；重新综合开始前也移除旧 netlist 清单。原诊断见 `rtl-floating-history/source-snapshot-recheck.json`，最终清单只接受源码稳定后的复跑结果。
+
+首次全量 sanitizer 运行 34 套件，其中 33 通过，原单个 `rtl_collector_execution` 在 600.02 秒达到总限时；98 个场景中 85 个已输出通过，没有数值或 sanitizer 报告，但该次运行不算全部通过。现在将这 98 项按 core 30 / memory+async 49 / Tensor 19 分成三个 CTest 套件，保留原每套件 600 秒及每子进程 120 秒限制。实际 unittest 发现集合与三个分组的并集全等且无重复，证据 `rtl-floating-history/collector-suite-partition.json`；原完整失败输出和分析分别为 `sanitize-before-suite-split.log`、`sanitize-timeout-analysis.json`。直接运行原测试脚本不指定分组仍执行全部 98 项。
+
+最终 sanitizer 三组分别在 252.14、222.68、120.83 秒通过。Release 和 sanitizer 的实际输出均逐项核对全部 98 个测试名称，与原发现集合完全相等。最终完整明细及计数保存在 `rtl-floating-final/{joint-release.log,register-sanitize.log,tests.json,collector-execution-audit.json}`；600.32 秒是整轮并行 CTest 的总耗时，不能与单套件 600 秒限时混淆。
+
+分组后的首次 Release 全量运行通过，但后续 `ctest --show-only=json-v1` 覆盖了 CTest 的明细日志；那份被覆盖的日志不作场景计数证据。已完整重跑并保存 `rtl-floating-final/joint-release.log`，逐项核对 98 个 collector 场景与分组清单全等，再统计上表的最终结果。
+
+SFU、控制/访存执行电路、完整谓词值存储、整数内部算术流水级、跨分区共享单元仲裁和其余 GPU RTL 仍需完成。实卡参数校准、PTX 异步矩阵协议及最终整体验收也未完成，目标保持 active。
+
 ## 明确边界
 
 - 功能模式和时序模式都在 CPU 上执行；不会利用 RTX 4070 SUPER 来获得模拟 GPU 的实际吞吐。
-- 两个 SM 已有基础时序资源模型；缓存、Tensor、scoreboard、寄存器数据、collector/读请求年龄仲裁、七执行端口、整数数值与完成存储/写回仲裁 RTL 已接入实际执行，早期循环 bank 仲裁 RTL 仍独立，尚未连接成两份完整 RTL SM。仅报告实际模块的 generic-cell 统计，没有整卡门数、工艺频率、面积或功耗结论。
+- 两个 SM 已有基础时序资源模型；缓存、Tensor、scoreboard、寄存器数据、collector/读请求年龄仲裁、七执行端口、整数/普通浮点数值与完成存储/写回仲裁 RTL 已接入实际执行，早期循环 bank 仲裁 RTL 仍独立，尚未连接成两份完整 RTL SM。仅报告实际模块的 generic-cell 统计，没有整卡门数、工艺频率、面积或功耗结论。
 - 自定义编码不兼容 CUDA/PTX/SASS/curryGPU 私有二进制；Python Program 是指令构造接口，不是 CUDA 编译器。
 - 主机接口及 CUDA Graph 风格功能通过 Python/C++ 进程协议运行，不实现 NVIDIA `cudaGraph*` API/ABI、驱动、PCIe/MMIO 或系统可枚举的 CUDA 设备。
 - Graph 支持范围见 [主机接口规范](HOST.md)：无 child graph、host callback、条件/内存分配节点、device-side launch 或完整 capture mode；单计算引擎不支持并发 kernel。

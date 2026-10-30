@@ -58,6 +58,14 @@ module register_operand_unit #(
     output wire integer_accept, integer_ready, integer_clock_enable, integer_output_valid,
     output wire [3:0] integer_error,
     output wire [5:0] integer_occupancy,
+    input wire floating_launch,
+    input wire [4:0] floating_collector, floating_entry,
+    input wire [7:0] floating_opcode, floating_mode,
+    input wire [5:0] floating_ra, floating_rb, floating_rc,
+    input wire [31:0] floating_latency, floating_mask,
+    output wire floating_accept, floating_ready, floating_clock_enable, floating_output_valid, floating_protocol_error,
+    output wire [3:0] floating_error,
+    output wire [5:0] floating_occupancy,
     input wire wb_reserve_valid,
     input wire [SLOT_BITS-1:0] wb_reserve_warp,
     input wire [2:0] wb_reserve_pipe,
@@ -88,16 +96,25 @@ module register_operand_unit #(
     wire [127:0] wb_masks;
     wire [4095:0] wb_data;
     assign write_events = write_valid | wb_writes;
-    assign clock_enable = register_clock_enable || collector_clock_enable || wb_clock_enable || integer_clock_enable;
+    assign clock_enable = register_clock_enable || collector_clock_enable || wb_clock_enable || integer_clock_enable || floating_clock_enable;
     wire integer_selected = dispatch_valid[0] && !dispatch_accept[0] && dispatch_entries[4:0] == integer_collector;
     wire [3:0] integer_arithmetic_error;
     wire [4:0] integer_result_entry;
     wire [1023:0] integer_result_data;
     assign integer_error = integer_launch && !integer_selected ? 4'd8 : integer_arithmetic_error;
-    assign dispatch_accept_events = dispatch_accept | {6'b0,integer_accept};
-    wire [6:0] actual_complete_valid = wb_complete_valid | {6'b0,integer_output_valid};
-    wire [34:0] actual_complete_entries = {wb_complete_entries[34:5], integer_output_valid ? integer_result_entry : wb_complete_entries[4:0]};
-    wire [7167:0] actual_complete_data = {wb_complete_data[7167:1024], integer_output_valid ? integer_result_data : wb_complete_data[1023:0]};
+    wire floating_selected = dispatch_valid[1] && !dispatch_accept[1] && dispatch_entries[9:5] == floating_collector;
+    wire [3:0] floating_arithmetic_error;
+    wire [4:0] floating_result_entry;
+    wire [1023:0] floating_result_data;
+    assign floating_error = floating_launch && !floating_selected ? 4'd6 : floating_arithmetic_error;
+    assign dispatch_accept_events = dispatch_accept | {5'b0,floating_accept,integer_accept};
+    wire [6:0] actual_complete_valid = wb_complete_valid | {5'b0,floating_output_valid,integer_output_valid};
+    wire [34:0] actual_complete_entries = {wb_complete_entries[34:10],
+        floating_output_valid ? floating_result_entry : wb_complete_entries[9:5],
+        integer_output_valid ? integer_result_entry : wb_complete_entries[4:0]};
+    wire [7167:0] actual_complete_data = {wb_complete_data[7167:2048],
+        floating_output_valid ? floating_result_data : wb_complete_data[2047:1024],
+        integer_output_valid ? integer_result_data : wb_complete_data[1023:0]};
     // Integer operands and results stay on circuit wires; the host supplies only instruction metadata.
     // 整数操作数和结果始终走电路连线；宿主只提供指令元数据。
     integer_execute integers (
@@ -110,6 +127,16 @@ module register_operand_unit #(
         .output_valid(integer_output_valid), .output_ready(wb_complete_accept[0]),
         .output_entry(integer_result_entry), .output_data(integer_result_data),
         .occupancy(integer_occupancy), .clock_enable(integer_clock_enable)
+    );
+    floating_execute floating_point (
+        .clk(clk), .reset(reset), .input_valid(floating_launch && floating_selected),
+        .input_ready(floating_ready), .input_accept(floating_accept), .input_error(floating_arithmetic_error),
+        .input_entry(floating_entry), .latency(floating_latency), .opcode(floating_opcode), .mode(floating_mode),
+        .ra(floating_ra), .rb(floating_rb), .rc(floating_rc), .mask(floating_mask),
+        .source_count(dispatch_counts[3:2]), .source_registers(dispatch_registers[35:18]), .source_data(dispatch_data[6143:3072]),
+        .output_valid(floating_output_valid), .output_ready(wb_complete_accept[1]),
+        .output_entry(floating_result_entry), .output_data(floating_result_data),
+        .occupancy(floating_occupancy), .clock_enable(floating_clock_enable), .protocol_error(floating_protocol_error)
     );
     wire [4*ROW_BITS-1:0] actual_rows;
     wire [127:0] actual_masks;

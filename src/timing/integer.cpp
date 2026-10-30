@@ -32,7 +32,7 @@ bool TimingMachine::launch_integer(Inflight& entry) {
 
 // Completion readiness comes from physical storage and its arriving-result bypass, never a host due time.
 // 完成就绪来自物理存储及其到达结果旁路，而不是宿主到期时间。
-void TimingMachine::poll_integer(Inflight& entry) {
+void TimingMachine::poll_rtl_execution(Inflight& entry) {
     auto* unit = sms_[entry.sm]->partitions[entry.partition].registers->writeback();
     if (!unit->completed(*entry.completion)) return;
     entry.result_submitted = true;

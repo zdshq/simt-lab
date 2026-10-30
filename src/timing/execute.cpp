@@ -63,8 +63,9 @@ void TimingMachine::launch(Inflight& entry) {
     if (entry.collector && !partition.registers->collector()->selected(*entry.collector)) {
         ++stats_.unit_stalls; return;
     }
-    if (pipe == Pipe::integer && entry.collector) {
-        if (!launch_integer(entry)) { ++stats_.unit_stalls; return; }
+    if ((pipe == Pipe::integer || pipe == Pipe::floating) && entry.collector) {
+        const bool accepted = pipe == Pipe::integer ? launch_integer(entry) : launch_floating(entry);
+        if (!accepted) { ++stats_.unit_stalls; return; }
         partition.available[index] = cycle_ + interval;
         trace(entry, "execute"); return;
     }

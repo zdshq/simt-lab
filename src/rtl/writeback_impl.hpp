@@ -48,6 +48,7 @@ template<class C, uint32_t S> bool RtlWriteback<C,S>::complete(uint32_t entry, u
     const auto bit = 1u << pipe;
     if (dut_.wb_complete_valid & bit) return false;
     if (pipe == 0 && dut_.integer_output_valid) return false;
+    if (pipe == 1 && dut_.floating_output_valid) return false;
     const auto shift = pipe*5;
     dut_.wb_complete_entries = (dut_.wb_complete_entries & ~(uint64_t{31} << shift)) | (uint64_t{entry} << shift);
     for (uint32_t lane = 0; lane < 32; ++lane) dut_.wb_complete_data[pipe*32+lane] = values[lane];

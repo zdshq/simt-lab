@@ -9,11 +9,12 @@
 #include "simt/operand_collector.hpp"
 #include "simt/writeback.hpp"
 #include "simt/integer_execution.hpp"
+#include "simt/floating_execution.hpp"
 #include <deque>
 
 namespace simt {
 enum class Pipe { integer, floating, special, memory, control, tensor, async };
-enum class Stage { collect, ready, executing, integer, memory, tensor, async, writeback };
+enum class Stage { collect, ready, executing, integer, floating, memory, tensor, async, writeback };
 struct Footprint {
     Pipe pipe = Pipe::integer;
     std::vector<hw::RegisterUse> reads;
@@ -145,7 +146,8 @@ private:
     void launch(Inflight& entry);
     void evaluate_scalar(Inflight& entry);
     bool launch_integer(Inflight& entry);
-    void poll_integer(Inflight& entry);
+    bool launch_floating(Inflight& entry);
+    void poll_rtl_execution(Inflight& entry);
     void commit_control(Inflight& entry);
     void poll_memory(Inflight& entry);
     void prepare_memory(Inflight& entry);

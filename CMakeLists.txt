@@ -19,7 +19,7 @@ add_library(simt_core src/machine.cpp src/execution.cpp src/control.cpp src/coll
     src/dump.cpp src/module.cpp src/memory_execution.cpp src/barrier.cpp
     src/diagnostics.cpp src/tensor.cpp src/tensor_numeric.cpp src/matrix.cpp src/matrix_descriptor.cpp
     src/async.cpp src/async_copy.cpp src/timing/footprint.cpp src/timing/scheduler.cpp src/timing/issue.cpp
-    src/timing/execute.cpp src/timing/integer.cpp src/timing/registers.cpp src/timing/collectors.cpp src/timing/writeback.cpp src/timing/memory.cpp src/timing/retire.cpp src/timing/report.cpp
+    src/timing/execute.cpp src/timing/integer.cpp src/timing/floating.cpp src/timing/registers.cpp src/timing/collectors.cpp src/timing/writeback.cpp src/timing/memory.cpp src/timing/retire.cpp src/timing/report.cpp
     src/hardware/tensor_array.cpp src/hardware/tensor_engine.cpp src/timing/tensor_transfer.cpp src/timing/tensor_control.cpp
     src/timing/tensor_tile.cpp src/timing/tensor_operands.cpp src/timing/async_launch.cpp
     src/timing/async_barrier.cpp src/timing/async_dma.cpp src/timing/async_report.cpp src/timing/atomic.cpp ${GENERATED_DIR}/isa.hpp)
@@ -142,7 +142,7 @@ function(add_simt_test name script)
     add_test(NAME ${name} COMMAND ${CMAKE_COMMAND} -E env
         "PYTHONPATH=${GENERATED_DIR}:${CMAKE_CURRENT_SOURCE_DIR}/python"
         "SIMT_RUNNER=$<TARGET_FILE:simt-run>"
-        ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/${script})
+        ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/${script} ${ARGN})
     set_tests_properties(${name} PROPERTIES TIMEOUT 90)
 endfunction()
 add_simt_test(isa_and_execution test_simulator.py)
@@ -178,9 +178,13 @@ if(SIMT_REGISTER_RTL)
     target_link_libraries(test-rtl-collector PRIVATE simt_hardware)
     target_compile_options(test-rtl-collector PRIVATE -Wall -Wextra -Wpedantic -Werror)
     add_test(NAME rtl_collector_adapter COMMAND test-rtl-collector)
-    add_simt_test(rtl_collector_execution test_rtl_collector.py)
+    add_simt_test(rtl_collector_execution test_rtl_collector.py --group core)
+    add_simt_test(rtl_collector_memory_async test_rtl_collector.py --group memory)
+    add_simt_test(rtl_collector_tensor test_rtl_collector.py --group tensor)
+    add_simt_test(rtl_floating_execution test_rtl_floating.py)
     add_simt_test(rtl_collector_host test_rtl_collector_host.py)
-    set_tests_properties(rtl_collector_execution rtl_collector_host PROPERTIES TIMEOUT 600)
+    set_tests_properties(rtl_collector_execution rtl_collector_memory_async rtl_collector_tensor rtl_collector_host PROPERTIES TIMEOUT 600)
+    set_tests_properties(rtl_floating_execution PROPERTIES TIMEOUT 300)
     add_executable(test-rtl-register-file tests/test_rtl_register_file.cpp)
     target_link_libraries(test-rtl-register-file PRIVATE simt_hardware)
     target_compile_options(test-rtl-register-file PRIVATE -Wall -Wextra -Wpedantic -Werror)

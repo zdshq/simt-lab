@@ -106,6 +106,26 @@ void integer_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedSm>
     out << ']';
 }
 
+// Floating counters include physical pipeline occupancy and completed result handshakes.
+// 浮点计数包含物理流水线占用和已完成结果的握手。
+void floating_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedSm>>& sms) {
+    out << ",\"floating_units\":[";
+    bool first = true;
+    for (uint32_t sm = 0; sm < sms.size(); ++sm)
+        for (uint32_t part = 0; part < sms[sm]->partitions.size(); ++part) {
+            const auto& file = sms[sm]->partitions[part].registers;
+            auto* unit = file ? file->floating() : nullptr;
+            if (!unit) continue;
+            if (!first) out << ',';
+            first = false;
+            const auto& s = unit->floating_stats();
+            out << "{\"sm\":" << sm << ",\"partition\":" << part << ",\"backend\":\"rtl\",\"entries\":32,\"pipeline_stages\":4"
+                << ",\"occupancy\":" << unit->occupancy() << ",\"clocks\":" << s.clocks << ",\"active_clocks\":" << s.active_clocks
+                << ",\"accepted\":" << s.accepted << ",\"completed\":" << s.completed << '}';
+        }
+    out << ']';
+}
+
 void cache_stats(std::ostream& out, const hw::CachePort& cache) {
     const auto& s = cache.stats(); const auto& config = cache.config();
     out << "{\"backend\":\"" << cache.name() << "\",\"clocks\":" << cache.cycle()
@@ -197,6 +217,7 @@ void TimingMachine::dump(std::ostream& out) const {
     register_stats(out, sms_);
     collector_stats(out, sms_);
     integer_stats(out, sms_);
+    floating_stats(out, sms_);
     writeback_stats(out, sms_);
     dump_memory(out);
     dump_tensor(out);

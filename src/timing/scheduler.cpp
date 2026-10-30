@@ -29,6 +29,8 @@ TimingMachine::TimingMachine(Machine& machine, std::shared_ptr<hw::HardwareConte
     if (!config.max_cycles) throw std::runtime_error("invalid_cycle_limit");
     validate_async_config(config.async);
     hw::SmResources probe(config.pipeline);
+    if (config.pipeline.collector_rtl && config.pipeline.float_latency < 4)
+        throw std::runtime_error("floating_rtl_requires_latency_at_least_4");
     if (!probe.acquire(0, config.threads, config.cta_shared_bytes))
         throw std::runtime_error("kernel_exceeds_sm_resources");
     hw::HierarchyConfig memory_config; memory_config.sms = config.sms; memory_config.atomic = config.atomic;

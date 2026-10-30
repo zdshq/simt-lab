@@ -14,6 +14,7 @@ public:
 void commit(TestBench& b) {
     b.tick(); b.dut.write_valid = 0; b.dut.clear_slots = 0;
     b.dut.integer_launch = 0;
+    b.dut.floating_launch = 0;
     b.dut.wb_reserve_valid = 0; b.dut.wb_complete_valid = 0; b.dut.wb_acknowledge = 0;
     b.dut.allocate_valid = 0; b.dut.release_entries = 0; b.dut.collect_enable = 0; b.dut.dispatch_enable = 0; b.dut.dispatch_accept = 0; b.dut.eval();
 }
@@ -143,7 +144,34 @@ void integer_execution_connected_storage() {
         require(d.query_data[lane] == 112+2*lane,"integer physical result did not persist in RF");
 }
 
+// A floating result must traverse four arithmetic registers and survive the configured extra delay before RF writeback.
+// 浮点结果必须经过四级算术寄存器，并在配置的额外延迟后仍能写回 RF。
+void floating_execution_connected_storage() {
+    TestBench b("operand-unit-floating.vcd"); auto& d = b.dut;
+    write(b,0,1,0x3f800000); commit(b); write(b,0,2,0x3f800000); commit(b);
+    d.wb_reserve_warp = 0; d.wb_reserve_pipe = 1; d.wb_reserve_kind = 1;
+    d.wb_reserve_register = 3; d.wb_reserve_mask = UINT32_MAX; d.wb_reserve_valid = 1; d.eval();
+    d.allocate_pipe = 1;
+    const uint32_t result = d.wb_reserve_index, source = allocate(b,0,1,2); commit(b);
+    d.collect_enable = 1; d.dispatch_enable = 1; d.dispatch_eligible = UINT32_MAX;
+    d.floating_launch = 1; d.floating_collector = source; d.floating_entry = result;
+    d.floating_opcode = 16; d.floating_ra = 1; d.floating_rb = 2; d.floating_rc = 63;
+    d.floating_mask = UINT32_MAX; d.floating_latency = 6; d.eval();
+    require(d.floating_accept && d.dispatch_accept_events == 2,"connected floating failed last-source acceptance");
+    for (uint32_t tick = 0; tick < 6; ++tick) {
+        require(!d.wb_completed_entries,"floating completion bypassed configured stages"); commit(b);
+    }
+    require(d.occupancy == 0 && d.wb_completed_entries == (1u<<result),"floating release or completion missing");
+    for (uint32_t lane = 0; lane < 32; ++lane)
+        require(d.wb_retire_data[3*32+lane] == 0x40000000+lane,"floating physical retirement data differs");
+    d.wb_acknowledge = 1u<<result; d.eval(); commit(b);
+    const auto reader = allocate(b,0,3,4); commit(b); d.collect_enable = 1; d.query_entry = reader; d.eval();
+    for (uint32_t lane = 0; lane < 32; ++lane)
+        require(d.query_data[lane] == 0x40000000+lane,"floating result did not persist in RF");
+}
+
 void run_cases() {
+    run_case("connected floating four arithmetic stages, result delay and physical RF storage",floating_execution_connected_storage);
     run_case("connected integer collector last-source bypass and physical result storage",integer_execution_connected_storage);
     run_case("connected writeback physical RF storage and collector bypass",writeback_to_rf_and_collector);
     run_case("connected RF physical dispatch bypass and pipe reuse",physical_execution_bus_bypass_and_reuse);

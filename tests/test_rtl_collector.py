@@ -1,5 +1,7 @@
 # Existing numerical and hazard references now depend on the RTL operand collector.
 # 既有数值和冒险参考现在依赖RTL 操作数收集器。
+import argparse
+import sys
 import unittest
 import test_timing as timing
 import test_timed_memory as memory
@@ -19,6 +21,13 @@ class RtlCollector:
             self.assertTrue(hardware['collectors'])
             self.assertTrue(hardware['writeback_units'])
             self.assertTrue(hardware['integer_units'])
+            self.assertTrue(hardware['floating_units'])
+            for unit in hardware['floating_units']:
+                self.assertEqual(unit['backend'], 'rtl')
+                self.assertEqual(unit['pipeline_stages'], 4)
+                self.assertEqual(unit['occupancy'], 0)
+                self.assertEqual(unit['accepted'], unit['completed'])
+                self.assertEqual(unit['clocks'], hardware['cycles'])
             for unit in hardware['integer_units']:
                 self.assertEqual(unit['backend'], 'rtl')
                 self.assertEqual(unit['entries'], 32)
@@ -114,5 +123,28 @@ class WritebackCapacity(RtlCollector, SimulationCase):
                     self.assertEqual(event['cycle']-starts[event['instruction']], latency)
 
 
+# Partition only test scheduling; running this file without a group still discovers every existing case.
+# 只划分测试调度；不指定分组运行本文件时仍发现全部既有场景。
+def selected_classes(group):
+    classes = [name for name, value in vars(sys.modules[__name__]).items()
+               if isinstance(value, type) and issubclass(value, unittest.TestCase) and value.__module__ == __name__]
+    return [name for name in classes if group == 'all' or test_group(name) == group]
+
+
+def test_group(name):
+    if name.startswith('CollectorTensor'):
+        return 'tensor'
+    if name.startswith(('CollectorMemory', 'CollectorAsync')):
+        return 'memory'
+    return 'core'
+
+
+def run_application():
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument('--group', choices=('all', 'core', 'memory', 'tensor'), default='all')
+    options, remaining = parser.parse_known_args()
+    unittest.main(defaultTest=selected_classes(options.group), argv=[sys.argv[0], *remaining], verbosity=2)
+
+
 if __name__ == '__main__':
-    unittest.main(verbosity=2)
+    run_application()

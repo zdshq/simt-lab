@@ -145,12 +145,16 @@ module fp32_fma (
 
     // A blocked output freezes every stage, preserving all accepted operations and the visible result.
     // 输出受阻时冻结所有级，保留已接受运算及可见结果。
+    // Data registers update only for valid work in their stage; bubbles still advance the valid pipeline.
+    // 数据寄存器只在所属级持有有效工作时更新；气泡仍推进有效位流水线。
     always @(posedge clk) begin
         if (reset) begin valid <= 0; result <= 0; end
         else if (advance) begin
             valid <= {valid[2:0], input_valid};
-            multiply_inputs(); align_operands(); add_magnitudes();
-            result <= special3[32] ? special3[31:0] : pack(magnitude3, exponent3, sign3);
+            if (input_valid) multiply_inputs();
+            if (valid[0]) align_operands();
+            if (valid[1]) add_magnitudes();
+            if (valid[2]) result <= special3[32] ? special3[31:0] : pack(magnitude3, exponent3, sign3);
         end
     end
 endmodule

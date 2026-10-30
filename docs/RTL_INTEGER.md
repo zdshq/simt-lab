@@ -53,4 +53,4 @@ python3 tools/rtl.py --module operand_unit --out artifacts/rtl-integer-connected
 
 各次构建、综合统计、主机 Graph 结果及失败修复记录见 [验证记录](VALIDATION.md)。综合使用 generic cells，没有指定工艺库或 FPGA DSP；单元数不能称为等价 NAND2 门数、两个完整 SM 面积或实际频率。
 
-浮点/SFU/控制执行、跨分区共享资源仲裁、完整 GPU RTL、实卡参数校准和 PTX 异步矩阵协议仍未完成。NVML 可见性不提供 CUDA 计算接口；整体目标见 [硬件计划](HARDWARE_PLAN.md)。
+普通浮点现已接入 [浮点执行 RTL](RTL_FLOATING.md)。SFU/控制/访存执行、整数算术内部流水级、跨分区共享资源仲裁、完整 GPU RTL、实卡参数校准和 PTX 异步矩阵协议仍未完成。NVML 可见性不提供 CUDA 计算接口；整体目标见 [硬件计划](HARDWARE_PLAN.md)。
