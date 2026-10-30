@@ -165,6 +165,22 @@ void collective_stats(std::ostream& out, const std::vector<std::unique_ptr<Timed
     out << ']';
 }
 
+void control_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedSm>>& sms) {
+    out << ",\"warp_controls\":[";
+    bool first = true;
+    for (uint32_t sm = 0; sm < sms.size(); ++sm)
+        for (uint32_t slot = 0; slot < sms[sm]->controls.size(); ++slot) {
+            const auto& unit = sms[sm]->controls[slot];
+            if (!unit) continue;
+            if (!first) out << ',';
+            first = false; const auto& s = unit->stats();
+            out << "{\"sm\":" << sm << ",\"slot\":" << slot << ",\"backend\":\"rtl\",\"tokens\":16,\"storage_bits\":1568"
+                << ",\"clocks\":" << s.clocks << ",\"active_clocks\":" << s.active_clocks
+                << ",\"commands\":" << s.commands << ",\"clears\":" << s.clears << ",\"woken_lanes\":" << s.woken_lanes << '}';
+        }
+    out << ']';
+}
+
 void cache_stats(std::ostream& out, const hw::CachePort& cache) {
     const auto& s = cache.stats(); const auto& config = cache.config();
     out << "{\"backend\":\"" << cache.name() << "\",\"clocks\":" << cache.cycle()
@@ -253,6 +269,7 @@ void TimingMachine::dump_tensor(std::ostream& out) const {
 void TimingMachine::dump(std::ostream& out) const {
     dump_statistics(out);
     scoreboard_stats(out, sms_);
+    control_stats(out, sms_);
     register_stats(out, sms_);
     predicate_stats(out, sms_);
     collector_stats(out, sms_);

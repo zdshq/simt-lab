@@ -70,3 +70,5 @@ Tensor RTL 的四级 FP32 FMA、77 位对齐通路、完整次正规数和最近
 
 
 集合执行的 32 lane 跨 lane 多路选择、最低成员编码、布尔归约、单项结果寄存器及控制完成端口优先级是本项目硬件设计。谓词文件新增独立执行读口，三个端口共享同一数据和有效位。集合单元 55,423 cells/1,030 FF 位、32 槽谓词文件 68,814 cells/7,392 FF 位来自本次 Yosys/ABC 实际综合；不代表 NVIDIA 网络拓扑、真实延迟或具体工艺面积。实际 ISA 和主机 Graph 接入见 [RTL_COLLECTIVES.md](RTL_COLLECTIVES.md)。
+
+分支重聚的每 warp 16 个 98 位令牌记录、并行参与/到达更新、16 位完成向量和按 lane 等待编号选择目标都是项目自定义电路，不是 NVIDIA 逆向得到的结构。实际综合为 68,030 个 generic cells/1,568 个触发器位，令牌存储未映射为 SRAM；lane PC/运行状态和指令目标检查仍由宿主提供。数据来源、时钟边界和验证见 [RTL_WARP_CONTROL.md](RTL_WARP_CONTROL.md)。

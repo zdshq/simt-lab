@@ -460,10 +460,44 @@ python3 tools/kernel_perf/perf.py run --config tools/kernel_perf/configs/memory-
 - 监控会话两次规约 Graph 通过；原版 nvidia-smi 经用户级入口与桥接层同时显示实卡及模拟器，实际分配 7 MiB、释放 0 MiB、退出消失。证据 `artifacts/rtl-collective-final/{allocated,freed,exited}.csv`；未变成 CUDA 或 PCIe 枚举。
 - 完整目标仍 active：SFU、分支/重聚/CTA 屏障控制、其余访存电路、整机 RTL 接线、参数辨识与最终硬件审计未完成。
 
+## 阶段 16：分支控制与 RTL 重聚令牌（2026-10-30）
+
+本阶段从 `ee5067c` 接续。实际六类控制指令读取并更新每物理 warp 的 16 个 RTL 令牌；lane PC/状态仍是显式宿主输入和输出，未实现完整硬件调度器。结构、存储和接口边界见 [RTL_WARP_CONTROL.md](RTL_WARP_CONTROL.md)。
+
+实际验收命令：
+
+```sh
+cmake -S . -B build
+cmake --build build -j4
+ctest --test-dir build --output-on-failure
+cmake -S . -B build-cache-rtl -DCMAKE_BUILD_TYPE=Release \
+  -DSIMT_TENSOR_RTL=ON -DSIMT_CACHE_RTL=ON \
+  -DSIMT_SCOREBOARD_RTL=ON -DSIMT_REGISTER_RTL=ON
+cmake --build build-cache-rtl -j4
+ctest --test-dir build-cache-rtl --output-on-failure
+python3 tools/rtl.py --build build-release --out artifacts/rtl-warp-control --module warp_control
+python3 tools/rtl.py --build build-release --out artifacts/rtl-warp-control --module warp_control --synth
+python3 tools/rtl.py --build build-release --out artifacts/rtl-warp-control --module warp_control --gate-sim
+UBSAN_OPTIONS=halt_on_error=1 python3 tools/rtl.py --build build-sanitize \
+  --out artifacts/rtl-warp-control-sanitize --module warp_control
+python3 examples/hardware_host.py --build build-cache-rtl --tensor-rtl --cache-rtl \
+  --scoreboard-rtl --register-rtl --collector-rtl --out artifacts/rtl-control-host
+```
+
+- 默认 Debug：27 套件，236 Python + 43 C++ = 279 项，277 通过、2 项未构建 RTL 而跳过，9.75 秒。联合 Release：50 套件，804 Python + 76 C++ = 880 项全部通过，27.47 秒。原始输出为 `artifacts/rtl-control-final/{default,joint}-{ctest,tests}.log`。
+- 新控制模块四项独立场景分别通过 RTL、ASan/UBSan 与实际综合网表。包含 200 轮全 16 令牌随机到达（9,600 次事务）、3,000 次 BRA/YIELD 随机向量、嵌套/EXIT/BREAK 唤醒、错误命令原子性、清零与解除状态。参考复用功能 ISA 实现，不使用 RTL 计算预期值。
+- 四项新适配器测试覆盖空闲时钟门控、只在 tick 提交、待提交命令保护、清槽、两实例隔离、16 项存储、修改观察快照不影响硬件、错误撤销引脚及 96 位 lane 状态打包。ISA 新套件复跑九项既有控制测试并新增三项；两项持久主机检查验证 16 令牌/9 CTA/37 线程的两次 Graph 重放、333 个内存输出及失败 kernel 隔离。
+- 首版组合过程逐令牌改写同一 lane 向量，Yosys 长时间停留在 `PROC_DLATCH`，人工停止该次工具进程。日志保存在 `initial-synthesis-latch-pass.log`；启动器历史日志包含被停止进程的 `-15` 返回。重写为完成向量和按等待编号查询后，最终综合成功且无残留 memory/process；所有受影响验证在最终 RTL 上重新通过。没有获得首版有效综合成本。
+- 最终单 warp 模块为 68,030 generic cells、1,568 FF 位。`netlist.json` 关联最终源码与 `gates.v` 哈希，四份模块清单（RTL、sanitizer、综合、网表）全部核对一致。工具新增独立场景总数由 81 增为 85；本阶段重跑的是新增四项，不把历史模块算成本次重新验收。
+- 五个后端同时启用的四类 Graph 各两次通过数学参考；额外两次带监控的规约也通过。十份报告和 trace 删除新增 `warp_controls` 后与上一阶段完全一致。四类原负载只有 EXIT 使用新单元；重聚运算由新增 ISA、适配器和持久主机测试覆盖。
+- 普通 `nvidia-smi` 实测显示真实 4070 SUPER 和活模拟器；模拟内存 7 MiB→0 MiB，退出后移除。绝对路径 `/usr/bin/nvidia-smi` 在模拟器存活时仍只看见实卡。列表、表格、分配/释放/退出和监控负载记录保存在 `artifacts/rtl-control-final/`；未提供 CUDA/PCIe 设备兼容。
+- 最终 `evidence-audit.json` 冻结 273 个源码文件与三个联合二进制，核对四份清单、一个实际网表和十份主机报告。完整联合 sanitizer、其他未修改电路的综合和完整 GPU 门级连接没有在本阶段重新运行。
+- 整体目标仍 active；PC/lane 存储、发射/YIELD 恢复、CTA 屏障、SFU、其余访存电路、整机 RTL、实测校准、PTX 异步矩阵协议与最终硬件审计未完成。
+
 ## 明确边界
 
 - 功能模式和时序模式都在 CPU 上执行；不会利用 RTX 4070 SUPER 来获得模拟 GPU 的实际吞吐。
-- 两个 SM 已有基础时序资源模型；缓存、Tensor、scoreboard、普通/谓词寄存器数据、collector/读请求年龄仲裁、七执行端口、整数/普通浮点数值与完成存储/写回仲裁 RTL 已接入实际执行，早期循环 bank 仲裁 RTL 仍独立，尚未连接成两份完整 RTL SM。仅报告实际模块的 generic-cell 统计，没有整卡门数、工艺频率、面积或功耗结论。
+- 两个 SM 已有基础时序资源模型；缓存、Tensor、scoreboard、普通/谓词寄存器数据、collector/读请求年龄仲裁、七执行端口、整数/普通浮点/集合数值、重聚令牌/控制转换与完成存储/写回仲裁 RTL 已接入实际执行，早期循环 bank 仲裁 RTL 仍独立，尚未连接成两份完整 RTL SM。仅报告实际模块的 generic-cell 统计，没有整卡门数、工艺频率、面积或功耗结论。
 - 自定义编码不兼容 CUDA/PTX/SASS/curryGPU 私有二进制；Python Program 是指令构造接口，不是 CUDA 编译器。
 - 主机接口及 CUDA Graph 风格功能通过 Python/C++ 进程协议运行，不实现 NVIDIA `cudaGraph*` API/ABI、驱动、PCIe/MMIO 或系统可枚举的 CUDA 设备。
 - Graph 支持范围见 [主机接口规范](HOST.md)：无 child graph、host callback、条件/内存分配节点、device-side launch 或完整 capture mode；单计算引擎不支持并发 kernel。

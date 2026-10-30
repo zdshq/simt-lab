@@ -19,7 +19,7 @@ add_library(simt_core src/machine.cpp src/execution.cpp src/control.cpp src/coll
     src/dump.cpp src/module.cpp src/memory_execution.cpp src/barrier.cpp
     src/diagnostics.cpp src/tensor.cpp src/tensor_numeric.cpp src/matrix.cpp src/matrix_descriptor.cpp
     src/async.cpp src/async_copy.cpp src/timing/footprint.cpp src/timing/scheduler.cpp src/timing/issue.cpp
-    src/timing/execute.cpp src/timing/integer.cpp src/timing/floating.cpp src/timing/collective.cpp src/timing/registers.cpp src/timing/collectors.cpp src/timing/writeback.cpp src/timing/memory.cpp src/timing/retire.cpp src/timing/report.cpp
+    src/timing/execute.cpp src/timing/integer.cpp src/timing/floating.cpp src/timing/collective.cpp src/timing/control.cpp src/timing/registers.cpp src/timing/collectors.cpp src/timing/writeback.cpp src/timing/memory.cpp src/timing/retire.cpp src/timing/report.cpp
     src/hardware/tensor_array.cpp src/hardware/tensor_engine.cpp src/timing/tensor_transfer.cpp src/timing/tensor_control.cpp
     src/timing/tensor_tile.cpp src/timing/tensor_operands.cpp src/timing/async_launch.cpp
     src/timing/async_barrier.cpp src/timing/async_dma.cpp src/timing/async_report.cpp src/timing/atomic.cpp ${GENERATED_DIR}/isa.hpp)
@@ -44,7 +44,7 @@ add_library(simt_hardware src/hardware/port.cpp src/hardware/dram.cpp src/hardwa
     src/hardware/cache_request.cpp src/hardware/cache_fill.cpp src/hardware/coalescer.cpp src/hardware/shared.cpp
     src/hardware/hierarchy.cpp src/hardware/scoreboard.cpp src/hardware/scoreboard_engine.cpp src/hardware/register_file.cpp src/hardware/resources.cpp src/hardware/local.cpp
     src/hardware/atomic_queue.cpp src/hardware/atomic_execute.cpp src/hardware/shared_atomic.cpp
-    src/hardware/lifetime.cpp src/hardware/context.cpp)
+    src/hardware/lifetime.cpp src/hardware/context.cpp src/hardware/warp_control.cpp)
 target_link_libraries(simt_hardware PUBLIC simt_storage)
 target_link_libraries(simt_core PUBLIC simt_hardware)
 option(SIMT_TENSOR_RTL "Build the optional Verilator Tensor execution backend" OFF)
@@ -178,6 +178,10 @@ if(SIMT_REGISTER_RTL)
     if(SIMT_SANITIZE)
         set_tests_properties(timed_sm_execution PROPERTIES TIMEOUT 180)
     endif()
+    add_executable(test-rtl-warp-control tests/test_rtl_warp_control.cpp)
+    target_link_libraries(test-rtl-warp-control PRIVATE simt_hardware)
+    target_compile_options(test-rtl-warp-control PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    add_test(NAME rtl_warp_control_adapter COMMAND test-rtl-warp-control)
     add_executable(test-rtl-writeback tests/test_rtl_writeback.cpp)
     target_link_libraries(test-rtl-writeback PRIVATE simt_hardware)
     target_compile_options(test-rtl-writeback PRIVATE -Wall -Wextra -Wpedantic -Werror)
@@ -192,6 +196,8 @@ if(SIMT_REGISTER_RTL)
     add_simt_test(rtl_floating_execution test_rtl_floating.py)
     add_simt_test(rtl_predicate_execution test_rtl_predicate.py)
     add_simt_test(rtl_collective_execution test_rtl_collective.py)
+    add_simt_test(rtl_warp_control_execution test_rtl_warp_control.py)
+    set_tests_properties(rtl_warp_control_execution PROPERTIES TIMEOUT 300)
     set_tests_properties(rtl_collective_execution PROPERTIES TIMEOUT 300)
     add_simt_test(rtl_collector_host test_rtl_collector_host.py)
     set_tests_properties(rtl_collector_execution rtl_collector_memory_async rtl_collector_tensor rtl_collector_host PROPERTIES TIMEOUT 600)

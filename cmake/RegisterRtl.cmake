@@ -20,10 +20,12 @@ function(simt_enable_register_rtl)
                 rtl/writeback_payload.sv rtl/writeback_unit.sv rtl/register_operand_unit.sv
             VERILATOR_ARGS -Wall --unroll-count 4096 -GSLOTS=${slots})
     endforeach()
+    verilate(simt_register_circuit TOP_MODULE warp_control PREFIX Vsimt_warp_control
+        SOURCES rtl/warp_control.sv VERILATOR_ARGS -Wall --unroll-count 4096)
     target_compile_options(simt_register_circuit PRIVATE ${VERILATOR_CFLAGS})
     get_target_property(circuit_includes simt_register_circuit INTERFACE_INCLUDE_DIRECTORIES)
     set_property(TARGET simt_register_circuit PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${circuit_includes})
-    target_sources(simt_hardware PRIVATE src/rtl/register_file.cpp src/rtl/operand_collector.cpp)
+    target_sources(simt_hardware PRIVATE src/rtl/register_file.cpp src/rtl/operand_collector.cpp src/rtl/warp_control.cpp)
     target_compile_definitions(simt_hardware PRIVATE SIMT_HAS_REGISTER_RTL=1)
     target_link_libraries(simt_hardware PRIVATE simt_register_circuit)
 endfunction()

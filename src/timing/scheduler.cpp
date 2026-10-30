@@ -20,7 +20,7 @@ TimedSm::TimedSm(const hw::PipelineConfig& config, const hw::TensorConfig& tenso
         partitions.emplace_back(config.register_banks);
         if (config.register_rtl) partitions.back().registers = hw::make_register_file(config.partitions, config.register_banks, config.collector_rtl ? config.collectors : 0);
     }
-    scoreboards.resize(config.max_warps);
+    scoreboards.resize(config.max_warps); controls.resize(config.max_warps);
 }
 
 TimingMachine::TimingMachine(Machine& machine, std::shared_ptr<hw::HardwareContext> hardware)
@@ -85,6 +85,11 @@ void TimingMachine::place(uint32_t block, uint32_t sm, const hw::Residency& resi
         auto threads = std::span<Memory>(machine_.ctas_[block].local).subspan(warp * lanes);
         hardware_->physical.attach(local_base_ + block * 32 + warp, threads.first(std::min<size_t>(threads.size(), lanes)));
         const auto slot = residency.slots[warp];
+        if (machine_.config_.pipeline.collector_rtl) {
+            auto& control = sms_[sm]->controls[slot];
+            if (!control) control = hw::make_warp_control();
+            control->clear();
+        }
         auto& file = sms_[sm]->partitions[slot % sms_[sm]->partitions.size()].registers;
         if (file) file->clear(slot / sms_[sm]->partitions.size());
         auto& board = sms_[sm]->scoreboards[slot];
@@ -167,6 +172,7 @@ bool TimingMachine::advance() {
     // 物理 scoreboard 槽在 CTA 复用时保持实例，每拍事件结束后只提交一次。
     for (auto& sm : sms_) {
         for (auto& board : sm->scoreboards) if (board) board->tick();
+        for (auto& control : sm->controls) if (control) control->tick();
         for (auto& partition : sm->partitions) if (partition.registers) partition.registers->tick();
     }
     retire_ctas();
