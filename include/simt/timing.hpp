@@ -16,20 +16,11 @@
 #include "simt/transaction_table.hpp"
 #include "simt/warp_scheduler.hpp"
 #include "simt/execution_arbiter.hpp"
+#include "simt/instruction_decoder.hpp"
 #include <deque>
 
 namespace simt {
-enum class Pipe { integer, floating, special, memory, control, tensor, async };
 enum class Stage { collect, ready, executing, integer, floating, collective, memory, tensor, async, writeback };
-struct Footprint {
-    Pipe pipe = Pipe::integer;
-    std::vector<hw::RegisterUse> reads;
-    std::optional<uint32_t> destination, predicate;
-    std::optional<uint32_t> source_predicate;
-    uint32_t write_mask = 0;
-    bool boundary = false, store = false;
-};
-Footprint instruction_footprint(const Instruction& instruction, uint32_t mask);
 std::string timing_location(uint32_t cta, uint32_t sm, uint32_t warp, uint32_t pc);
 
 struct TimedWarp {
@@ -42,6 +33,7 @@ struct Partition {
     hw::RegisterPorts ports;
     std::unique_ptr<hw::RegisterFile> registers;
     std::unique_ptr<hw::WarpScheduler> scheduler;
+    std::unique_ptr<hw::InstructionDecoder> decoder;
     std::array<std::optional<uint64_t>,32> collector_owners;
     uint32_t cursor = 0;
     std::array<uint64_t, 7> available{};
@@ -149,7 +141,7 @@ private:
     bool dependencies(uint32_t cta, uint32_t warp, Group group, const Footprint& footprint) const;
     bool capacity(uint32_t sm, uint32_t partition);
     hw::PredicateValues probe_predicates(uint32_t cta, uint32_t warp, const Instruction& instruction, Group group);
-    void enqueue(uint32_t cta, uint32_t warp, Group group, uint32_t mask, Footprint footprint, uint32_t predicate_source);
+    void enqueue(uint32_t cta, uint32_t warp, const Instruction& instruction, Group group, uint32_t mask, Footprint footprint, uint32_t predicate_source);
     void reserve(Inflight& entry);
     void collect_operands();
     void collect_rtl_operands();
@@ -254,6 +246,7 @@ private:
     void trace(const Inflight& entry, const std::string& action);
     void dump_statistics(std::ostream& out) const;
     void dump_execution_arbiters(std::ostream& out) const;
+    void dump_instruction_decoders(std::ostream& out) const;
     void dump_memory(std::ostream& out) const;
     void dump_tensor(std::ostream& out) const;
     void dump_async(std::ostream& out) const;

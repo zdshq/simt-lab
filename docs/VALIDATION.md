@@ -718,3 +718,43 @@ python3 artifacts/rtl-execution-final/audit.py
 最终审计包含四份模块清单、完整综合网表、一份实际适配器 sanitizer 清单、十份主机报告、329 个源码文件和三个联合二进制。网表 SHA-256 为 `d01708f6be84aae9a611700d17034612bf0dfe46576ec4b100c6d602a129473c`，完整清单在 `artifacts/rtl-execution-final/evidence-audit.json`。本阶段复跑新增电路的五项独立场景，未重跑全部历史独立模块、完整联合 sanitizer 或整 GPU 综合。
 
 完整目标仍 active；取指译码/依赖查询组合、异步后台与 CTA 提交/回收服务次序、SFU/剩余访存电路、外部内存返回选择、整机 RTL、实卡校准、PTX 异步矩阵协议和最终硬件审计仍未完成。
+
+
+## 阶段 16：原始机器码与操作数译码 RTL（2026-10-30）
+
+从 `38139d7` 接续。每分区新增组合译码器，实际执行字段来自原始 128 位映像的 RTL 输出。规范生成字段/合法位电路，手写操作数电路产生三个有界源请求、重复源合并、R63 消除、跨 lane 掩码与结构错误。PC 越界、指令存储、部分静态目标验证、依赖查询组合与执行专用检查仍有 C++，见 [RTL_INSTRUCTION_DECODER.md](RTL_INSTRUCTION_DECODER.md)。
+
+| 实际命令/范围 | 最终结果 |
+|---|---|
+| `cmake --build build -j4` / `ctest --test-dir build --output-on-failure` | 默认 Debug 27 套件、279 项运行：236 Python / 43 C++，277 通过、2 跳过，10.23 秒 |
+| `cmake --build build-cache-rtl -j4` / `ctest --test-dir build-cache-rtl --output-on-failure` | 联合 Release 63 套件、966 项全部通过：857 Python / 109 C++，38.01 秒 |
+| `python3 tools/rtl.py --build build-release --module instruction_decoder --out artifacts/rtl-decoder-final` | 五项独立电路检查通过，含全部 59 个 opcode、197 个未知 opcode、保留位扫描与 70,800 组随机字段/footprint 差分 |
+| 同模块 `--build build-sanitize --out artifacts/rtl-decoder-sanitize` | 同五项 ASan/UBSan 通过；参考库来自本轮重新构建的默认 sanitizer |
+| 同模块 `--build build-release --synth --out artifacts/rtl-decoder-final` | `check -assert` 通过，完整 1,941 generic cells、零 FF、零运行时存储；中间 64×114 位常量 ROM 已映射为组合逻辑 |
+| 同模块 `--build build-release --gate-sim --out artifacts/rtl-decoder-final` | 实际综合网表复跑同五项，全部通过 |
+| `python3 artifacts/rtl-decoder-final/build_adapter.py` | 实际适配器与完整组合电路四项独立 ASan/UBSan 通过 |
+| `rtl_instruction_decoder_path` / `rtl_instruction_decoding` | 三项 C++ 原始映像权威性检查、五项 Python 实际 ISA/主机检查通过；包含 1/2/4/8 分区、尾 warp、多 CTA、分歧、错误与 Graph 两次重放 |
+
+适配器与实际路径的七项 C++ 已计入联合 109 项，不将 sanitizer 复跑再算作新场景。五项独立电路场景另计。本轮没有执行完整联合 sanitizer 或整 GPU 综合；默认 Release/sanitizer 构建用于生成文件和独立参考库，没有据此宣称它们的全量 CTest 已运行。
+
+原始路径检查故意把宿主预解码的 MOVI 改成 FADD、改变 guard/目标/源/立即数及 STG 的源字段，保持原始映像时执行结果和完整报告仍相同。改变原始立即数后，真正写入的内存随之改变。额外直接修改原始未知 opcode/保留位并清空映像，验证没有回退到宿主预解码。这些负例没有改动实际生产执行来通过测试。
+
+首次完整回归为 62/63 套件通过，失败集中于新增 Python 套件的两处预期，日志保留为 `initial-joint-{ctest,tests}.log`：失败 kernel 后在同一 stream 重放会正确报告 dependency_failed，因此改到独立 stream；空掩码的非法普通源虽不在译码阶段读取，下游整数描述符仍拒绝，因此保留该错误并另测合法源的空掩码。随后单套件验证暴露 CLI 错误报告没有 hardware 字段，移除不成立的字段访问；译码错误计数仍由独立适配器和持久主机测试检查，日志在 `targeted-failed-tests.log`。最终完整回归全部通过，没有改变原有失败传播或描述符校验。
+
+五后端联合运行四类完整主机负载各两次 Graph，另运行两次监控 Transformer：
+
+```sh
+python3 examples/hardware_host.py --build build-cache-rtl \
+  --register-rtl --collector-rtl --scoreboard-rtl --cache-rtl --tensor-rtl \
+  --out artifacts/rtl-decoder-host
+python3 artifacts/rtl-decoder-final/check_monitor.py
+python3 artifacts/rtl-decoder-final/audit.py
+```
+
+十份报告的译码计数与调度 probes/guard stalls/issued 逐一匹配，下载数据与上阶段逐字节相同；去掉新增 instruction_decoders 字段后，完整 hardware 报告（含 trace）也相同。四类 kernel 模型周期为向量 4832/4850、规约 2021/2240、GEMM 3868/3416、Transformer 5736/5741。审计最初误把独立监控会话与已运行其他负载的持久会话比较，因缓存历史不同失败；改为同场景的上阶段监控会话后完整比较通过，保留 `initial-audit-run.log`。没有忽略差异或用同周期代替完整比较。
+
+原版 nvidia-smi 经已安装的用户级 NVML 入口实际显示 RTX 4070 SUPER 与活模拟器，内存从 7 MiB 到释放后的 0 MiB，再随会话退出移除。直接 `/usr/bin/nvidia-smi -L` 仍只显示实卡。这是管理面可见性，不是 PCIe 或 CUDA 设备枚举；证据在本阶段 `list.txt`、`table.txt`、`native-list.txt` 与三份 CSV。
+
+审计核对四份模块清单、生成 RTL 和驱动源码哈希、综合网表、一份适配器 sanitizer 清单、十份主机报告、343 个源码/模板/规范文件、四个构建的生成译码文件及四个联合二进制。实际网表 SHA-256 为 `407e82041949b33c1e9d6b37e6032163ce662379c439b7d0cd8d51eef4407018`；完整映射见 `artifacts/rtl-decoder-final/evidence-audit.json`。
+
+完整目标保持 active。指令存储/取指与依赖查询直连、异步后台/CTA 服务次序、SFU/剩余访存、外部返回选择、整机 RTL、实卡校准、PTX 异步矩阵协议和最终硬件审计仍未完成。

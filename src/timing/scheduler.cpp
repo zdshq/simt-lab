@@ -22,6 +22,7 @@ TimedSm::TimedSm(const hw::PipelineConfig& config, const hw::TensorConfig& tenso
         partitions.emplace_back(config.register_banks);
         if (config.register_rtl) partitions.back().registers = hw::make_register_file(config.partitions, config.register_banks, config.collector_rtl ? config.collectors : 0);
         if (config.collector_rtl) partitions.back().scheduler = hw::make_warp_scheduler(32/config.partitions);
+        if (config.collector_rtl) partitions.back().decoder = hw::make_instruction_decoder();
     }
     scoreboards.resize(config.max_warps); controls.resize(config.max_warps);
     if (config.collector_rtl) { cta_tables.resize(config.max_ctas); cta_owners.resize(config.max_ctas); }
@@ -32,6 +33,8 @@ TimingMachine::TimingMachine(Machine& machine, std::shared_ptr<hw::HardwareConte
     const auto& config = machine_.config_;
     if (!config.max_cycles) throw std::runtime_error("invalid_cycle_limit");
     validate_async_config(config.async);
+    if (config.pipeline.collector_rtl && machine.module_.image.size()!=machine.module_.code.size())
+        throw std::runtime_error("instruction_image_missing");
     hw::SmResources probe(config.pipeline);
     if (config.pipeline.collector_rtl && config.pipeline.float_latency < 4)
         throw std::runtime_error("floating_rtl_requires_latency_at_least_4");
@@ -193,6 +196,7 @@ bool TimingMachine::advance() {
         if (sm->dma) sm->dma->tick();
         if (sm->execution_arbiter) sm->execution_arbiter->tick();
         for (auto& partition : sm->partitions) if (partition.scheduler) partition.scheduler->tick();
+        for (auto& partition : sm->partitions) if (partition.decoder) partition.decoder->tick();
         for (auto& partition : sm->partitions) if (partition.registers) partition.registers->tick();
     }
     retire_ctas();

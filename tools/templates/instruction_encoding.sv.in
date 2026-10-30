@@ -1,0 +1,19 @@
+// Generated field extraction and legal-bit decoding; do not edit build artifacts.
+// 生成的字段提取与合法位解码；不要修改构建产物。
+module instruction_encoding (
+    input wire [127:0] words,
+@PORTS@
+    output wire [1:0] encoding_error
+);
+@WIRES@
+    reg [127:0] allowed;
+    reg known;
+    always @* begin
+        allowed=0; known=1;
+        case (opcode)
+@CASES@
+            default: known=0;
+        endcase
+    end
+    assign encoding_error=!known ? 2'd1 : ((words & ~allowed)!=0 ? 2'd2 : 2'd0);
+endmodule

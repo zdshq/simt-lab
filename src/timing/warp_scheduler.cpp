@@ -27,14 +27,16 @@ bool TimingMachine::issue_partition_rtl(uint32_t sm_id,uint32_t part) {
 // 原始就绪信号进入调度器；由调度器应用自身在途、边界和访存顺序状态。
 bool TimingMachine::issue_scheduled_group(uint32_t cta_id,uint32_t wi,Group group) {
     const auto sm=machine_.ctas_[cta_id].sm_id; auto& timed=warps_[cta_id][wi];
-    auto& scheduler=*sms_[sm]->partitions[timed.slot%sms_[sm]->partitions.size()].scheduler;
-    if (group.pc>=machine_.module_.code.size()) throw std::runtime_error("pc_out_of_range");
-    const auto& i=machine_.module_.code[group.pc];
+    auto& partition=sms_[sm]->partitions[timed.slot%sms_[sm]->partitions.size()];
+    auto& scheduler=*partition.scheduler; auto& decoder=*partition.decoder;
+    if (group.pc>=machine_.module_.image.size()) throw std::runtime_error("pc_out_of_range");
+    const auto i=decoder.inspect(machine_.module_.image[group.pc]);
     if (!timed.scoreboard->predicate_ready(i.guard&7,group.mask)) return scheduler.decide(false,false,false,false);
     const auto predicates=probe_predicates(cta_id,wi,i,group);
-    auto footprint=instruction_footprint(i,predicates.participating);
+    auto footprint=decoder.operands(predicates.participating);
     if (!scheduler.decide(true,dependencies(cta_id,wi,group,footprint),footprint.boundary,footprint.pipe==Pipe::memory)) return false;
-    enqueue(cta_id,wi,group,predicates.participating,std::move(footprint),predicates.source); return true;
+    enqueue(cta_id,wi,i,group,predicates.participating,std::move(footprint),predicates.source);
+    decoder.accept(); return true;
 }
 
 uint32_t TimingMachine::warp_inflight(uint32_t cta,uint32_t wi) const {

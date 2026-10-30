@@ -12,6 +12,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = {'cache': ('sector_cache', 'test_cache.cpp', ['sector_sram.sv', 'cache_lru.sv', 'sector_cache.sv']),
+           'instruction_decoder': ('instruction_decoder', 'test_instruction_decoder.cpp', ['instruction_operands.sv', 'instruction_decoder.sv']),
            'execution_arbiter': ('execution_arbiter', 'test_execution_arbiter.cpp', ['execution_arbiter.sv']),
            'warp_scheduler': ('warp_scheduler', 'test_warp_scheduler.cpp', ['warp_issue_slot.sv', 'warp_scheduler.sv']),
            'dma_engine': ('dma_engine', 'test_dma_engine.cpp', ['dma_select.sv', 'dma_command.sv', 'dma_fragment.sv', 'dma_engine.sv']),
@@ -134,6 +135,20 @@ def dma_gate_wrapper(destination):
     return [str(config), str(wrapper)]
 
 
+# Generated decoding must match the current schema; synthesis and gate checks hash that actual source too.
+# 生成的译码必须符合当前规范；综合与网表检查也计算该实际源码的哈希。
+def rtl_paths(options, name):
+    paths = [ROOT/'rtl'/file for file in MODULES[name][2]]
+    if name == 'instruction_decoder':
+        from gen_isa import render, rtl_tables, validate
+        generated = options.build/'generated/instruction_encoding.sv'
+        expected = render('instruction_encoding.sv.in', rtl_tables(validate(json.loads((ROOT/'isa/isa.json').read_text()))))
+        if not generated.is_file() or generated.read_text() != expected:
+            raise RuntimeError('Generated decoder is stale; build the generate_isa target first.')
+        paths.insert(0, generated)
+    return paths
+
+
 def simulation_sources(options, name, destination):
     _, test, files = MODULES[name]
     if options.gate_sim:
@@ -144,19 +159,21 @@ def simulation_sources(options, name, destination):
     if name in ('register_file', 'operand_unit', 'predicate'): parameters = [f'-GSLOTS={options.rf_slots}']
     if name == 'transaction_table': parameters = [f'-GSLOTS={options.transaction_slots}']
     if name in ('collector', 'dispatch', 'writeback', 'integer', 'floating'): parameters = [f'-GENTRIES={options.collector_entries}']
-    return parameters+[str(ROOT/'rtl'/file) for file in files]+[str(ROOT/'tests/rtl'/test)]
+    return parameters+[str(path) for path in rtl_paths(options, name)]+[str(ROOT/'tests/rtl'/test)]
 
 
 def simulation(options, name):
-    top, _, files = MODULES[name]
-    paths = [ROOT/'rtl'/file for file in files]
+    top, test, _ = MODULES[name]
+    paths = rtl_paths(options, name)
     original_sources = source_hashes(paths)
+    drivers = [ROOT/'tests/rtl'/test, ROOT/'tests/rtl/bench.hpp']
+    original_drivers = source_hashes(drivers)
     destination = options.out/name
     destination.mkdir(parents=True, exist_ok=True)
     if name == 'fma':
         run([sys.executable, str(ROOT/'tests/rtl/fma_vectors.py'), '--out', str(destination/'reference.txt')],
             destination, 'reference')
-    if options.gate_sim: verify_netlist(destination, files, cache_parameters(options, name))
+    if options.gate_sim: verify_netlist(destination, paths, cache_parameters(options, name))
     label, objects = ('gate', 'gate-obj') if options.gate_sim else ('simulation', 'obj')
     flags, libraries = compiler_flags(options)
     if name == 'predicate': flags += f' -DSIMT_RTL_SLOTS={options.rf_slots}'
@@ -173,11 +190,13 @@ def simulation(options, name):
     run(command, destination, label+'-build', environment())
     output = execute_simulation(options, destination, destination/objects/('V'+top), label)
     verify_unchanged(paths, original_sources)
-    if options.gate_sim: verify_netlist(destination, files, cache_parameters(options, name))
+    verify_unchanged(drivers, original_drivers)
+    if options.gate_sim: verify_netlist(destination, paths, cache_parameters(options, name))
     print(output, end='', flush=True)
     return {'checks': len([line for line in output.splitlines() if line.startswith('PASS ')]),
             'command': command, 'parameters': cache_parameters(options, name),
             'sources': original_sources,
+            'drivers': original_drivers,
             'waveforms': [] if sanitized(options) else sorted(path.name for path in destination.glob('*.vcd'))}
 
 
@@ -187,13 +206,13 @@ def yosys_string(value):
 
 # Gate tests must use a netlist generated from the current RTL, not a stale successful artifact.
 # 门级测试必须使用当前 RTL 生成的网表，不能沿用陈旧的成功产物。
-def verify_netlist(destination, files, parameters):
+def verify_netlist(destination, paths, parameters):
     manifest = destination/'netlist.json'
     if not manifest.is_file(): raise RuntimeError('Run --synth before --gate-sim.')
     record = json.loads(manifest.read_text())
     if record.get('parameters', {}) != parameters:
         raise RuntimeError('Gate geometry differs from requested parameters; rerun --synth.')
-    if record['sources'] != source_hashes([ROOT/'rtl'/file for file in files]):
+    if record['sources'] != source_hashes(paths):
         raise RuntimeError('RTL changed since synthesis; rerun --synth.')
     digest = hashlib.sha256((destination/'gates.v').read_bytes()).hexdigest()
     if digest != record['gate_sha256']: raise RuntimeError('Gate netlist differs from synthesis manifest.')
@@ -210,12 +229,12 @@ def cache_parameters(options, name):
 # 先保留存储宏以统计存储容量，再将小配置映射为通用门单元。
 def synthesis(options, name):
     top, _, files = MODULES[name]
-    paths = [ROOT/'rtl'/file for file in files]
+    paths = rtl_paths(options, name)
     original_sources = source_hashes(paths)
     destination = options.out/name
     destination.mkdir(parents=True, exist_ok=True)
     if not options.infer_only: (destination/'netlist.json').unlink(missing_ok=True)
-    lines = ['read_verilog -sv '+' '.join(yosys_string(ROOT/'rtl'/file) for file in files)]
+    lines = ['read_verilog -sv '+' '.join(yosys_string(path) for path in paths)]
     if name in ('collector', 'dispatch', 'writeback', 'integer', 'floating'): lines.append(f'chparam -set ENTRIES {options.collector_entries} {top}')
     if name in ('register_file', 'operand_unit', 'predicate'): lines.append(f'chparam -set SLOTS {options.rf_slots} {top}')
     if name == 'transaction_table': lines.append(f'chparam -set SLOTS {options.transaction_slots} {top}')

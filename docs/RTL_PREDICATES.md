@@ -2,7 +2,7 @@
 
 启用 `--timing --register-rtl` 后，指令 guard 与 VOTE 的谓词输入来自 `predicate_file.sv` 的实际存储输出。再启用 `--collector-rtl` 时，ISETP/FSETP 的电路结果及 ELECT 的完成结果经写回单元直接进入谓词存储，不经过宿主谓词写调用。架构转储中的谓词数组保留为结果镜像，不再为该后端提供执行输入。
 
-这是自定义 ISA 的研究设计，不是 NVIDIA 谓词寄存器电路的精确逆向。后续阶段已接入 [跨 warp 调度](RTL_WARP_SCHEDULER.md) 和 [PC/状态前端](RTL_WARP_FRONTEND.md)；取指译码及依赖查询组合仍有 C++。ELECT/VOTE/SHFL/ACTIVEMASK 已接入独立集合电路，并增加执行侧第三个读口，见 [RTL_COLLECTIVES.md](RTL_COLLECTIVES.md)。下方综合表记录原双读口阶段的历史结果，三读口完整配置的当前综合结果见该文档。
+这是自定义 ISA 的研究设计，不是 NVIDIA 谓词寄存器电路的精确逆向。后续阶段已接入 [跨 warp 调度](RTL_WARP_SCHEDULER.md) 和 [PC/状态前端](RTL_WARP_FRONTEND.md)；指令存储/取指及依赖查询组合仍有 C++。ELECT/VOTE/SHFL/ACTIVEMASK 已接入独立集合电路，并增加执行侧第三个读口，见 [RTL_COLLECTIVES.md](RTL_COLLECTIVES.md)。下方综合表记录原双读口阶段的历史结果，三读口完整配置的当前综合结果见该文档。
 
 ```mermaid
 flowchart LR

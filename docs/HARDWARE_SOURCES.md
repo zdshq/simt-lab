@@ -73,7 +73,7 @@ Tensor RTL 的四级 FP32 FMA、77 位对齐通路、完整次正规数和最近
 
 分支重聚的每 warp 16 个 98 位令牌记录、并行参与/到达更新、16 位完成向量和按 lane 等待编号选择目标都是项目自定义电路，不是 NVIDIA 逆向得到的结构。实际综合为 68,030 个 generic cells/1,568 个触发器位，令牌存储未映射为 SRAM；独立子模块的 lane 输入在实际执行中现由下述前端存储提供，指令目标检查仍由宿主完成。数据来源、时钟边界和验证见 [RTL_WARP_CONTROL.md](RTL_WARP_CONTROL.md)。
 
-Warp 前端的 3,233 位 PC/lane/等待元数据/游标存储、五层最小/最大/后继树、两个有序外部等待字段写端口及同拍退休到发射旁路属于本项目设计。完整连接令牌并加入 CTA/异步阶段端口后的前端实际综合为 125,662 generic cells / 4,801 FF 位，没有 SRAM 或工艺映射结论；不能根据 NVIDIA 的线程调度语义推断其使用同一拓扑。跨 warp 候选选择现已接入独立 RTL；取指译码、依赖查询组合、异步地址分组与 DMA 外部票据桥仍有 C++，见 [RTL_WARP_FRONTEND.md](RTL_WARP_FRONTEND.md)。
+Warp 前端的 3,233 位 PC/lane/等待元数据/游标存储、五层最小/最大/后继树、两个有序外部等待字段写端口及同拍退休到发射旁路属于本项目设计。完整连接令牌并加入 CTA/异步阶段端口后的前端实际综合为 125,662 generic cells / 4,801 FF 位，没有 SRAM 或工艺映射结论；不能根据 NVIDIA 的线程调度语义推断其使用同一拓扑。跨 warp 候选选择现已接入独立 RTL；指令存储/取指、依赖查询组合、异步地址分组与 DMA 外部票据桥仍有 C++，见 [RTL_WARP_FRONTEND.md](RTL_WARP_FRONTEND.md)。
 
 CTA 的每块 16 个屏障、逐线程到达/存活位图、缓存动态目标人数、64 位代数、单命令端口和前端完成信号匹配均为本项目设计；不是 NVIDIA 公开的内部电路。完整 1,024 线程表实际综合为 234,669 generic cells / 18,999 FF 位，没有 SRAM 宏或工艺布局。EXIT 保留已到达贡献、仅扣除未到达退出者的规则来自本项目 ISA；C++ 仍负责跨分区提交次序与实例间引脚路由，见 [RTL_CTA_BARRIER.md](RTL_CTA_BARRIER.md)。
 
@@ -81,6 +81,8 @@ CTA 的每块 16 个屏障、逐线程到达/存活位图、缓存动态目标�
 
 DMA 的 64×259 位命令寄存器、64×1,108 位片段寄存器、四个独立轮转游标、33 位地址、读/写各一条返回总线、请求重选气泡及领取/释放分离协议均为项目设计。完整物理配置实际综合为 400,338 generic cells / 87,547 FF 位，其中 65,536 位是无复位载荷触发器；没有 SRAM 宏、工艺面积或 NVIDIA 拓扑结论。片段与载荷控制现已接入 RTL，外部票据返回选择、shared bank 服务和内存互联仍有 C++，见 [RTL_DMA.md](RTL_DMA.md)。
 
-跨 warp 调度器的每分区 32 个物理槽、325 位状态、单候选检查端口、轮转/固定槽优先级及拒绝重试集合均为本项目设计，未通过 NVIDIA 逆向实验证明。完整实例实际综合为 7,625 generic cells / 325 FF 位，无 SRAM；这一局部数字不含取指译码、scoreboard、寄存器或其他执行资源。实际边界与计数口径见 [RTL_WARP_SCHEDULER.md](RTL_WARP_SCHEDULER.md)。
+跨 warp 调度器的每分区 32 个物理槽、325 位状态、单候选检查端口、轮转/固定槽优先级及拒绝重试集合均为本项目设计，未通过 NVIDIA 逆向实验证明。完整实例实际综合为 7,625 generic cells / 325 FF 位，无 SRAM；这一局部数字不含指令存储/取指、scoreboard、寄存器或其他执行资源。实际边界与计数口径见 [RTL_WARP_SCHEDULER.md](RTL_WARP_SCHEDULER.md)。
 
 跨分区执行仲裁的八个物理分区/七类端口、Tensor 与异步独立轮转、Tensor 持有到退休，以及每分区三份 32 位发射间隔计数器均是本项目设计。完整实例实际综合为 6,360 generic cells / 778 FF 位，无 SRAM；不能据此推断 NVIDIA 的共享单元拓扑、调度策略、频率或功耗。异步 busy 输入、后台完成优先服务和剩余 C++ 边界见 [RTL_EXECUTION_ARBITER.md](RTL_EXECUTION_ARBITER.md)。
+
+原始 128 位机器码的字段、59 项合法位表、三个普通源端口、重复源压紧和 lane 掩码电路来自项目 ISA 与原有 footprint 契约，不是 NVIDIA SASS/PTX 编码。完整组合译码器实际综合为 1,941 generic cells、零 FF；中间推断的 64×114 位只读常量表最终映射为组合逻辑，没有运行时存储或工艺面积结论。指令存储与部分依赖连接仍为 C++，见 [RTL_INSTRUCTION_DECODER.md](RTL_INSTRUCTION_DECODER.md)。

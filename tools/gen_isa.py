@@ -54,13 +54,33 @@ def validate(schema):
 
 # Construct the legal bit mask for one instruction.
 # 构造一条指令允许使用的位掩码。
-def encoding_masks(fields, op):
+def encoding_mask_values(fields, op):
     masks = [0] * 4
     allowed = set(op['fields']) | {'opcode', 'guard', 'control'}
     for field in fields:
         if field['name'] in allowed:
             masks[field['word']] |= ((1 << field['bits']) - 1) << field['shift']
-    return ', '.join(hex(mask) + 'u' for mask in masks)
+    return masks
+
+
+def encoding_masks(fields, op):
+    return ', '.join(hex(mask) + 'u' for mask in encoding_mask_values(fields, op))
+
+
+# Generate field wires and opcode validity masks from the same canonical binary layout.
+# 从同一规范二进制布局生成字段连线和操作码有效位掩码。
+def rtl_tables(schema):
+    fields = schema['fields']
+    cases = []
+    for op in schema['instructions']:
+        masks = encoding_mask_values(fields, op)
+        value = sum(mask << (word*32) for word, mask in enumerate(masks))
+        cases.append(f"            8'd{op['code']}: allowed=128'h{value:032x};")
+    return {
+        '@PORTS@': '\n'.join(f"    output wire [{f['bits']-1}:0] {f['name']}," for f in fields),
+        '@WIRES@': '\n'.join(f"    assign {f['name']}=words[{f['word']*32+f['shift']}+:{f['bits']}];" for f in fields),
+        '@CASES@': '\n'.join(cases),
+    }
 
 
 # Emit data tables instead of a long generated opcode switch.
@@ -91,6 +111,7 @@ def generate(schema, destination):
     destination.mkdir(parents=True, exist_ok=True)
     (destination / 'isa.hpp').write_text(render('isa.hpp.in', cpp_tables(schema)))
     (destination / 'simt_isa.py').write_text(render('isa.py.in', {'@SCHEMA@': repr(schema)}))
+    (destination / 'instruction_encoding.sv').write_text(render('instruction_encoding.sv.in', rtl_tables(schema)))
 
 
 # Read generation options without performing work at module import time.

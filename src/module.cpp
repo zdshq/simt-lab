@@ -26,6 +26,7 @@ Module Module::from_bytes(const std::vector<uint8_t>& bytes) {
                 words[w] |= uint32_t(bytes[at + w * 4 + b]) << (8 * b);
         try {
             module.code.push_back(decode(words));
+            module.image.push_back(words);
         } catch (const std::exception& e) {
             throw std::runtime_error(std::string(e.what()) + " at pc=" + std::to_string(at / 16));
         }

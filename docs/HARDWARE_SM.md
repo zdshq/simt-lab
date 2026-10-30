@@ -4,7 +4,7 @@
 
 当前接入范围覆盖自定义 59 个 opcode：整数/标量浮点、谓词、控制流/重聚、warp 集合操作、global/shared/local/constant 的 load/store、通用地址、CTA 屏障和 fence，以及 [Tensor/TMEM](HARDWARE_TENSOR.md)、[CP_ASYNC/mbarrier](HARDWARE_ASYNC.md) 和 [local/整数原子](HARDWARE_ATOMIC_LOCAL.md)。这不是 NVIDIA 的完整指令集或硬件实现；各模块的模型假设、测试范围与未实现部分分别列明。
 
-启用 `--register-rtl --collector-rtl` 时，[跨 warp 调度器](RTL_WARP_SCHEDULER.md) 已通过 RTL 保存候选优先级、在途计数和串行化状态。每分区每拍只检查一个候选；拒绝后等待下一拍，不再通过软件循环尝试其他 warp。停顿统计采用实际候选事件，与默认 C++ 扫描的计数口径不同。[跨分区执行仲裁器](RTL_EXECUTION_ARBITER.md) 现已通过 RTL 实现 Tensor/异步候选轮转、Tensor 持有和发射间隔；取指译码、依赖查询组合、CTA 资源分配及异步后台服务次序仍有 C++。
+启用 `--register-rtl --collector-rtl` 时，[跨 warp 调度器](RTL_WARP_SCHEDULER.md) 已通过 RTL 保存候选优先级、在途计数和串行化状态。每分区每拍只检查一个候选；拒绝后等待下一拍，不再通过软件循环尝试其他 warp。停顿统计采用实际候选事件，与默认 C++ 扫描的计数口径不同。[跨分区执行仲裁器](RTL_EXECUTION_ARBITER.md) 现已通过 RTL 实现 Tensor/异步候选轮转、Tensor 持有和发射间隔；指令存储/取指、依赖查询组合、CTA 资源分配及异步后台服务次序仍有 C++。
 
 ## 从一条指令到真实结果
 

@@ -1,6 +1,10 @@
 # Partition geometries divide the same 65,536-word SM register capacity without duplicating storage.
 # 分区几何划分同一份 65,536 字 SM 寄存器容量，不重复配置存储。
 function(simt_enable_register_rtl)
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+        isa/isa.json tools/gen_isa.py tools/templates/instruction_encoding.sv.in)
+    execute_process(COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/gen_isa.py
+        --schema ${PROJECT_SOURCE_DIR}/isa/isa.json --out ${GENERATED_DIR} COMMAND_ERROR_IS_FATAL ANY)
     find_package(verilator REQUIRED HINTS
         $ENV{VERILATOR_ROOT} ${PROJECT_SOURCE_DIR}/.tools/rtl/root/usr/share/verilator)
     set(launcher ${PROJECT_BINARY_DIR}/simt-register-verilator)
@@ -34,10 +38,13 @@ function(simt_enable_register_rtl)
         SOURCES rtl/warp_issue_slot.sv rtl/warp_scheduler.sv VERILATOR_ARGS -Wall --unroll-count 4096)
     verilate(simt_register_circuit TOP_MODULE execution_arbiter PREFIX Vsimt_execution_arbiter
         SOURCES rtl/execution_arbiter.sv VERILATOR_ARGS -Wall --unroll-count 4096)
+    verilate(simt_register_circuit TOP_MODULE instruction_decoder PREFIX Vsimt_instruction_decoder
+        SOURCES ${GENERATED_DIR}/instruction_encoding.sv rtl/instruction_operands.sv rtl/instruction_decoder.sv
+        VERILATOR_ARGS -Wall --unroll-count 4096)
     target_compile_options(simt_register_circuit PRIVATE ${VERILATOR_CFLAGS})
     get_target_property(circuit_includes simt_register_circuit INTERFACE_INCLUDE_DIRECTORIES)
     set_property(TARGET simt_register_circuit PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${circuit_includes})
-    target_sources(simt_hardware PRIVATE src/rtl/register_file.cpp src/rtl/operand_collector.cpp src/rtl/warp_control.cpp src/rtl/warp_frontend.cpp src/rtl/cta_barrier.cpp src/rtl/transaction_table.cpp src/rtl/dma_engine.cpp src/rtl/warp_scheduler.cpp src/rtl/execution_arbiter.cpp)
+    target_sources(simt_hardware PRIVATE src/rtl/register_file.cpp src/rtl/operand_collector.cpp src/rtl/warp_control.cpp src/rtl/warp_frontend.cpp src/rtl/cta_barrier.cpp src/rtl/transaction_table.cpp src/rtl/dma_engine.cpp src/rtl/warp_scheduler.cpp src/rtl/execution_arbiter.cpp src/rtl/instruction_decoder.cpp)
     target_compile_definitions(simt_hardware PRIVATE SIMT_HAS_REGISTER_RTL=1)
     target_link_libraries(simt_hardware PRIVATE simt_register_circuit)
 endfunction()

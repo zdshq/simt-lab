@@ -2,7 +2,7 @@
 
 `--timing --register-rtl --collector-rtl` 现在为每个使用中的物理 warp 实例化 `warp_frontend.sv`。它保存线程 PC、运行状态、等待编号与阶段，并直接连接既有 `warp_control.sv` 和新的 `warp_group.sv`。六类分支/重聚指令不再接收宿主 lane 快照；普通发射、边界退休、YIELD 恢复和 PC 组选择均操作实际 RTL 存储。
 
-这是自定义研究架构的电路，不是 NVIDIA 公开逆向已经证明的内部实现。[跨 warp 候选选择与串行化](RTL_WARP_SCHEDULER.md) 和 [DMA 命令/片段控制](RTL_DMA.md) 现已接入独立 RTL。**取指译码、依赖查询组合、异步等待地址分组、外部内存返回选择与异步后台与 CTA 提交/回收服务次序仍有 C++**。CTA 屏障已经通过 [独立表 RTL](RTL_CTA_BARRIER.md) 的完成信号和本地等待比较电路接入；异步等待已通过 [事务表 RTL](RTL_TRANSACTION_TABLE.md) 的原始阶段和本地比较电路接入，不能把这个局部前端称为完整 SM 调度器。
+这是自定义研究架构的电路，不是 NVIDIA 公开逆向已经证明的内部实现。[跨 warp 候选选择与串行化](RTL_WARP_SCHEDULER.md) 和 [DMA 命令/片段控制](RTL_DMA.md) 现已接入独立 RTL。**指令存储/取指、依赖查询组合、异步等待地址分组、外部内存返回选择与异步后台与 CTA 提交/回收服务次序仍有 C++**。CTA 屏障已经通过 [独立表 RTL](RTL_CTA_BARRIER.md) 的完成信号和本地等待比较电路接入；异步等待已通过 [事务表 RTL](RTL_TRANSACTION_TABLE.md) 的原始阶段和本地比较电路接入，不能把这个局部前端称为完整 SM 调度器。
 
 ```mermaid
 flowchart LR
@@ -99,4 +99,4 @@ UBSAN_OPTIONS=halt_on_error=1 python3 tools/rtl.py --build build-sanitize \
 
 先构建相应的普通 Release 与 sanitizer 参考库；联合执行沿用既有四个 CMake RTL 开关及 collector 运行选项。证据目录为 `artifacts/rtl-warp-frontend*/`、`artifacts/rtl-frontend-adapter-sanitize/`、`artifacts/rtl-frontend-host/` 和 `artifacts/rtl-frontend-final/`，后者保存最终审计。
 
-完整目标仍在进行：取指译码、异步后台与 CTA 提交/回收服务次序、外部内存返回选择、其余执行/访存硬件、整机 RTL、参数校准、PTX 异步矩阵协议和最终硬件验收仍须继续，见 [硬件计划](HARDWARE_PLAN.md)。
+完整目标仍在进行：指令存储/取指、异步后台与 CTA 提交/回收服务次序、外部内存返回选择、其余执行/访存硬件、整机 RTL、参数校准、PTX 异步矩阵协议和最终硬件验收仍须继续，见 [硬件计划](HARDWARE_PLAN.md)。
