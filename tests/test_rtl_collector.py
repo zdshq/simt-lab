@@ -22,6 +22,8 @@ class RtlCollector:
             self.assertTrue(hardware['writeback_units'])
             self.assertTrue(hardware['integer_units'])
             self.assertTrue(hardware['floating_units'])
+            self.assertTrue(hardware['predicate_files'])
+            self.assertEqual(sum(unit['guard_reads'] for unit in hardware['predicate_files']), hardware['issued'])
             for unit in hardware['floating_units']:
                 self.assertEqual(unit['backend'], 'rtl')
                 self.assertEqual(unit['pipeline_stages'], 4)

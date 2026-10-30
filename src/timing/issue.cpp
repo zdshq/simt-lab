@@ -49,17 +49,18 @@ bool TimingMachine::try_issue(uint32_t cta_id, uint32_t wi) {
 // Decode and reserve only after a runnable PC group has been selected.
 // 选出可运行 PC 线程组后，才进行解码和资源预约。
 bool TimingMachine::issue_group(uint32_t cta_id, uint32_t wi, Group group) {
-    auto& cta = machine_.ctas_[cta_id]; auto& warp = cta.warps[wi]; auto& timed = warps_[cta_id][wi];
+    auto& cta = machine_.ctas_[cta_id]; auto& timed = warps_[cta_id][wi];
     if (group.pc >= machine_.module_.code.size()) throw std::runtime_error("pc_out_of_range");
     const auto& instruction = machine_.module_.code[group.pc];
     if (!timed.scoreboard->predicate_ready(instruction.guard & 7, group.mask)) { ++stats_.scoreboard_stalls; return false; }
-    const auto mask = participating_mask(warp, instruction, group);
+    const auto predicates = probe_predicates(cta_id, wi, instruction, group);
+    const auto mask = predicates.participating;
     auto footprint = instruction_footprint(instruction, mask);
     if (footprint.boundary && timed.inflight) { ++stats_.boundary_stalls; return false; }
     if (footprint.pipe == Pipe::memory && timed.memory) { ++stats_.memory_order_stalls; return false; }
     if (!dependencies(cta_id, wi, group, footprint)) { ++stats_.scoreboard_stalls; return false; }
     if (!capacity(cta.sm_id, timed.slot % machine_.config_.pipeline.partitions)) return false;
-    enqueue(cta_id, wi, group, mask, std::move(footprint));
+    enqueue(cta_id, wi, group, mask, std::move(footprint), predicates.source);
     return true;
 }
 
@@ -76,7 +77,7 @@ void TimingMachine::reserve(Inflight& entry) {
 
 // Advance fetch PCs on ordinary issue; control instructions hold their continuation until retirement.
 // 普通发射时推进取指 PC，控制指令保留后续位置直到退休。
-void TimingMachine::enqueue(uint32_t cta_id, uint32_t wi, Group group, uint32_t mask, Footprint footprint) {
+void TimingMachine::enqueue(uint32_t cta_id, uint32_t wi, Group group, uint32_t mask, Footprint footprint, uint32_t predicate_source) {
     if (machine_.steps_ >= machine_.config_.max_steps) throw std::runtime_error("step_limit_exceeded");
     auto& cta = machine_.ctas_[cta_id]; auto& warp = cta.warps[wi];
     auto entry = std::make_unique<Inflight>();
@@ -86,7 +87,10 @@ void TimingMachine::enqueue(uint32_t cta_id, uint32_t wi, Group group, uint32_t 
     entry->footprint = std::move(footprint);
     reserve_collector(*entry);
     reserve_writeback(*entry);
-    entry->operands.predicates = warp.predicates; entry->operands.valid_mask = warp.valid_mask;
+    entry->operands.valid_mask = warp.valid_mask;
+    if (entry->footprint.source_predicate) entry->operands.predicates[*entry->footprint.source_predicate] = predicate_source;
+    auto& file = sms_[entry->sm]->partitions[entry->partition].registers;
+    if (file) file->accept_predicates(entry->footprint.source_predicate.has_value());
     reserve(*entry); resume_yielded(warp);
     if (!entry->footprint.boundary)
         for (uint32_t lane = 0; lane < lanes; ++lane)

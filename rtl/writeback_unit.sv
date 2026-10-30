@@ -33,6 +33,11 @@ module writeback_unit #(
     output reg [4*ROW_BITS-1:0] write_rows,
     output reg [127:0] write_masks,
     output wire [4095:0] write_data,
+    output reg predicate_write_valid,
+    output reg [SLOT_BITS-1:0] predicate_write_slot,
+    output reg [2:0] predicate_write_register,
+    output reg [31:0] predicate_write_mask,
+    output wire [31:0] predicate_write_data,
     output reg [5:0] occupancy,
     output wire clock_enable
 );
@@ -62,6 +67,7 @@ module writeback_unit #(
     assign acknowledge_error = acknowledge & ~retire_ready;
     assign clock_enable = reset || (reserve_valid && reserve_ready) || |complete_accept || |released;
     assign write_data = retire_data[4095:0];
+    assign predicate_write_data = retire_data[4096+:32];
 
     // Only the reserved producer may complete a slot, and duplicate completions cannot replace stored data.
     // 只有预约的生产端口可以完成该槽；重复完成不能覆盖已保存的数据。
@@ -111,6 +117,7 @@ module writeback_unit #(
     // 物理退休总线在确认后直接驱动 bank 地址、lane 掩码和数据。
     always @* begin
         retire_data = 0; write_valid = 0; write_rows = 0; write_masks = 0;
+        predicate_write_valid = 0; predicate_write_slot = 0; predicate_write_register = 0; predicate_write_mask = 0;
         for (output_port = 0; output_port < 5; output_port = output_port+1)
             for (output_entry = 0; output_entry < ENTRIES; output_entry = output_entry+1)
                 if (retire_valid[output_port] && retire_entries[output_port*ENTRY_BITS+:ENTRY_BITS] == ENTRY_BITS'(output_entry)) begin
@@ -119,6 +126,11 @@ module writeback_unit #(
                         write_valid[output_port] = acknowledge[output_entry];
                         write_rows[output_port*ROW_BITS+:ROW_BITS] = {warp[output_entry], destination[output_entry][5:2]};
                         write_masks[output_port*32+:32] = mask[output_entry];
+                    end else begin
+                        predicate_write_valid = acknowledge[output_entry];
+                        predicate_write_slot = warp[output_entry];
+                        predicate_write_register = destination[output_entry][2:0];
+                        predicate_write_mask = mask[output_entry];
                     end
                 end
     end

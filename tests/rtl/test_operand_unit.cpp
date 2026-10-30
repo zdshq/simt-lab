@@ -170,7 +170,29 @@ void floating_execution_connected_storage() {
         require(d.query_data[lane] == 0x40000000+lane,"floating result did not persist in RF");
 }
 
+// Predicate retirement drives the independent physical storage port and both issue read muxes.
+// 谓词退休驱动独立物理存储端口及两个发射读取多路器。
+void predicate_retirement_connection() {
+    TestBench b("operand-unit-predicate.vcd"); const auto slot = b.dut.slot_count-1;
+    b.dut.wb_reserve_valid = 1; b.dut.wb_reserve_warp = slot; b.dut.wb_reserve_pipe = 4;
+    b.dut.wb_reserve_kind = 2; b.dut.wb_reserve_register = 6; b.dut.wb_reserve_mask = 0x80000001;
+    b.dut.eval(); const auto id = b.dut.wb_reserve_index; commit(b);
+    b.dut.predicate_query_slot = slot; b.dut.predicate_query_guard = 6;
+    b.dut.predicate_query_source = 6; b.dut.predicate_query_group = UINT32_MAX;
+    b.dut.wb_complete_valid = 16; b.dut.wb_complete_entries = uint64_t{id}<<20;
+    b.dut.wb_complete_data[128] = UINT32_MAX; b.dut.eval();
+    require(!b.dut.predicate_write_event && !b.dut.predicate_participating,"unfinished predicate reached storage");
+    b.dut.wb_acknowledge = 1u<<id; b.dut.eval();
+    require(b.dut.predicate_write_event && b.dut.predicate_port_busy,"acknowledgement missed physical predicate port");
+    require(b.dut.predicate_participating == 0x80000001 && b.dut.predicate_source_data == 0x80000001,"retirement did not bypass to read muxes");
+    commit(b);
+    require(b.dut.predicate_participating == 0x80000001 && !b.dut.predicate_write_event,"predicate retirement did not persist");
+    b.dut.predicate_query_slot = 0; b.dut.eval();
+    require(!b.dut.predicate_participating,"predicate warp address truncated");
+}
+
 void run_cases() {
+    run_case("connected predicate retirement mask bypass and persistent storage",predicate_retirement_connection);
     run_case("connected floating four arithmetic stages, result delay and physical RF storage",floating_execution_connected_storage);
     run_case("connected integer collector last-source bypass and physical result storage",integer_execution_connected_storage);
     run_case("connected writeback physical RF storage and collector bypass",writeback_to_rf_and_collector);

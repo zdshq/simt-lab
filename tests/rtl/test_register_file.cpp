@@ -126,7 +126,23 @@ void randomized_data_path() {
     }
 }
 
+void predicate_storage_connection() {
+    TestBench b("register-predicate.vcd"); const auto slot = b.dut.slot_count-1;
+    b.dut.predicate_query_slot = slot; b.dut.predicate_query_guard = 6;
+    b.dut.predicate_query_source = 6; b.dut.predicate_query_group = UINT32_MAX;
+    b.dut.predicate_write_slot = slot; b.dut.predicate_write_register = 6;
+    b.dut.predicate_write_mask = 0x80000001; b.dut.predicate_write_data = UINT32_MAX;
+    b.dut.predicate_write_valid = 1; b.dut.eval();
+    require(b.dut.predicate_write_event && b.dut.predicate_clock_enable && b.dut.clock_enable,"predicate storage clock not connected");
+    require(b.dut.predicate_participating == 0x80000001 && b.dut.predicate_source_data == 0x80000001,"predicate bypass not connected");
+    b.tick(); b.dut.predicate_write_valid = 0; b.dut.eval();
+    require(b.dut.predicate_participating == 0x80000001 && !b.dut.clock_enable,"predicate write not captured");
+    b.dut.clear_slots = uint32_t{1}<<slot; b.dut.eval(); commit(b);
+    require(!b.dut.predicate_participating,"register slot clear missed predicate file");
+}
+
 void run_cases() {
+    run_case("register connected predicate storage bypass and slot clear",predicate_storage_connection);
     run_case("register masked bypass and edge ownership", masks_bypass_and_edges);
     run_case("register zero reset and physical slot reuse", zero_reset_and_slot_reuse);
     run_case("register port capacity and independent directions", port_capacity_and_independent_directions);

@@ -16,6 +16,10 @@ bool TimingMachine::writeback_available(Inflight& entry) {
         if (!available) { ++stats_.writeback_stalls; return false; }
     }
     if (!f.predicate) return true;
+    if (partition.registers) {
+        if (partition.registers->predicate_writable()) return true;
+        ++stats_.writeback_stalls; return false;
+    }
     if (partition.predicate_write == cycle_) { ++stats_.writeback_stalls; return false; }
     partition.predicate_write = cycle_;
     return true;

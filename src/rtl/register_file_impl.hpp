@@ -10,6 +10,7 @@ public:
         if (banks != 1 && banks != 2 && banks != 4) throw std::runtime_error("register_rtl_invalid_port_groups");
         dut_.port_groups = banks;
         dut_.clk = 0; dut_.reset = 1; dut_.read_valid = 0; dut_.write_valid = 0; dut_.clear_slots = 0;
+        dut_.predicate_write_valid = 0;
         edge(); dut_.reset = 0; dut_.eval();
     }
     ~RtlRegisterFile() override { dut_.final(); }
@@ -17,6 +18,10 @@ public:
     std::optional<RegisterVector> read(uint32_t slot, uint32_t reg) override;
     bool writable(uint32_t reg) override;
     void write(uint32_t slot, uint32_t reg, uint32_t mask, const RegisterVector& values) override;
+    PredicateValues probe_predicates(uint32_t slot, uint32_t guard, uint32_t group, uint32_t source) override;
+    void accept_predicates(bool source) override;
+    bool predicate_writable() const override;
+    void write_predicate(uint32_t slot, uint32_t reg, uint32_t mask, uint32_t value) override;
     void tick() override;
     uint32_t port_groups() const override { return dut_.port_groups; }
     uint32_t slots() const override { return Slots; }
@@ -24,6 +29,8 @@ public:
 protected:
     Circuit dut_;
     RegisterFileStats stats_;
+    bool predicate_probed_ = false;
+    uint32_t predicate_reads_ = 0;
     static constexpr uint32_t row_bits = std::countr_zero(Slots)+4;
     bool collection_active() const {
         if constexpr (requires { dut_.collect_enable; }) return dut_.collect_enable;
@@ -38,8 +45,7 @@ protected:
         return dut_.write_valid;
     }
     bool storage_clock_enabled() const {
-        if constexpr (requires { dut_.register_clock_enable; }) return dut_.register_clock_enable;
-        return dut_.clock_enable;
+        return dut_.reset || dut_.clear_slots || write_events();
     }
     void edge() { dut_.clk = 1; dut_.eval(); dut_.clk = 0; dut_.eval(); }
     void validate(uint32_t slot, uint32_t reg) const;
@@ -54,7 +60,8 @@ template<class C, uint32_t S> void RtlRegisterFile<C,S>::validate(uint32_t slot,
 // 物理槽复用时清除有效位；数据存储保持不动，但旧值不能通过读取泄漏。
 template<class C, uint32_t S> void RtlRegisterFile<C,S>::clear(uint32_t slot) {
     validate(slot, 0);
-    if (dut_.read_valid || dut_.write_valid || collection_active()) throw std::runtime_error("register_clear_after_port_use");
+    if (dut_.read_valid || dut_.write_valid || dut_.predicate_write_valid || predicate_reads_ || collection_active())
+        throw std::runtime_error("register_clear_after_port_use");
     dut_.clear_slots |= uint32_t{1} << slot; dut_.eval();
 }
 
@@ -100,10 +107,17 @@ template<class C, uint32_t S> void RtlRegisterFile<C,S>::tick() {
     stats_.reads += std::popcount(read_events());
     stats_.writes += std::popcount(write_events());
     stats_.cleared_slots += std::popcount(uint32_t{dut_.clear_slots});
+    stats_.guard_reads += bool(predicate_reads_ & 1);
+    stats_.predicate_source_reads += bool(predicate_reads_ & 2);
+    stats_.predicate_writes += bool(dut_.predicate_write_event);
+    stats_.predicate_active_clocks += bool(dut_.predicate_clock_enable);
     if (storage_clock_enabled()) ++stats_.active_clocks;
     if (dut_.clock_enable) edge();
-    if (dut_.read_valid || dut_.write_valid || dut_.clear_slots) {
-        dut_.read_valid = 0; dut_.write_valid = 0; dut_.clear_slots = 0; dut_.eval();
+    if (dut_.read_valid || dut_.write_valid || dut_.clear_slots || dut_.predicate_write_valid) {
+        dut_.read_valid = 0; dut_.write_valid = 0; dut_.clear_slots = 0; dut_.predicate_write_valid = 0; dut_.eval();
     }
+    predicate_reads_ = 0; predicate_probed_ = false;
 }
 }
+
+#include "predicate_impl.hpp"

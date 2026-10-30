@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MODULES = {'cache': ('sector_cache', 'test_cache.cpp', ['sector_sram.sv', 'cache_lru.sv', 'sector_cache.sv']),
            'scoreboard': ('lane_scoreboard', 'test_scoreboard.cpp', ['lane_scoreboard.sv']),
            'operand_unit': ('register_operand_unit', 'test_operand_unit.cpp',
-                            ['register_bank.sv', 'register_file.sv', 'collector_dispatch.sv', 'collector_payload.sv', 'operand_collector.sv',
+                            ['register_bank.sv', 'predicate_file.sv', 'register_file.sv', 'collector_dispatch.sv', 'collector_payload.sv', 'operand_collector.sv',
                              'integer_lane.sv', 'integer_vector.sv', 'integer_execute.sv', 'fp32_fma.sv', 'fp32_misc.sv', 'fp32_scalar_lane.sv', 'floating_execute.sv',
                              'writeback_payload.sv', 'writeback_unit.sv', 'register_operand_unit.sv']),
            'floating': ('floating_execute', 'test_floating.cpp', ['fp32_fma.sv', 'fp32_misc.sv', 'fp32_scalar_lane.sv', 'floating_execute.sv']),
@@ -22,7 +22,8 @@ MODULES = {'cache': ('sector_cache', 'test_cache.cpp', ['sector_sram.sv', 'cache
            'writeback': ('writeback_unit', 'test_writeback.cpp', ['writeback_payload.sv', 'writeback_unit.sv']),
            'collector': ('operand_collector', 'test_collector.cpp', ['collector_dispatch.sv', 'collector_payload.sv', 'operand_collector.sv']),
            'dispatch': ('collector_dispatch', 'test_dispatch.cpp', ['collector_dispatch.sv']),
-           'register_file': ('register_file', 'test_register_file.cpp', ['register_bank.sv', 'register_file.sv']),
+           'register_file': ('register_file', 'test_register_file.cpp', ['register_bank.sv', 'predicate_file.sv', 'register_file.sv']),
+           'predicate': ('predicate_file', 'test_predicate.cpp', ['predicate_file.sv']),
            'warp_scoreboard': ('warp_scoreboard', 'test_warp_scoreboard.cpp', ['scoreboard_cell.sv', 'warp_scoreboard.sv']),
            'arbiter': ('register_arbiter', 'test_arbiter.cpp', ['register_arbiter.sv']),
            'fma': ('fp32_fma', 'test_fma.cpp', ['fp32_fma.sv']),
@@ -111,7 +112,7 @@ def simulation_sources(options, name, destination):
         return ['-Wno-DECLFILENAME', '-Wno-UNUSED', str(destination/'gates.v'), str(options.simcells),
                 str(ROOT/'tests/rtl'/test)]
     parameters = [f'-GSETS={options.sets}', f'-GWAYS={options.ways}'] if name == 'cache' else []
-    if name in ('register_file', 'operand_unit'): parameters = [f'-GSLOTS={options.rf_slots}']
+    if name in ('register_file', 'operand_unit', 'predicate'): parameters = [f'-GSLOTS={options.rf_slots}']
     if name in ('collector', 'dispatch', 'writeback', 'integer', 'floating'): parameters = [f'-GENTRIES={options.collector_entries}']
     return parameters+[str(ROOT/'rtl'/file) for file in files]+[str(ROOT/'tests/rtl'/test)]
 
@@ -128,6 +129,7 @@ def simulation(options, name):
     if options.gate_sim: verify_netlist(destination, files, cache_parameters(options, name))
     label, objects = ('gate', 'gate-obj') if options.gate_sim else ('simulation', 'obj')
     flags, libraries = compiler_flags(options)
+    if name == 'predicate': flags += f' -DSIMT_RTL_SLOTS={options.rf_slots}'
     if name in ('collector', 'dispatch', 'writeback', 'integer', 'floating'): flags += f' -DCOLLECTOR_ENTRIES={options.collector_entries}'
     command = [tool('verilator'), '--cc', '--exe', '--build', '-j', str(options.jobs),
                '-Wall', '--unroll-count', '4096', '--top-module', top, '--Mdir', str(destination/objects),
@@ -165,7 +167,7 @@ def verify_netlist(destination, files, parameters):
 
 
 def cache_parameters(options, name):
-    if name in ('register_file', 'operand_unit'): return {'SLOTS': options.rf_slots}
+    if name in ('register_file', 'operand_unit', 'predicate'): return {'SLOTS': options.rf_slots}
     if name in ('collector', 'dispatch', 'writeback', 'integer', 'floating'): return {'ENTRIES': options.collector_entries}
     return {'SETS': options.sets, 'WAYS': options.ways} if name == 'cache' else {}
 
@@ -181,7 +183,7 @@ def synthesis(options, name):
     if not options.infer_only: (destination/'netlist.json').unlink(missing_ok=True)
     lines = ['read_verilog -sv '+' '.join(yosys_string(ROOT/'rtl'/file) for file in files)]
     if name in ('collector', 'dispatch', 'writeback', 'integer', 'floating'): lines.append(f'chparam -set ENTRIES {options.collector_entries} {top}')
-    if name in ('register_file', 'operand_unit'): lines.append(f'chparam -set SLOTS {options.rf_slots} {top}')
+    if name in ('register_file', 'operand_unit', 'predicate'): lines.append(f'chparam -set SLOTS {options.rf_slots} {top}')
     if name == 'cache': lines.append(f'chparam -set SETS {options.sets} -set WAYS {options.ways} {top}')
     lines += [f'synth -top {top} -run begin:fine', 'check -assert',
               'write_json inferred.json', 'tee -o inferred-stat.json stat -json']

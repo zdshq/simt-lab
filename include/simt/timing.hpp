@@ -125,7 +125,8 @@ private:
     bool issue_group(uint32_t cta, uint32_t warp, Group group);
     bool dependencies(uint32_t cta, uint32_t warp, Group group, const Footprint& footprint) const;
     bool capacity(uint32_t sm, uint32_t partition);
-    void enqueue(uint32_t cta, uint32_t warp, Group group, uint32_t mask, Footprint footprint);
+    hw::PredicateValues probe_predicates(uint32_t cta, uint32_t warp, const Instruction& instruction, Group group);
+    void enqueue(uint32_t cta, uint32_t warp, Group group, uint32_t mask, Footprint footprint, uint32_t predicate_source);
     void reserve(Inflight& entry);
     void collect_operands();
     void collect_rtl_operands();

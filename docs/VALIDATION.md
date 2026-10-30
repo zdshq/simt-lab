@@ -395,10 +395,37 @@ PCI 选择在原程序私有路径中假定所有设备都有 PCI 状态，模�
 
 SFU、控制/访存执行电路、完整谓词值存储、整数内部算术流水级、跨分区共享单元仲裁和其余 GPU RTL 仍需完成。实卡参数校准、PTX 异步矩阵协议及最终整体验收也未完成，目标保持 active。
 
+## 阶段 16：谓词值存储、双读端口与直连退休（2026-10-30）
+
+从 `fbbbddf` 接续。`predicate_file.sv` 保存每 warp 七个 32 位字及每字有效位，P7 为常量；guard 的取反/PC 组筛选与 VOTE 源来自两个实际读多路器。寄存器后端不再从架构谓词镜像取得执行输入。collector 模式的写回第五端口直接驱动物理谓词写入，包含 mask、同拍旁路、年龄优先和清槽复用；见 [RTL_PREDICATES.md](RTL_PREDICATES.md)。
+
+| 验证 | 实际结果与范围 |
+|---|---|
+| 默认 Debug | `ctest --test-dir build --output-on-failure -j3`：26 套件、274 项（231 Python / 43 C++），272 通过、2 跳过，3.10 秒 |
+| 联合 Release | `ctest --test-dir build-cache-rtl --output-on-failure -j3`：最终 46 套件、852 项（781 Python / 71 C++）全部通过，8.93 秒；首次同范围运行 9.85 秒，探测求值优化后再次全量验证 |
+| 寄存器联合 RTL Debug ASan/UBSan | `ctest --test-dir build-register-sanitize --output-on-failure -j3`：最终 37 套件、558 项（501 Python / 57 C++）全部通过，513.88 秒；包含普通/谓词寄存器、collector、整数、浮点及写回 RTL，Tensor/cache/scoreboard 为 C++ 后端 |
+| 谓词独立 RTL | 四项检查在 4/8/32 槽通过：双端口、P7、guard/group、边沿、掩码、清槽/写入同拍、隔离、错误拒绝及 12,000 拍独立随机参考；8 槽同样通过 ASan/UBSan |
+| 谓词综合与实际网表 | 8 槽 13,733 cells / 1,848 FF 位；32 槽 53,573 cells / 7,392 FF 位。两种配置均通过 `check -assert` 和同四项 `--gate-sim`，产物 `rtl-predicate-synth` / `rtl-predicate-full` |
+| 寄存器 / 写回 / 组合顶层 | 普通 RTL 和 sanitizer 分别通过 5/5/7 项；包含新增谓词存储连接、实际退休总线与保留值读取。写回完整 32 槽另重新综合及同五项实际网表验证，740,745 generic cells / 34,496 FF 位 |
+| 组合顶层保留存储综合 | 8 warp 槽配置 `--infer-only` / `check -assert` 通过：147 数组、598,048 数组位、169,460 FF 位；FF 较上一阶段增加 1,848，正好等于该分区谓词存储。不宣称整个组合顶层完成门级验证 |
+| 实际 ISA 与适配器 | 三项 Python 用例覆盖两种寄存器后端、1/2/4/8 分区、部分写入/VOTE/ELECT、FSETP 退休到发射同拍旁路、37 线程与多 CTA 槽复用。两个新增 C++ 用例覆盖四种几何、读取捕获、写回保留与年龄、外部写端口冲突；均包含在 CTest 总数中 |
+| 主机 Graph | 四负载各两次重放；除新增 `predicate_files` 外，全部状态、旧统计、模型周期和原始 trace 与 `rtl-floating-host` 全量相等。每次 vector/reduction/GEMM/Transformer 的实际谓词写为 20/45/6/56，与汇编中的谓词指令 PC 及退休 trace 独立计数一致 |
+| 原版 nvidia-smi | 启用全部已接入 RTL 的活设备完成两次 Transformer Graph，每次验证 32 个数值、70 条普通浮点及 56 次谓词写入；实卡共存、7 MiB→0 MiB→退出移除通过，系统绝对路径仍仅显示实卡。证据 `rtl-predicate-host/monitor/` 与复现脚本 `check_monitor.py` |
+
+独立工具集合从 70 增至 76 个场景；本轮运行受影响的 21 项：谓词 4、寄存器 5、写回 5、组合顶层 7。不同几何、构建和网表复跑不重复计数，没有宣称重跑全部独立电路。17 份当前 RTL 源码清单和三份实际网表 SHA-256 已核对，记录在 `rtl-predicate-final/evidence-audit.json`；完整 CTest 明细和计数保存于同目录。主机验证、旧字段对照和退休计数证据为 `rtl-predicate-host/backend-audit.json`。
+
+首次全量 ASan/UBSan 为 37 套件、36 通过，`rtl_collector_memory_async` 在 600.02 秒达到总限时；该次不能记作全部通过。失败明细保存在 `rtl-predicate-history/sanitize-before-probe-cache.log`。检查发现谓词候选查询无论引脚是否改变都会重新求值整个组合模块，给等待访存的周期增加了大量宿主开销。适配器现只在查询引脚变化时额外求值；写入、退休和时钟操作仍正常求值，返回的是当前电路输出。未调整任何测试分组、600 秒套件限时或 120 秒子进程限时。
+
+保留优化前 sanitizer 可执行文件，交替顺序运行相同输入并比较完整 JSON 输出：随机原子场景为 13.73/13.81 秒对 5.40/5.27 秒，模型均为 6,513 拍；六 CTA 有限原子队列场景为 77.13/77.75 秒对 2.38/2.40 秒，模型均为 16,740 拍。完整输出逐项相等；这些是宿主仿真耗时，不是 GPU 性能。复现脚本、二进制哈希和两轮原始观测为 `rtl-predicate-history/{compare_probe.py,sanitize-timeout-analysis.json,probe-evaluation-comparison.json}`。再次完整回归中，原超时的 49 项存储/异步组在 246.59 秒通过。
+
+最终 Release 和 sanitizer 输出均逐项核对 30/49/19 个 collector 场景，与上一阶段完整 98 项发现集合完全相等、无重复。证据为 `rtl-predicate-final/collector-execution-audit.json`，最终全量明细为同目录 `joint-release.log`、`register-sanitize.log` 和 `tests.json`。优化后的实际主机 Graph 与监控也重新执行，未只复用旧版二进制的输出。
+
+谓词存储和读写通路完成本阶段验证不等于完整 SM：调度、解码、PC 与集合运算仍为 C++，SFU、控制/访存电路、跨分区共享单元、整数内部算术流水级、整机 RTL、实卡校准和 PTX 异步矩阵协议仍须继续，完整目标保持 active。
+
 ## 明确边界
 
 - 功能模式和时序模式都在 CPU 上执行；不会利用 RTX 4070 SUPER 来获得模拟 GPU 的实际吞吐。
-- 两个 SM 已有基础时序资源模型；缓存、Tensor、scoreboard、寄存器数据、collector/读请求年龄仲裁、七执行端口、整数/普通浮点数值与完成存储/写回仲裁 RTL 已接入实际执行，早期循环 bank 仲裁 RTL 仍独立，尚未连接成两份完整 RTL SM。仅报告实际模块的 generic-cell 统计，没有整卡门数、工艺频率、面积或功耗结论。
+- 两个 SM 已有基础时序资源模型；缓存、Tensor、scoreboard、普通/谓词寄存器数据、collector/读请求年龄仲裁、七执行端口、整数/普通浮点数值与完成存储/写回仲裁 RTL 已接入实际执行，早期循环 bank 仲裁 RTL 仍独立，尚未连接成两份完整 RTL SM。仅报告实际模块的 generic-cell 统计，没有整卡门数、工艺频率、面积或功耗结论。
 - 自定义编码不兼容 CUDA/PTX/SASS/curryGPU 私有二进制；Python Program 是指令构造接口，不是 CUDA 编译器。
 - 主机接口及 CUDA Graph 风格功能通过 Python/C++ 进程协议运行，不实现 NVIDIA `cudaGraph*` API/ABI、驱动、PCIe/MMIO 或系统可枚举的 CUDA 设备。
 - Graph 支持范围见 [主机接口规范](HOST.md)：无 child graph、host callback、条件/内存分配节点、device-side launch 或完整 capture mode；单计算引擎不支持并发 kernel。

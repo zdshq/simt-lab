@@ -11,10 +11,10 @@ function(simt_enable_register_rtl)
     add_library(simt_register_circuit STATIC)
     foreach(slots 4 8 16 32)
         verilate(simt_register_circuit TOP_MODULE register_file PREFIX Vsimt_register${slots}
-            SOURCES rtl/register_bank.sv rtl/register_file.sv
+            SOURCES rtl/register_bank.sv rtl/predicate_file.sv rtl/register_file.sv
             VERILATOR_ARGS -Wall --unroll-count 4096 -GSLOTS=${slots})
         verilate(simt_register_circuit TOP_MODULE register_operand_unit PREFIX Vsimt_operands${slots}
-            SOURCES rtl/register_bank.sv rtl/register_file.sv rtl/collector_dispatch.sv rtl/collector_payload.sv rtl/operand_collector.sv
+            SOURCES rtl/register_bank.sv rtl/predicate_file.sv rtl/register_file.sv rtl/collector_dispatch.sv rtl/collector_payload.sv rtl/operand_collector.sv
                 rtl/integer_lane.sv rtl/integer_vector.sv rtl/integer_execute.sv
                 rtl/fp32_fma.sv rtl/fp32_misc.sv rtl/fp32_scalar_lane.sv rtl/floating_execute.sv
                 rtl/writeback_payload.sv rtl/writeback_unit.sv rtl/register_operand_unit.sv

@@ -68,6 +68,8 @@ template<class C, uint32_t S> bool RtlWriteback<C,S>::selected(uint32_t entry) c
 // 采样实际退休总线；确认后的同一份数据也直接流入寄存器堆电路。
 template<class C, uint32_t S> RegisterVector RtlWriteback<C,S>::take(uint32_t entry) {
     if (!selected(entry) || dut_.wb_reserve_valid || retirement_closed_) throw std::runtime_error("writeback_not_selected");
+    if ((dut_.wb_retire_valid & 16) && ((dut_.wb_retire_entries >> 20) & 31u) == entry && dut_.predicate_write_valid)
+        throw std::runtime_error("predicate_write_port_busy");
     RegisterVector result{};
     for (uint32_t port = 0; port < 5; ++port)
         if ((dut_.wb_retire_valid & (1u << port)) && ((dut_.wb_retire_entries >> (port*5)) & 31u) == entry)

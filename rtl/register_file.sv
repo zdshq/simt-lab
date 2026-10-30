@@ -16,7 +16,14 @@ module register_file #(
     input wire [4*ROW_BITS-1:0] read_rows, write_rows,
     input wire [127:0] write_masks,
     input wire [4095:0] write_data,
-    output wire [4095:0] read_data
+    output wire [4095:0] read_data,
+    input wire [SLOT_BITS-1:0] predicate_query_slot, predicate_write_slot,
+    input wire [3:0] predicate_query_guard,
+    input wire [2:0] predicate_query_source, predicate_write_register,
+    input wire [31:0] predicate_query_group, predicate_write_mask, predicate_write_data,
+    input wire predicate_write_valid,
+    output wire [31:0] predicate_participating, predicate_source_data,
+    output wire predicate_write_event, predicate_write_error, predicate_clock_enable
 );
     assign slot_count = 8'(SLOTS);
     // One or two shared port groups serialize accesses across the unchanged four storage banks.
@@ -28,8 +35,16 @@ module register_file #(
     assign write_available = !reset && valid_geometry && (query_register == 63 || !(|(write_valid & group_mask)));
     // Standalone host pins stay stable while high; internal RTL producers instead share the source clock.
     // 独立宿主引脚在高电平保持稳定；内部 RTL 生产者则使用共同的源时钟。
-    assign clock_enable = reset || (|clear_slots) || (|write_valid);
+    assign clock_enable = reset || (|clear_slots) || (|write_valid) || predicate_clock_enable;
     wire storage_clock = SHARED_CLOCK != 0 ? clk : clk && clock_enable;
+    predicate_file #(.SLOTS(SLOTS)) predicates (
+        .clk(storage_clock), .reset(reset), .clear_slots(clear_slots),
+        .query_slot(predicate_query_slot), .query_guard(predicate_query_guard), .query_source(predicate_query_source),
+        .query_group(predicate_query_group), .participating(predicate_participating), .source_data(predicate_source_data),
+        .write_valid(predicate_write_valid), .write_slot(predicate_write_slot), .write_register(predicate_write_register),
+        .write_mask(predicate_write_mask), .write_data(predicate_write_data), .write_accept(predicate_write_event),
+        .write_error(predicate_write_error), .clock_enable(predicate_clock_enable)
+    );
     genvar bank;
     generate for (bank = 0; bank < 4; bank = bank+1) begin: banks
         register_bank #(.SLOTS(SLOTS)) storage (

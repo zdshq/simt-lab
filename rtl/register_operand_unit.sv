@@ -16,6 +16,14 @@ module register_operand_unit #(
     input wire [127:0] write_masks,
     input wire [4095:0] write_data,
     output wire [4095:0] read_data,
+    input wire [SLOT_BITS-1:0] predicate_query_slot, predicate_write_slot,
+    input wire [3:0] predicate_query_guard,
+    input wire [2:0] predicate_query_source, predicate_write_register,
+    input wire [31:0] predicate_query_group, predicate_write_mask, predicate_write_data,
+    input wire predicate_write_valid,
+    output wire [31:0] predicate_participating, predicate_source_data,
+    output wire predicate_write_event, predicate_write_error, predicate_clock_enable,
+    output wire predicate_port_busy,
     input wire collect_enable,
     input wire [5:0] entry_limit,
     input wire allocate_valid,
@@ -95,6 +103,11 @@ module register_operand_unit #(
     wire [4*ROW_BITS-1:0] wb_rows;
     wire [127:0] wb_masks;
     wire [4095:0] wb_data;
+    wire [SLOT_BITS-1:0] wb_predicate_slot;
+    wire [2:0] wb_predicate_register;
+    wire [31:0] wb_predicate_mask, wb_predicate_data;
+    wire wb_predicate_valid;
+    assign predicate_port_busy = wb_predicate_valid || predicate_write_valid;
     assign write_events = write_valid | wb_writes;
     assign clock_enable = register_clock_enable || collector_clock_enable || wb_clock_enable || integer_clock_enable || floating_clock_enable;
     wire integer_selected = dispatch_valid[0] && !dispatch_accept[0] && dispatch_entries[4:0] == integer_collector;
@@ -151,7 +164,17 @@ module register_operand_unit #(
         .clk(clk), .reset(reset), .clear_slots(clear_slots), .query_register(query_register), .port_groups(port_groups),
         .read_available(read_available), .write_available(write_available), .clock_enable(register_clock_enable), .slot_count(slot_count),
         .read_valid(read_events), .write_valid(write_events), .read_rows(collect_enable ? collector_rows : read_rows),
-        .write_rows(actual_rows), .write_masks(actual_masks), .write_data(actual_data), .read_data(read_data)
+        .write_rows(actual_rows), .write_masks(actual_masks), .write_data(actual_data), .read_data(read_data),
+        .predicate_query_slot(predicate_query_slot), .predicate_query_guard(predicate_query_guard),
+        .predicate_query_source(predicate_query_source), .predicate_query_group(predicate_query_group),
+        .predicate_participating(predicate_participating), .predicate_source_data(predicate_source_data),
+        .predicate_write_valid(wb_predicate_valid || predicate_write_valid),
+        .predicate_write_slot(wb_predicate_valid ? wb_predicate_slot : predicate_write_slot),
+        .predicate_write_register(wb_predicate_valid ? wb_predicate_register : predicate_write_register),
+        .predicate_write_mask(wb_predicate_valid ? wb_predicate_mask : predicate_write_mask),
+        .predicate_write_data(wb_predicate_valid ? wb_predicate_data : predicate_write_data),
+        .predicate_write_event(predicate_write_event), .predicate_write_error(predicate_write_error),
+        .predicate_clock_enable(predicate_clock_enable)
     );
     writeback_unit #(.SLOTS(SLOTS)) completions (
         .clk(clk), .reset(reset), .port_groups(port_groups),
@@ -163,7 +186,9 @@ module register_operand_unit #(
         .retire_ready(wb_retire_ready), .acknowledge_error(wb_acknowledge_error), .retire_valid(wb_retire_valid),
         .completed_entries(wb_completed_entries),
         .retire_entries(wb_retire_entries), .retire_data(wb_retire_data), .write_valid(wb_writes),
-        .write_rows(wb_rows), .write_masks(wb_masks), .write_data(wb_data), .occupancy(wb_occupancy), .clock_enable(wb_clock_enable)
+        .write_rows(wb_rows), .write_masks(wb_masks), .write_data(wb_data), .occupancy(wb_occupancy), .clock_enable(wb_clock_enable),
+        .predicate_write_valid(wb_predicate_valid), .predicate_write_slot(wb_predicate_slot),
+        .predicate_write_register(wb_predicate_register), .predicate_write_mask(wb_predicate_mask), .predicate_write_data(wb_predicate_data)
     );
     operand_collector #(.SLOTS(SLOTS), .SHARED_CLOCK(1)) collectors (
         .clk(clk), .reset(reset), .collect_enable(collect_enable), .entry_limit(entry_limit), .port_groups(port_groups),

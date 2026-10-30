@@ -29,6 +29,27 @@ void register_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedSm
     out << ']';
 }
 
+// Count accepted issue reads separately from scheduler probes and from GPR storage activity.
+// 将已接受发射的读取与调度探测及普通寄存器存储活动分开计数。
+void predicate_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedSm>>& sms) {
+    out << ",\"predicate_files\":[";
+    bool first = true;
+    for (uint32_t sm = 0; sm < sms.size(); ++sm)
+        for (uint32_t part = 0; part < sms[sm]->partitions.size(); ++part) {
+            const auto& file = sms[sm]->partitions[part].registers;
+            if (!file) continue;
+            if (!first) out << ',';
+            first = false;
+            const auto& s = file->stats();
+            out << "{\"sm\":" << sm << ",\"partition\":" << part << ",\"backend\":\"rtl\",\"slots\":" << file->slots()
+                << ",\"data_bits\":" << file->slots()*224 << ",\"valid_bits\":" << file->slots()*7
+                << ",\"read_ports\":2,\"write_ports\":1,\"clocks\":" << s.clocks
+                << ",\"active_clocks\":" << s.predicate_active_clocks << ",\"guard_reads\":" << s.guard_reads
+                << ",\"source_reads\":" << s.predicate_source_reads << ",\"writes\":" << s.predicate_writes << '}';
+        }
+    out << ']';
+}
+
 // Collector counters reflect circuit handshakes, not a software estimate of operand availability.
 // 收集器计数反映电路握手，而不是软件估算的操作数可用性。
 void collector_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedSm>>& sms) {
@@ -215,6 +236,7 @@ void TimingMachine::dump(std::ostream& out) const {
     dump_statistics(out);
     scoreboard_stats(out, sms_);
     register_stats(out, sms_);
+    predicate_stats(out, sms_);
     collector_stats(out, sms_);
     integer_stats(out, sms_);
     floating_stats(out, sms_);

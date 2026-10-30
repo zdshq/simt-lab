@@ -2,6 +2,18 @@
 #include "simt/execution.hpp"
 
 namespace simt {
+// Predication and VOTE read two RTL muxes; the architectural predicate array is only a software-backend source.
+// 谓词筛选和 VOTE 读取两个 RTL 多路器；架构谓词数组只向纯软件后端提供输入。
+hw::PredicateValues TimingMachine::probe_predicates(uint32_t cta_id, uint32_t wi, const Instruction& i, Group group) {
+    const auto& cta = machine_.ctas_[cta_id];
+    const auto source = i.op == Op::VOTE && i.ra < 8 ? i.ra : 7;
+    const auto slot = warps_[cta_id][wi].slot;
+    const auto partitions = sms_[cta.sm_id]->partitions.size();
+    auto& file = sms_[cta.sm_id]->partitions[slot % partitions].registers;
+    if (file) return file->probe_predicates(slot / partitions, i.guard & 15, group.mask, source);
+    return {participating_mask(cta.warps[wi], i, group), cta.warps[wi].predicates[source]};
+}
+
 // RTL reads are authoritative; the architectural register mirror never supplies this backend's operands.
 // RTL 读取是权威数据源；架构寄存器镜像不向此后端提供操作数。
 bool TimingMachine::collect_operand(Inflight& entry, const hw::RegisterUse& use) {
@@ -26,10 +38,11 @@ bool TimingMachine::collect_operand(Inflight& entry, const hw::RegisterUse& use)
 void TimingMachine::commit_register_data(Inflight& entry) {
     auto& file = sms_[entry.sm]->partitions[entry.partition].registers;
     const auto& f = entry.footprint;
-    if (!file || entry.completion || !f.destination || !f.write_mask) return;
+    if (!file || entry.completion || !f.write_mask) return;
     const auto slot = warps_[entry.cta][entry.warp].slot / sms_[entry.sm]->partitions.size();
     const auto& result = f.pipe == Pipe::control ? machine_.ctas_[entry.cta].warps[entry.warp] : entry.result;
-    file->write(slot, *f.destination, f.write_mask, result.r[*f.destination]);
+    if (f.destination) file->write(slot, *f.destination, f.write_mask, result.r[*f.destination]);
+    if (f.predicate) file->write_predicate(slot, *f.predicate, f.write_mask, result.predicates[*f.predicate]);
 }
 
 // Architectural dumps mirror accepted results; RTL operand reads still come from physical RF storage.

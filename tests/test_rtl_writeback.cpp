@@ -144,7 +144,32 @@ void connected_floating_execution_and_persistent_results() {
     }
 }
 
+// Acknowledged predicate retirement reaches the stored file without a host write call, including port conflicts.
+// 已确认谓词退休无需宿主写调用即可到达存储，并验证端口冲突。
+void direct_predicate_route() {
+    for (uint32_t partitions : {1,2,4,8}) {
+        auto file = make_register_file(partitions,4,4); auto& wb = *file->writeback(); const auto slot = file->slots()-1;
+        file->write_predicate(slot,6,UINT32_MAX,0x55555555); file->tick();
+        const auto first = wb.reserve({slot,0,2,6,0x80000001}); file->tick();
+        const auto second = wb.reserve({slot,1,2,5,UINT32_MAX}); file->tick();
+        require(wb.complete(first,0,values(0x80000000)),"predicate completion rejected");
+        require(wb.complete(second,1,values(0x12345678)),"second predicate completion rejected"); wb.arbitrate();
+        require(wb.selected(first) && !wb.selected(second),"predicate age arbitration bypassed single port");
+        file->write_predicate(slot,4,1,1); rejects([&] { wb.take(first); }); file->tick();
+        wb.arbitrate(); require(file->probe_predicates(slot,6,UINT32_MAX,6).source == 0x55555555,"unacknowledged result wrote predicates");
+        wb.take(first); rejects([&] { file->write_predicate(slot,4,1,1); });
+        auto result = file->probe_predicates(slot,6,UINT32_MAX,6);
+        require(result.source == 0xd5555554 && result.participating == result.source,"masked predicate retirement bypass differs");
+        file->accept_predicates(true); file->tick();
+        wb.arbitrate(); wb.take(second); file->tick();
+        require(file->probe_predicates(slot,6,UINT32_MAX,5).source == 0x12345678,"predicate retirement not stored");
+        require(file->probe_predicates(0,6,UINT32_MAX,6).source == 0,"predicate retirement aliased warp");
+        require(file->stats().predicate_writes == 4 && wb.occupancy() == 0,"predicate retirement accounting differs");
+    }
+}
+
 void run_cases() {
+    direct_predicate_route(); std::cout << "PASS writeback direct predicate storage bypass masks age and ownership\n";
     connected_floating_execution_and_persistent_results(); std::cout << "PASS floating four-stage collector-to-FMA-to-WB-to-RF route across four geometries\n";
     connected_integer_execution_and_persistent_results(); std::cout << "PASS integer collector-to-ALU-to-WB-to-RF route across four geometries\n";
     direct_register_route_and_lane_masks(); std::cout << "PASS writeback actual RF bypass, storage and lane masks across four geometries\n";

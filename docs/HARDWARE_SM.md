@@ -38,7 +38,7 @@ scoreboard 按寄存器和 lane 掩码记录尚未完成的写者，阻塞 RAW/W
 
 这些映射、端口和延迟都是可检查的模型选择，不是已经逆向证明的 NVIDIA 寄存器电路。默认 C++ 后端在收集好的操作数上计算，再等待写回。collector RTL 后端现将整数与普通浮点直接送入电路，浮点加乘具有实际四级数据寄存器并完成网表验证；SFU 多项式等电路仍未实现。
 
-可选 [scoreboard RTL 后端](RTL_SCOREBOARD.md) 已将这些逐 lane 依赖接入实际电路，包括写者位、读者计数、谓词状态、同拍旁路和有限更新端口。用 `--timing --scoreboard-rtl` 或 `Device(timing=True, scoreboard_rtl=True)` 启用；寄存器数据另可启用 [寄存器 RTL](RTL_REGISTERS.md)，其逐 lane 写入、旁路、端口分组和槽复用已接入。另启用 [collector RTL](RTL_COLLECTOR.md) 可将普通源收集和读请求年龄仲裁接入电路；collector 到七类执行端口的选择和数据总线另见 [执行端口 RTL](RTL_DISPATCH.md)。该选项现在同时接入每分区 32 个完成槽、七类结果输入、写回年龄仲裁和 RF 直连，见 [写回 RTL](RTL_WRITEBACK.md)；[整数](RTL_INTEGER.md) 和 [普通浮点](RTL_FLOATING.md) 执行直接连接两个结果端口。其余执行通路及部分输入选择仍有 C++，不能将这些选项称为完整 SM RTL。
+可选 [scoreboard RTL 后端](RTL_SCOREBOARD.md) 已将这些逐 lane 依赖接入实际电路，包括写者位、读者计数、谓词状态、同拍旁路和有限更新端口。用 `--timing --scoreboard-rtl` 或 `Device(timing=True, scoreboard_rtl=True)` 启用；寄存器数据另可启用 [寄存器 RTL](RTL_REGISTERS.md)，其逐 lane 写入、旁路、端口分组和槽复用已接入。另启用 [collector RTL](RTL_COLLECTOR.md) 可将普通源收集和读请求年龄仲裁接入电路；collector 到七类执行端口的选择和数据总线另见 [执行端口 RTL](RTL_DISPATCH.md)。该选项现在同时接入每分区 32 个完成槽、七类结果输入、写回年龄仲裁和 RF 直连，见 [写回 RTL](RTL_WRITEBACK.md)；[整数](RTL_INTEGER.md) 和 [普通浮点](RTL_FLOATING.md) 执行直接连接两个结果端口。谓词退休端现已直连 [谓词存储 RTL](RTL_PREDICATES.md)，guard 和 VOTE 不再从架构镜像取值。其余执行通路及部分输入选择仍有 C++，不能将这些选项称为完整 SM RTL。
 
 ## 多 CTA 驻留与参数
 

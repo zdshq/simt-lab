@@ -15,6 +15,8 @@ class RtlRegisterFile:
         if kwargs.get('error') is None:
             hardware = report['hardware']
             self.assertTrue(hardware['register_files'])
+            self.assertTrue(hardware['predicate_files'])
+            self.assertEqual(sum(unit['guard_reads'] for unit in hardware['predicate_files']), hardware['issued'])
             for board in hardware['register_files']:
                 self.assertEqual(board['backend'], 'rtl')
                 self.assertGreater(board['clocks'], 0)

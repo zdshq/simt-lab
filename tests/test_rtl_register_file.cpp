@@ -85,7 +85,36 @@ void clocks_errors_and_isolation() {
     require(!shared->read(0, 2), "shared read port group admitted a second bank");
 }
 
+// A pair of predicate muxes shares one issue capture; masked writes and slot reuse remain physical.
+// 两个谓词多路器共用一次发射捕获；掩码写入与槽复用均保留物理存储语义。
+void predicate_storage_and_ports() {
+    for (uint32_t partitions : {1,2,4,8}) {
+        auto file = simt::hw::make_register_file(partitions); const auto slot = file->slots()-1;
+        rejects([&] { file->accept_predicates(false); });
+        file->write_predicate(slot,6,UINT32_MAX,0x80000001);
+        rejects([&] { file->write_predicate(slot,5,1,1); });
+        const auto value = file->probe_predicates(slot,6,UINT32_MAX,6);
+        require(value.participating == 0x80000001 && value.source == 0x80000001,"predicate bypass differs");
+        file->accept_predicates(true);
+        rejects([&] { file->probe_predicates(0,7,UINT32_MAX); });
+        rejects([&] { file->clear(slot); }); file->tick();
+        require(file->probe_predicates(slot,14,UINT32_MAX,6).participating == 0x7ffffffe,"predicate commit/invert differs");
+        require(file->probe_predicates(0,6,UINT32_MAX,7).source == UINT32_MAX,"P7 is not constant");
+        file->clear(slot);
+        require(file->probe_predicates(slot,6,UINT32_MAX,6).source == 0,"reused slot leaked predicates"); file->tick();
+        file->write_predicate(slot,6,2,2); file->tick();
+        require(file->probe_predicates(slot,6,UINT32_MAX,6).source == 2,"partial write resurrected stale lanes");
+        rejects([&] { file->write_predicate(slot,7,1,1); });
+        rejects([&] { file->probe_predicates(file->slots(),7,1); });
+        rejects([&] { file->probe_predicates(0,16,1); });
+        rejects([&] { file->probe_predicates(0,7,1,8); });
+        require(file->stats().clocks == 3 && file->stats().guard_reads == 1 && file->stats().predicate_source_reads == 1 &&
+                file->stats().predicate_writes == 2,"predicate events or hidden clocks differ");
+    }
+}
+
 void run_cases() {
+    predicate_storage_and_ports(); std::cout << "PASS predicate storage ports masks and isolation across four geometries\n";
     geometries_and_port_capacity(); std::cout << "PASS register geometries and physical ports\n";
     masks_zero_and_reuse(); std::cout << "PASS register masks zero and slot reuse\n";
     clocks_errors_and_isolation(); std::cout << "PASS register clocks errors and isolation\n";

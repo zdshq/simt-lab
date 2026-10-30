@@ -56,7 +56,10 @@ void simultaneous_results_and_held_payload() {
     require(b.dut.complete_accept == 7, "independent producer completions serialized");
     require(b.dut.retire_ready == ((1u<<old)|(1u<<pred)), "bank/predicate arbitration differs");
     expect_data(b.dut,0,old,pattern(10)); expect_data(b.dut,4,pred,pattern(30));
+    require(!b.dut.predicate_write_valid,"predicate write occurred before acknowledgement");
     b.dut.acknowledge = (1u<<old)|(1u<<pred); b.dut.eval();
+    require(b.dut.predicate_write_valid && b.dut.predicate_write_slot == 3 && b.dut.predicate_write_register == 3 &&
+            b.dut.predicate_write_mask == UINT32_MAX && b.dut.predicate_write_data == pattern(30)[0],"physical predicate bus differs");
     require(b.dut.write_valid == 1 && b.dut.write_masks[0] == 0x80000001, "physical write mask differs");
     require(!(b.dut.retire_ready & (1u<<young)), "same bank consumed twice in one cycle");
     b.step();
