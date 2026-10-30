@@ -16,6 +16,8 @@ TimedSm::TimedSm(const hw::PipelineConfig& config, const hw::TensorConfig& tenso
     : resources(config), owners(config.max_warps),
       shared({65536, 32, 2, 8, atomic.latency}),
       tmem({131072, tensor.tmem_banks, tensor.tmem_latency, 8}), array(hw::make_tensor_engine(tensor)) {
+    if (config.collector_rtl) execution_arbiter=hw::make_execution_arbiter(config.partitions,
+        {config.integer_interval,config.float_interval,config.special_interval});
     for (uint32_t part = 0; part < config.partitions; ++part) {
         partitions.emplace_back(config.register_banks);
         if (config.register_rtl) partitions.back().registers = hw::make_register_file(config.partitions, config.register_banks, config.collector_rtl ? config.collectors : 0);
@@ -189,6 +191,7 @@ bool TimingMachine::advance() {
         for (auto& table : sm->cta_tables) if (table) table->tick();
         if (sm->transactions) sm->transactions->tick();
         if (sm->dma) sm->dma->tick();
+        if (sm->execution_arbiter) sm->execution_arbiter->tick();
         for (auto& partition : sm->partitions) if (partition.scheduler) partition.scheduler->tick();
         for (auto& partition : sm->partitions) if (partition.registers) partition.registers->tick();
     }

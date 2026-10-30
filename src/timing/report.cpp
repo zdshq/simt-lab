@@ -35,6 +35,11 @@ void scheduler_stats(std::ostream& out,const std::vector<std::unique_ptr<TimedSm
 }
 
 TimingStats scheduling_statistics(TimingStats result,const std::vector<std::unique_ptr<TimedSm>>& sms) {
+    for (const auto& sm : sms) if (sm->execution_arbiter) {
+        const auto& s=sm->execution_arbiter->stats();
+        for (uint32_t pipe=0; pipe<7; ++pipe)
+            result.unit_stalls+=s.interval_stalls[pipe]+s.shared_stalls[pipe]+s.arbitration_stalls[pipe]+s.downstream_stalls[pipe];
+    }
     for (const auto& sm : sms) for (const auto& partition : sm->partitions) {
         if (!partition.scheduler) continue;
         const auto& s=partition.scheduler->stats();
@@ -356,6 +361,7 @@ void TimingMachine::dump_tensor(std::ostream& out) const {
 
 void TimingMachine::dump(std::ostream& out) const {
     dump_statistics(out);
+    dump_execution_arbiters(out);
     scheduler_stats(out,sms_);
     scoreboard_stats(out, sms_);
     control_stats(out, sms_);

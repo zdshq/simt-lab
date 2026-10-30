@@ -72,7 +72,7 @@ flowchart LR
 
 顶层 scoreboard/boundary/memory-order/collector/completion 停顿字段在此后端汇总实际调度器事件。与旧软件扫描每拍可能检查多个 warp 的计数口径不同，不宣称原始停顿统计或逐拍 trace 完全相同。发生错误后，设备的排空周期可能继续增加，而私有调度器的时钟停止。
 
-剩余 C++ 包括：CTA 资源分配策略、取指译码与 footprint、scoreboard 查询组合、实例间引脚路由、跨分区共享执行资源仲裁，以及尚未落实为电路的 SFU/访存部分。寄存器和前端的权威数据分别见 [寄存器 RTL](RTL_REGISTERS.md) 与 [warp 前端](RTL_WARP_FRONTEND.md)。整个硬件目标继续以 [总计划](HARDWARE_PLAN.md) 为准。
+剩余 C++ 包括：CTA 资源分配策略、取指译码与 footprint、scoreboard 查询组合、实例间引脚路由、异步后台服务次序，以及尚未落实为电路的 SFU/访存部分。[跨分区执行仲裁](RTL_EXECUTION_ARBITER.md) 已负责 Tensor/异步候选轮转、Tensor 持有和发射间隔。寄存器和前端的权威数据分别见 [寄存器 RTL](RTL_REGISTERS.md) 与 [warp 前端](RTL_WARP_FRONTEND.md)。整个硬件目标继续以 [总计划](HARDWARE_PLAN.md) 为准。
 
 ## 验证与复现
 

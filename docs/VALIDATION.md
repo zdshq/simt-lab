@@ -679,3 +679,42 @@ python3 artifacts/rtl-scheduler-final/audit.py
 审计脚本核对四份模块清单、完整容量与实际网表、一份适配器 sanitizer 清单、十份主机报告、320 个源码文件及三个联合二进制，结果保存在 `evidence-audit.json`。最终网表 SHA-256 为 `52bdd1e149078421899e565f42fbce11d6fc6028e276435b2812af2be4aea6c3`。本阶段只复跑新增调度电路的五项独立场景，未重跑全部历史独立模块、完整联合 sanitizer 或整 GPU 综合。
 
 完整目标保持 active：取指译码、依赖查询组合、跨分区仲裁、SFU/剩余访存、外部内存返回选择、整机 RTL、实卡参数辨识、PTX 异步矩阵协议与最终硬件审计仍须继续。
+
+## 阶段 16：跨分区执行轮转、Tensor 归属与发射间隔 RTL（2026-10-30）
+
+从 `de300e3` 接续。每 SM 新增完整八分区、七类候选端口的执行仲裁器，实际 collector 输出提供请求，实际接收提供确认。Tensor/异步候选轮转、Tensor 持有到退休及三类算术间隔移入电路；异步 busy 输入、后台完成优先服务与 CTA 回收编排仍有 C++。细节见 [RTL_EXECUTION_ARBITER.md](RTL_EXECUTION_ARBITER.md)。
+
+| 实际命令/范围 | 最终结果 |
+|---|---|
+| `cmake --build build -j4` / `ctest --test-dir build --output-on-failure` | 默认 Debug 27 套件、279 项运行：236 Python / 43 C++；277 通过、2 跳过，9.92 秒 |
+| `cmake --build build-cache-rtl -j4` / `ctest --test-dir build-cache-rtl --output-on-failure` | 联合 Release 60 套件、954 项全部通过：852 Python / 102 C++，36.46 秒；各套件选择目标后端 |
+| `python3 tools/rtl.py --build build-release --module execution_arbiter --out artifacts/rtl-execution-final` | 完整八分区五项通过：私有端口与 32 位间隔、共享轮转/下游拒绝、异步空操作、错误原子性/复位及 12,000 拍随机并发 |
+| 同模块 `--build build-sanitize --out artifacts/rtl-execution-sanitize` | 同五项 ASan/UBSan 通过，包括最高分区、完整 56 位矩阵和 UINT32_MAX 间隔 |
+| 同模块 `--synth --out artifacts/rtl-execution-final` | 完整容量 `check -assert` 通过，6,360 generic cells / 778 FF 位，无 SRAM |
+| 同模块 `--build build-release --gate-sim --out artifacts/rtl-execution-final` | 使用实际完整综合网表复跑同五项，全部通过 |
+| `python3 artifacts/rtl-execution-final/build_adapter.py` | 实际适配器与完整电路四项独立 ASan/UBSan 通过：快照/时钟、归属交接、间隔/空操作/拒绝及输入阶段与独立实例 |
+| `rtl_execution_arbitration` | 五项执行/主机检查通过：1/2/4/8 分区的 3/5/7 发射间隔、八分区 Tensor 互斥、单命令 DMA 池、异步空操作及活 Tensor 归属观察和失败恢复 |
+
+独立随机参考使用绝对截止时间与两个独立优先队列，按原始握手更新，未复用硬件计数器算法。实际 Tensor 互斥用 execute/retire trace 验证持有区间没有重叠；全八分区每个 warp 均完成分配、三次 TMEM 读取和释放。单命令/单片段 DMA 测试验证八份实际载荷，所有分区的 40 条异步指令完成，八条拷贝命令均归还额度。
+
+初始完整回归 60 套件中 57 通过，保留 `initial-joint-{ctest,tests}.log`。既有两个异步套件发现 `command_stalls` 为零：请求改在 collector 准入处过滤后，不再经过旧软件发射函数的计数点。修复为统计实际已就绪且被 DMA 容量阻塞的 collector 条目，保留原有“必须发生容量停顿”的断言。共享控制忙计数由 RTL 事件提供，相关统计口径在结构文档中说明。
+
+另外，新测试最初向 MOVI 传入无效源寄存器字段，并调用主机接口未支持的 `max_cycles` 参数。修正为合法 ISA 操作数，并使用第二个 warp 的循环耗尽 `max_steps`，在真实 Tensor 持有期间触发故障。报告代码随后因误把 SM 索引当对象而编译失败，记录在 `joint-build-2.log`，修正实际实例访问后编译通过。三个受影响套件先单独通过，再执行上表完整最终回归。未关闭告警或放宽功能断言。
+
+五后端同时运行四类主机负载各两次 Graph，另运行两次监控 Transformer：
+
+```sh
+python3 examples/hardware_host.py --build build-cache-rtl \
+  --register-rtl --collector-rtl --scoreboard-rtl --cache-rtl --tensor-rtl \
+  --out artifacts/rtl-execution-host
+python3 artifacts/rtl-execution-final/check_monitor.py
+python3 artifacts/rtl-execution-final/audit.py
+```
+
+十份下载结果与前一调度器阶段逐字节相同；这组负载的 kernel 模型周期也相同：向量 4832/4850、规约 2021/2240、GEMM 3868/3416、Transformer 5736/5741。每次实际 execute 数分别为 150、735、204、1470，与对应 SM 的仲裁接受数一致。审计还按汇编 PC 和 opcode 分类逐一核对七类接受计数、各类拒绝恒等式、Tensor 持有区间与释放次数；未宣称完整 trace 或停顿统计相同。
+
+普通 `nvidia-smi` 经已安装 NVML 入口再次验证真实卡和模拟器共存、7 MiB 分配、释放归零与退出移除；直接 `/usr/bin/nvidia-smi -L` 只显示真实卡。输出在 `artifacts/rtl-execution-final/{list,table,native-list}.txt` 和 `{allocated,freed,exited}.csv`，未增加 CUDA/PCIe 兼容。
+
+最终审计包含四份模块清单、完整综合网表、一份实际适配器 sanitizer 清单、十份主机报告、329 个源码文件和三个联合二进制。网表 SHA-256 为 `d01708f6be84aae9a611700d17034612bf0dfe46576ec4b100c6d602a129473c`，完整清单在 `artifacts/rtl-execution-final/evidence-audit.json`。本阶段复跑新增电路的五项独立场景，未重跑全部历史独立模块、完整联合 sanitizer 或整 GPU 综合。
+
+完整目标仍 active；取指译码/依赖查询组合、异步后台与 CTA 提交/回收服务次序、SFU/剩余访存电路、外部内存返回选择、整机 RTL、实卡校准、PTX 异步矩阵协议和最终硬件审计仍未完成。

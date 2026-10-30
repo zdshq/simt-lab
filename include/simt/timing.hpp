@@ -15,6 +15,7 @@
 #include "simt/cta_barrier.hpp"
 #include "simt/transaction_table.hpp"
 #include "simt/warp_scheduler.hpp"
+#include "simt/execution_arbiter.hpp"
 #include <deque>
 
 namespace simt {
@@ -59,6 +60,7 @@ struct TimedSm {
     hw::BankedShared constant{{65536, 1, 4, 8}};
     hw::BankedShared tmem;
     std::unique_ptr<hw::TensorEngine> array;
+    std::unique_ptr<hw::ExecutionArbiter> execution_arbiter;
     std::optional<uint64_t> tensor_owner;
     std::map<uint32_t, uint32_t> tensor_columns;
     uint32_t allocated_columns = 0;
@@ -165,6 +167,9 @@ private:
     void submit_writeback(Inflight& entry);
     bool take_writeback(Inflight& entry);
     void launch_ready();
+    void arbitrate_execution();
+    bool execution_available(const Inflight& entry);
+    void accept_execution(const Inflight& entry);
     void launch(Inflight& entry);
     void evaluate_scalar(Inflight& entry);
     bool launch_integer(Inflight& entry);
@@ -248,6 +253,7 @@ private:
     void commit(Inflight& entry);
     void trace(const Inflight& entry, const std::string& action);
     void dump_statistics(std::ostream& out) const;
+    void dump_execution_arbiters(std::ostream& out) const;
     void dump_memory(std::ostream& out) const;
     void dump_tensor(std::ostream& out) const;
     void dump_async(std::ostream& out) const;

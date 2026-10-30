@@ -50,7 +50,7 @@ FMA 数据寄存器现在只在所属级的 valid 为真时写入，空泡仍推
 
 启用 collector RTL 时，`--fp-latency 1..3` 明确报 `floating_rtl_requires_latency_at_least_4`，即使该 kernel 没有浮点指令也先验证配置。纯 C++ 后端保留原来的可调延迟，不用软件结果绕过物理流水级。
 
-发射间隔、warp 调度、指令解码和谓词输入快照仍由 C++ 控制。`hardware.floating_units` 按 SM/分区报告后端、四级结构、32 项容量、占用、时钟、有效更新周期以及真实 accepted/completed 事件。寄存器复合模块整体仍在 CPU 的 Verilator 模型上运行，这些周期不是 RTX 4070 SUPER 的性能预测。
+发射间隔现由 [执行仲裁 RTL](RTL_EXECUTION_ARBITER.md) 的 32 位计数器控制，warp 候选选择也已接入独立 RTL；取指译码与部分实例间信号路由仍有 C++。`hardware.floating_units` 按 SM/分区报告后端、四级结构、32 项容量、占用、时钟、有效更新周期以及真实 accepted/completed 事件。寄存器复合模块整体仍在 CPU 的 Verilator 模型上运行，这些周期不是 RTX 4070 SUPER 的性能预测。
 
 ## 验证与综合
 

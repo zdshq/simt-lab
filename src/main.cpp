@@ -53,6 +53,8 @@ bool hardware_option(simt::Config& config, const std::string& key, uint32_t valu
     else if (key == "--sm-registers") config.pipeline.register_words = value;
     else if (key == "--int-latency") config.pipeline.integer_latency = value;
     else if (key == "--fp-latency") config.pipeline.float_latency = value;
+    else if (key == "--int-interval") config.pipeline.integer_interval = value;
+    else if (key == "--fp-interval") config.pipeline.float_interval = value;
     else if (key == "--sfu-latency") config.pipeline.special_latency = value;
     else if (key == "--sfu-interval") config.pipeline.special_interval = value;
     else return false;
@@ -147,7 +149,7 @@ void print_help() {
                  "         [--timing] [--tensor-rtl] [--cache-rtl] [--scoreboard-rtl] [--register-rtl] [--collector-rtl] [--hardware-trace] [--max-cycles N] [--shared-bytes N]\n"
                  "         [--partitions N] [--register-banks N] [--collectors N] [--max-ctas N]\n"
                  "         [--max-warps N] [--sm-registers N] [--int-latency N] [--fp-latency N]\n"
-                 "         [--sfu-latency N] [--sfu-interval N]\n"
+                 "         [--int-interval N] [--fp-interval N] [--sfu-latency N] [--sfu-interval N]\n"
                  "         [--tensor-rows N] [--tensor-columns N] [--tensor-latency N] [--tensor-queue N]\n"
                  "         [--tmem-banks N] [--tmem-latency N] [--tmem-columns N]\n"
                  "         [--async-depth N] [--async-fragments N] [--async-chunk N]\n"

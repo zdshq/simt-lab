@@ -79,4 +79,4 @@ python3 tools/rtl.py --module predicate --gate-sim --out artifacts/rtl-predicate
 ctest --test-dir build-cache-rtl -R 'rtl_(predicate_execution|register_file|writeback_adapter)' --output-on-failure
 ```
 
-SFU、控制/访存执行电路、跨分区共享资源仲裁、整数内部算术流水级和整机 RTL 连接仍未完成；实卡校准、PTX 异步矩阵协议及完整硬件验收仍需继续。
+SFU、控制/访存执行电路、异步后台与 CTA 提交/回收服务次序、整数内部算术流水级和整机 RTL 连接仍未完成；实卡校准、PTX 异步矩阵协议及完整硬件验收仍需继续。

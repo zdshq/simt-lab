@@ -58,7 +58,8 @@ void TimingMachine::dump_async(std::ostream& out) const {
             << ",\"fragments\":" << s.fragments << ",\"command_stalls\":" << s.command_stalls
             << ",\"fragment_stalls\":" << s.fragment_stalls << ",\"memory_stalls\":" << s.memory_stalls
             << ",\"peak_commands\":" << s.peak_commands << ",\"barrier_requests\":" << s.barrier_requests
-            << ",\"barrier_stalls\":" << s.barrier_stalls << ",\"wait_queries\":" << s.wait_queries
+            << ",\"barrier_stalls\":" << s.barrier_stalls + (sms_[sm]->execution_arbiter ? sms_[sm]->execution_arbiter->stats().shared_stalls[6] : 0)
+            << ",\"wait_queries\":" << s.wait_queries
             << ",\"phase_completions\":" << s.phase_completions;
         transaction_statistics(out,sms_[sm]->transactions.get());
         dma_statistics(out,sms_[sm]->dma.get()); out << '}';

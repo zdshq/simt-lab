@@ -29,7 +29,7 @@ C++ 的 `IntegerCommand` 只有 opcode、寄存器编号、mask、立即数、�
 
 所有在途计数器可同时推进，只有 FIFO 队首能完成。输出受阻时，完成槽编号和数据保持不变；队列满则停止接收，支持同拍出队/入队。普通延迟为全局配置，测试另覆盖不同延迟混排导致的队首阻塞。复位排空有效状态，不要求清空每个结果位。
 
-若在模拟周期 C 的末尾边沿接收，延迟 L 的结果可在 C+L 的退休阶段使用。L=1、4、100 均由实际时钟验证。整数发射间隔、warp 调度和指令解码仍由 C++ 控制；本阶段没有把整个发射器称为 RTL。
+若在模拟周期 C 的末尾边沿接收，延迟 L 的结果可在 C+L 的退休阶段使用。L=1、4、100 均由实际时钟验证。整数发射间隔现由 [执行仲裁 RTL](RTL_EXECUTION_ARBITER.md) 的 32 位计数器控制，warp 候选选择也已接入 [调度 RTL](RTL_WARP_SCHEDULER.md)；取指译码仍有 C++。
 
 整数输出直接连接写回模块的完成端口 0，优先于该端口的测试用外部注入。写回模块的 `completed_entries` 包含已保存结果和当拍到达结果，供宿主跟踪指令身份；不返回重新计算的数值。真正退休数据来自写回物理输出总线，并直接写入 RF，C++ 只更新观测副本。
 
@@ -53,4 +53,4 @@ python3 tools/rtl.py --module operand_unit --out artifacts/rtl-integer-connected
 
 各次构建、综合统计、主机 Graph 结果及失败修复记录见 [验证记录](VALIDATION.md)。综合使用 generic cells，没有指定工艺库或 FPGA DSP；单元数不能称为等价 NAND2 门数、两个完整 SM 面积或实际频率。
 
-普通浮点现已接入 [浮点执行 RTL](RTL_FLOATING.md)。SFU/控制/访存执行、整数算术内部流水级、跨分区共享资源仲裁、完整 GPU RTL、实卡参数校准和 PTX 异步矩阵协议仍未完成。NVML 可见性不提供 CUDA 计算接口；整体目标见 [硬件计划](HARDWARE_PLAN.md)。
+普通浮点现已接入 [浮点执行 RTL](RTL_FLOATING.md)。SFU/部分控制与访存执行、整数算术内部流水级、异步后台服务次序、完整 GPU RTL、实卡参数校准和 PTX 异步矩阵协议仍未完成。NVML 可见性不提供 CUDA 计算接口；整体目标见 [硬件计划](HARDWARE_PLAN.md)。

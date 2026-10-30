@@ -56,35 +56,25 @@ void TimingMachine::commit_control(Inflight& entry) {
 }
 
 void TimingMachine::launch(Inflight& entry) {
-    auto& partition = sms_[entry.sm]->partitions[entry.partition];
     const auto& config = machine_.config_.pipeline;
     const auto pipe = entry.footprint.pipe;
-    if (pipe == Pipe::tensor && sms_[entry.sm]->tensor_owner) { ++stats_.unit_stalls; return; }
-    if (pipe == Pipe::async && !async_available(entry)) return;
-    const auto index = static_cast<size_t>(pipe);
-    if (partition.available[index] > cycle_) { ++stats_.unit_stalls; return; }
+    if (!execution_available(entry)) return;
     const uint32_t latency = pipe == Pipe::integer ? config.integer_latency :
         pipe == Pipe::floating ? config.float_latency : pipe == Pipe::special ? config.special_latency : 1;
-    const uint32_t interval = pipe == Pipe::integer ? config.integer_interval :
-        pipe == Pipe::floating ? config.float_interval : pipe == Pipe::special ? config.special_interval : 1;
-    if (entry.collector && !partition.registers->collector()->selected(*entry.collector)) {
-        ++stats_.unit_stalls; return;
-    }
     if ((pipe == Pipe::integer || pipe == Pipe::floating) && entry.collector) {
         const bool accepted = pipe == Pipe::integer ? launch_integer(entry) : launch_floating(entry);
-        if (!accepted) { ++stats_.unit_stalls; return; }
-        partition.available[index] = cycle_ + interval;
-        trace(entry, "execute"); return;
+        if (accepted) accept_execution(entry);
+        return;
     }
     if (entry.collector && entry.instruction.op >= Op::ELECT && entry.instruction.op <= Op::ACTIVEMASK) {
-        if (!launch_collective(entry)) { ++stats_.unit_stalls; return; }
-        partition.available[index] = cycle_ + interval; trace(entry, "execute"); return;
+        if (launch_collective(entry)) accept_execution(entry);
+        return;
     }
     take_collector(entry);
-    partition.available[index] = cycle_ + interval;
     if (pipe == Pipe::async) start_async(entry);
     else if (pipe == Pipe::tensor) {
-        sms_[entry.sm]->tensor_owner = entry.id; entry.tensor.emplace(); entry.stage = Stage::tensor;
+        if (!sms_[entry.sm]->execution_arbiter) sms_[entry.sm]->tensor_owner = entry.id;
+        entry.tensor.emplace(); entry.stage = Stage::tensor;
     } else if (pipe == Pipe::memory) { prepare_memory(entry); entry.stage = Stage::memory; }
     else {
         if (!entry.footprint.boundary) evaluate_scalar(entry);
@@ -95,11 +85,12 @@ void TimingMachine::launch(Inflight& entry) {
         }
         entry.stage = Stage::executing; entry.due = cycle_ + latency;
     }
-    trace(entry, "execute");
+    accept_execution(entry);
 }
 
 void TimingMachine::launch_ready() {
     dispatch_collector_operands();
+    arbitrate_execution();
     for (auto& [id, entry] : inflight_) {
         static_cast<void>(id);
         if (entry->stage != Stage::ready) continue;

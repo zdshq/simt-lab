@@ -41,8 +41,7 @@ bool TimingMachine::async_dispatch_eligible(const Inflight& entry) const {
     if (entry.footprint.pipe != Pipe::async || !entry.mask) return true;
     const auto& sm = *sms_[entry.sm];
     const bool copy_ready=sm.dma ? sm.dma->available() : sm.copies.size()<machine_.config_.async.commands;
-    return !sm.barrier_job && (entry.instruction.op != Op::CP_ASYNC ||
-                              copy_ready);
+    return entry.instruction.op != Op::CP_ASYNC || copy_ready;
 }
 
 void TimingMachine::dispatch_collector_operands() {
@@ -50,9 +49,11 @@ void TimingMachine::dispatch_collector_operands() {
         auto* collector = partition.registers ? partition.registers->collector() : nullptr;
         if (!collector) continue;
         uint32_t eligible = 0;
-        for (uint32_t index = 0; index < partition.collector_owners.size(); ++index)
-            if (partition.collector_owners[index] && async_dispatch_eligible(*inflight_.at(*partition.collector_owners[index])))
-                eligible |= 1u << index;
+        for (uint32_t index = 0; index < partition.collector_owners.size(); ++index) {
+            if (!partition.collector_owners[index]) continue;
+            if (async_dispatch_eligible(*inflight_.at(*partition.collector_owners[index]))) eligible |= 1u << index;
+            else if (collector->ready(index)) ++sm->async_stats.command_stalls;
+        }
         collector->dispatch(eligible);
     }
 }

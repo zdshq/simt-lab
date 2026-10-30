@@ -38,7 +38,8 @@ void TimingMachine::commit(Inflight& entry) {
     if (f.pipe == Pipe::async) commit_async_instruction(entry);
     if (f.pipe == Pipe::tensor) {
         advance_warp_pc(entry);
-        sms_[entry.sm]->tensor_owner.reset();
+        if (sms_[entry.sm]->execution_arbiter) sms_[entry.sm]->execution_arbiter->release_tensor(entry.partition);
+        else sms_[entry.sm]->tensor_owner.reset();
     }
     auto& scheduler=sms_[entry.sm]->partitions[entry.partition].scheduler;
     if (scheduler) scheduler->retire(timed.slot/sms_[entry.sm]->partitions.size(),f.boundary,f.pipe==Pipe::memory);
