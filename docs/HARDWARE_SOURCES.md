@@ -67,3 +67,6 @@ Tensor RTL 的四级 FP32 FMA、77 位对齐通路、完整次正规数和最近
 整数执行的 32 lane 组合 ALU、32 项结果 FIFO、逐项倒计数和 collector→整数→写回直连也是项目设计，见 [RTL_INTEGER.md](RTL_INTEGER.md)。默认四拍是模型配置，不代表乘法器内部已经划分四级，也没有根据公开微基准确认 NVIDIA 使用相同队列或数据通路。S2R/CVTA 实现的是自定义 ISA 的上下文和地址窗口，不是 NVIDIA 特殊寄存器、MMU 或 TLB 的完整实现。
 
 普通浮点执行实例化 32 份四级 FMA，转换/比较使用组合电路和四级对齐寄存器，32 项预约队列保存结果和额外延迟，见 [RTL_FLOATING.md](RTL_FLOATING.md)。四级最短时延与默认六拍均为项目设计；没有声称 NVIDIA 采用相同加乘复用、队列、端口数、转换流水划分或舍入精度实现。
+
+
+集合执行的 32 lane 跨 lane 多路选择、最低成员编码、布尔归约、单项结果寄存器及控制完成端口优先级是本项目硬件设计。谓词文件新增独立执行读口，三个端口共享同一数据和有效位。集合单元 55,423 cells/1,030 FF 位、32 槽谓词文件 68,814 cells/7,392 FF 位来自本次 Yosys/ABC 实际综合；不代表 NVIDIA 网络拓扑、真实延迟或具体工艺面积。实际 ISA 和主机 Graph 接入见 [RTL_COLLECTIVES.md](RTL_COLLECTIVES.md)。

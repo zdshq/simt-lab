@@ -43,7 +43,7 @@ void predicate_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedS
             const auto& s = file->stats();
             out << "{\"sm\":" << sm << ",\"partition\":" << part << ",\"backend\":\"rtl\",\"slots\":" << file->slots()
                 << ",\"data_bits\":" << file->slots()*224 << ",\"valid_bits\":" << file->slots()*7
-                << ",\"read_ports\":2,\"write_ports\":1,\"clocks\":" << s.clocks
+                << ",\"read_ports\":3,\"write_ports\":1,\"clocks\":" << s.clocks
                 << ",\"active_clocks\":" << s.predicate_active_clocks << ",\"guard_reads\":" << s.guard_reads
                 << ",\"source_reads\":" << s.predicate_source_reads << ",\"writes\":" << s.predicate_writes << '}';
         }
@@ -147,6 +147,24 @@ void floating_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedSm
     out << ']';
 }
 
+void collective_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedSm>>& sms) {
+    out << ",\"collective_units\":[";
+    bool first = true;
+    for (uint32_t sm = 0; sm < sms.size(); ++sm)
+        for (uint32_t part = 0; part < sms[sm]->partitions.size(); ++part) {
+            const auto& file = sms[sm]->partitions[part].registers;
+            auto* unit = file ? file->collective() : nullptr;
+            if (!unit) continue;
+            if (!first) out << ',';
+            first = false;
+            const auto& s = unit->collective_stats();
+            out << "{\"sm\":" << sm << ",\"partition\":" << part << ",\"backend\":\"rtl\",\"entries\":1,\"pipeline_stages\":1"
+                << ",\"occupancy\":" << unit->occupancy() << ",\"clocks\":" << s.clocks << ",\"active_clocks\":" << s.active_clocks
+                << ",\"vote_reads\":" << s.vote_reads << ",\"accepted\":" << s.accepted << ",\"completed\":" << s.completed << '}';
+        }
+    out << ']';
+}
+
 void cache_stats(std::ostream& out, const hw::CachePort& cache) {
     const auto& s = cache.stats(); const auto& config = cache.config();
     out << "{\"backend\":\"" << cache.name() << "\",\"clocks\":" << cache.cycle()
@@ -240,6 +258,7 @@ void TimingMachine::dump(std::ostream& out) const {
     collector_stats(out, sms_);
     integer_stats(out, sms_);
     floating_stats(out, sms_);
+    collective_stats(out, sms_);
     writeback_stats(out, sms_);
     dump_memory(out);
     dump_tensor(out);

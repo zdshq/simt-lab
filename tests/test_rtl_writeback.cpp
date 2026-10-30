@@ -2,6 +2,7 @@
 #include "simt/operand_collector.hpp"
 #include "simt/integer_execution.hpp"
 #include "simt/floating_execution.hpp"
+#include "simt/collective_execution.hpp"
 #include <iostream>
 #include <stdexcept>
 
@@ -168,7 +169,30 @@ void direct_predicate_route() {
     }
 }
 
+// Software control and the physical collective producer share completion port four with explicit backpressure.
+// 软件控制与物理集合生产端以显式反压共享完成端口四。
+void collective_and_control_collision() {
+    for (uint32_t partitions : {1,2,4,8}) {
+        auto file = make_register_file(partitions,4,4); auto& wb = *file->writeback(); auto& col = *file->collector();
+        const auto slot = file->slots()-1;
+        file->write_predicate(slot,6,UINT32_MAX,0x12345678); file->tick();
+        const auto software = wb.reserve({slot,4,0,0,0}); file->tick();
+        const auto result = wb.reserve({slot,4,1,3,UINT32_MAX});
+        const auto source = col.allocate(slot,{},4); file->tick(); col.collect(); col.dispatch(UINT32_MAX);
+        require(file->collective()->launch({source,result,31,0,6,0,UINT32_MAX,UINT32_MAX,UINT32_MAX,slot}),
+                "collective launch rejected");
+        file->probe_predicates(0,7,UINT32_MAX,0); file->tick();
+        require(!wb.complete(software,4,{}),"software stole collective completion port");
+        require(wb.completed(result),"collective completion unavailable"); wb.arbitrate();
+        RegisterVector expected{}; expected.fill(0x12345678);
+        require(wb.take(result) == expected,"collective result differs"); file->tick();
+        require(wb.complete(software,4,{}),"software completion failed to retry"); wb.arbitrate(); wb.take(software); file->tick();
+        require(wb.occupancy() == 0 && file->collective()->collective_stats().completed == 1,"collective ownership leaked");
+    }
+}
+
 void run_cases() {
+    collective_and_control_collision(); std::cout << "PASS collective physical predicate route and shared completion backpressure\n";
     direct_predicate_route(); std::cout << "PASS writeback direct predicate storage bypass masks age and ownership\n";
     connected_floating_execution_and_persistent_results(); std::cout << "PASS floating four-stage collector-to-FMA-to-WB-to-RF route across four geometries\n";
     connected_integer_execution_and_persistent_results(); std::cout << "PASS integer collector-to-ALU-to-WB-to-RF route across four geometries\n";

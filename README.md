@@ -80,8 +80,10 @@ python3 examples/host_graph.py
 
 [浮点执行 RTL](docs/RTL_FLOATING.md) 随 collector 后端启用，FADD/FMUL/FFMA 经过 32 份四级 FMA，FSETP/I2F/F2I 使用位电路和对齐寄存器。结果在发射前预约 32 项有限存储，再直接送入写回端口 1。默认六拍保留，额外延迟由硬件计数；配置小于四拍明确拒绝。完整模块已通过实际综合网表检查，SFU 和部分控制仍为 C++。
 
-[谓词存储 RTL](docs/RTL_PREDICATES.md) 随寄存器后端启用，每 warp 七个 32 位字、两个读取多路器和一个掩码写端口；P7 为常量。发射 guard 和 VOTE 读取实际电路输出，collector 模式的比较/ELECT 结果经写回总线直接进入存储，包含同拍旁路与槽复用清零。8/32 槽完成综合与实际网表验证，PC、集合运算和发射调度仍有 C++。
+[谓词存储 RTL](docs/RTL_PREDICATES.md) 随寄存器后端启用，每 warp 七个 32 位字、三个读取多路器和一个掩码写端口；P7 为常量。发射 guard 和 VOTE 读取实际电路输出，collector 模式的比较/ELECT 结果经写回总线直接进入存储，包含同拍旁路与槽复用清零。8/32 槽完成综合与实际网表验证，PC、集合运算和发射调度仍有 C++。
+
+新增 [跨 lane 集合 RTL](docs/RTL_COLLECTIVES.md)：SHFL/VOTE/ELECT/ACTIVEMASK 通过 collector 控制端口、独立谓词读口、选择/归约电路和单项结果寄存器直接进入写回。分支、重聚和 CTA 屏障控制仍有 C++；新单元已通过 RTL、sanitizer 和综合网表验证。
 
 新增 [4070 SUPER 访存实测](docs/MEMORY_CALIBRATION.md)：手写 CUDA/PTX 完成缓存依赖链、carveout、合并和 shared bank 实验，保存 118 组/590 个原始样本及 30 组实际模型探针。广播与冲突趋势有实测依据，但 shared 相对代价与模型不同；L2 容量辨识和 NCU sector 计数尚未完成，没有把这些曲线冒充完整硬件逆向。
 
-当前默认 Debug 运行 27 套件、279 项（277 通过，2 项未构建 RTL 而跳过）。此前联合 Release 构建通过 46 套件、852 项，寄存器/collector 等 RTL 的 Debug ASan/UBSan 构建通过 37 套件、558 项；访存微基准阶段未重跑全部 RTL 综合。构建范围、实际结果与各阶段失败记录见 [验证记录](docs/VALIDATION.md)。不同构建包含既有场景复跑，独立 RTL 检查另计，各套件按其目的选择后端，并非全部同时启用所有 RTL。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。
+当前默认 Debug 运行 27 套件、279 项（277 通过，2 项未构建 RTL 而跳过）。当前联合 Release 构建通过 48 套件、862 项，寄存器/collector 等 RTL 的 Debug ASan/UBSan 构建通过 37 套件、558 项；访存微基准阶段未重跑全部 RTL 综合。构建范围、实际结果与各阶段失败记录见 [验证记录](docs/VALIDATION.md)。不同构建包含既有场景复跑，独立 RTL 检查另计，各套件按其目的选择后端，并非全部同时启用所有 RTL。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。

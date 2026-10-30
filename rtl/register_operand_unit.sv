@@ -74,6 +74,14 @@ module register_operand_unit #(
     output wire floating_accept, floating_ready, floating_clock_enable, floating_output_valid, floating_protocol_error,
     output wire [3:0] floating_error,
     output wire [5:0] floating_occupancy,
+    input wire collective_launch,
+    input wire [4:0] collective_collector, collective_entry,
+    input wire [SLOT_BITS-1:0] collective_warp,
+    input wire [7:0] collective_opcode, collective_mode,
+    input wire [5:0] collective_ra, collective_rb,
+    input wire [31:0] collective_mask, collective_members, collective_group,
+    output wire collective_accept, collective_ready, collective_clock_enable, collective_output_valid,
+    output wire [3:0] collective_error,
     input wire wb_reserve_valid,
     input wire [SLOT_BITS-1:0] wb_reserve_warp,
     input wire [2:0] wb_reserve_pipe,
@@ -109,7 +117,7 @@ module register_operand_unit #(
     wire wb_predicate_valid;
     assign predicate_port_busy = wb_predicate_valid || predicate_write_valid;
     assign write_events = write_valid | wb_writes;
-    assign clock_enable = register_clock_enable || collector_clock_enable || wb_clock_enable || integer_clock_enable || floating_clock_enable;
+    assign clock_enable = register_clock_enable || collector_clock_enable || wb_clock_enable || integer_clock_enable || floating_clock_enable || collective_clock_enable;
     wire integer_selected = dispatch_valid[0] && !dispatch_accept[0] && dispatch_entries[4:0] == integer_collector;
     wire [3:0] integer_arithmetic_error;
     wire [4:0] integer_result_entry;
@@ -120,14 +128,34 @@ module register_operand_unit #(
     wire [4:0] floating_result_entry;
     wire [1023:0] floating_result_data;
     assign floating_error = floating_launch && !floating_selected ? 4'd6 : floating_arithmetic_error;
-    assign dispatch_accept_events = dispatch_accept | {5'b0,floating_accept,integer_accept};
-    wire [6:0] actual_complete_valid = wb_complete_valid | {5'b0,floating_output_valid,integer_output_valid};
-    wire [34:0] actual_complete_entries = {wb_complete_entries[34:10],
+    wire collective_selected = dispatch_valid[4] && !dispatch_accept[4] && dispatch_entries[24:20] == collective_collector;
+    wire [3:0] collective_arithmetic_error;
+    wire [4:0] collective_result_entry;
+    wire [1023:0] collective_result_data;
+    wire [31:0] execution_predicate_data;
+    assign collective_error = collective_launch && !collective_selected ? 4'd8 : collective_arithmetic_error;
+    assign dispatch_accept_events = dispatch_accept | {2'b0,collective_accept,2'b0,floating_accept,integer_accept};
+    wire [6:0] actual_complete_valid = wb_complete_valid | {2'b0,collective_output_valid,2'b0,floating_output_valid,integer_output_valid};
+    wire [34:0] actual_complete_entries = {wb_complete_entries[34:25],
+        collective_output_valid ? collective_result_entry : wb_complete_entries[24:20], wb_complete_entries[19:10],
         floating_output_valid ? floating_result_entry : wb_complete_entries[9:5],
         integer_output_valid ? integer_result_entry : wb_complete_entries[4:0]};
-    wire [7167:0] actual_complete_data = {wb_complete_data[7167:2048],
+    wire [7167:0] actual_complete_data = {wb_complete_data[7167:5120],
+        collective_output_valid ? collective_result_data : wb_complete_data[5119:4096], wb_complete_data[4095:2048],
         floating_output_valid ? floating_result_data : wb_complete_data[2047:1024],
         integer_output_valid ? integer_result_data : wb_complete_data[1023:0]};
+    // A dedicated predicate read port prevents issue queries from changing a waiting VOTE operand.
+    // 专用谓词读端口防止发射查询改变待执行 VOTE 的操作数。
+    collective_execute collectives (
+        .clk(clk), .reset(reset), .input_valid(collective_launch && collective_selected),
+        .input_ready(collective_ready), .input_accept(collective_accept), .input_error(collective_arithmetic_error),
+        .input_entry(collective_entry), .opcode(collective_opcode), .mode(collective_mode),
+        .ra(collective_ra), .rb(collective_rb), .mask(collective_mask), .members(collective_members),
+        .group_mask(collective_group), .predicates(execution_predicate_data),
+        .source_count(dispatch_counts[9:8]), .source_registers(dispatch_registers[89:72]), .source_data(dispatch_data[15359:12288]),
+        .output_valid(collective_output_valid), .output_ready(wb_complete_accept[4]),
+        .output_entry(collective_result_entry), .output_data(collective_result_data), .clock_enable(collective_clock_enable)
+    );
     // Integer operands and results stay on circuit wires; the host supplies only instruction metadata.
     // 整数操作数和结果始终走电路连线；宿主只提供指令元数据。
     integer_execute integers (
@@ -168,6 +196,8 @@ module register_operand_unit #(
         .predicate_query_slot(predicate_query_slot), .predicate_query_guard(predicate_query_guard),
         .predicate_query_source(predicate_query_source), .predicate_query_group(predicate_query_group),
         .predicate_participating(predicate_participating), .predicate_source_data(predicate_source_data),
+        .execution_predicate_slot(collective_warp), .execution_predicate_source(collective_ra[2:0]),
+        .execution_predicate_data(execution_predicate_data),
         .predicate_write_valid(wb_predicate_valid || predicate_write_valid),
         .predicate_write_slot(wb_predicate_valid ? wb_predicate_slot : predicate_write_slot),
         .predicate_write_register(wb_predicate_valid ? wb_predicate_register : predicate_write_register),

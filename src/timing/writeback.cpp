@@ -16,8 +16,8 @@ void TimingMachine::reserve_writeback(Inflight& entry) {
                                     f.destination.value_or(f.predicate.value_or(0)), f.write_mask});
 }
 
-// Software producers submit here; integer and floating RTL own their directly connected completion data.
-// 软件生产端在这里提交；整数与浮点 RTL 持有自己的直连完成数据。
+// Software producers submit here; integer, floating and collective RTL own their directly connected completion data.
+// 软件生产端在这里提交；整数、浮点与集合 RTL 持有自己的直连完成数据。
 void TimingMachine::submit_writeback(Inflight& entry) {
     if (!entry.completion || entry.result_submitted || entry.stage != Stage::writeback) return;
     const auto& f = entry.footprint;
@@ -50,7 +50,7 @@ void TimingMachine::prepare_writebacks() {
 // Software-only backends retain their existing poll/retire order; RTL polls all producers before arbitration.
 // 纯软件后端保留原有查询与退休顺序；RTL 在仲裁前查询全部生产端口。
 void TimingMachine::poll_result(Inflight& entry) {
-    if (entry.stage == Stage::integer || entry.stage == Stage::floating) poll_rtl_execution(entry);
+    if (entry.stage == Stage::integer || entry.stage == Stage::floating || entry.stage == Stage::collective) poll_rtl_execution(entry);
     if (entry.stage == Stage::memory) poll_memory(entry);
     if (entry.stage == Stage::tensor) poll_tensor(entry);
     if (entry.stage == Stage::executing && entry.due <= cycle_) entry.stage = Stage::writeback;

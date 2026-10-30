@@ -14,7 +14,7 @@ class PredicatePipeline(SimulationCase):
         self.assertTrue(hardware['predicate_files'])
         self.assertEqual(sum(unit['guard_reads'] for unit in hardware['predicate_files']), hardware['issued'])
         for unit in hardware['predicate_files']:
-            self.assertEqual((unit['backend'], unit['read_ports'], unit['write_ports']), ('rtl', 2, 1))
+            self.assertEqual((unit['backend'], unit['read_ports'], unit['write_ports']), ('rtl', 3, 1))
             self.assertEqual(unit['clocks'], hardware['cycles'])
             self.assertEqual(unit['data_bits'], unit['slots']*224)
             self.assertEqual(unit['valid_bits'], unit['slots']*7)

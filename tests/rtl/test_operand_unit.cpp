@@ -15,6 +15,7 @@ void commit(TestBench& b) {
     b.tick(); b.dut.write_valid = 0; b.dut.clear_slots = 0;
     b.dut.integer_launch = 0;
     b.dut.floating_launch = 0;
+    b.dut.collective_launch = 0; b.dut.predicate_write_valid = 0;
     b.dut.wb_reserve_valid = 0; b.dut.wb_complete_valid = 0; b.dut.wb_acknowledge = 0;
     b.dut.allocate_valid = 0; b.dut.release_entries = 0; b.dut.collect_enable = 0; b.dut.dispatch_enable = 0; b.dut.dispatch_accept = 0; b.dut.eval();
 }
@@ -191,7 +192,34 @@ void predicate_retirement_connection() {
     require(!b.dut.predicate_participating,"predicate warp address truncated");
 }
 
+// VOTE reads a dedicated predicate port while issue queries another warp; result data remains on wires.
+// VOTE 读取专用谓词端口，同时发射端查询另一个 warp；结果数据始终留在连线上。
+void collective_execution_connection() {
+    TestBench b("operand-unit-collective.vcd"); auto& d = b.dut; const auto slot = d.slot_count-1;
+    d.predicate_write_valid = 1; d.predicate_write_slot = slot; d.predicate_write_register = 6;
+    d.predicate_write_mask = UINT32_MAX; d.predicate_write_data = 0xa5a5a5a5; d.eval(); commit(b);
+    d.wb_reserve_warp = slot; d.wb_reserve_pipe = 4; d.wb_reserve_kind = 1;
+    d.wb_reserve_register = 3; d.wb_reserve_mask = UINT32_MAX; d.wb_reserve_valid = 1;
+    d.allocate_pipe = 4; d.allocate_warp = slot; d.allocate_count = 0; d.allocate_valid = 1; d.eval();
+    const uint32_t result = d.wb_reserve_index, source = d.allocate_index; commit(b);
+    d.collect_enable = 1; d.dispatch_enable = 1; d.dispatch_eligible = UINT32_MAX;
+    d.collective_launch = 1; d.collective_collector = source; d.collective_entry = result;
+    d.collective_opcode = 31; d.collective_mode = 0; d.collective_ra = 6; d.collective_warp = slot;
+    d.collective_mask = d.collective_members = d.collective_group = UINT32_MAX;
+    d.predicate_query_slot = 0; d.predicate_query_source = 0; d.predicate_query_group = UINT32_MAX; d.eval();
+    require(d.collective_accept && d.dispatch_accept_events == 16,"collective failed physical dispatch");
+    require(d.predicate_source_data == 0,"issue query must address independent warp"); commit(b);
+    require(d.occupancy == 0 && d.wb_completed_entries == (1u<<result),"collective result did not reach completion port");
+    for (uint32_t lane = 0; lane < 32; ++lane)
+        require(d.wb_retire_data[96+lane] == 0xa5a5a5a5,"dedicated predicate VOTE or direct result differs");
+    d.wb_acknowledge = 1u<<result; d.eval(); commit(b);
+    const auto reader = allocate(b,slot,3,4); commit(b); d.collect_enable = 1; d.query_entry = reader; d.eval();
+    for (uint32_t lane = 0; lane < 32; ++lane)
+        require(d.query_data[lane] == 0xa5a5a5a5,"collective physical RF result not retained");
+}
+
 void run_cases() {
+    run_case("connected collective dedicated predicate port and persistent RF route",collective_execution_connection);
     run_case("connected predicate retirement mask bypass and persistent storage",predicate_retirement_connection);
     run_case("connected floating four arithmetic stages, result delay and physical RF storage",floating_execution_connected_storage);
     run_case("connected integer collector last-source bypass and physical result storage",integer_execution_connected_storage);

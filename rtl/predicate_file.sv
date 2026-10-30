@@ -9,6 +9,9 @@ module predicate_file #(
     input wire [SLOT_BITS-1:0] query_slot,
     input wire [3:0] query_guard,
     input wire [2:0] query_source,
+    input wire [SLOT_BITS-1:0] execution_slot,
+    input wire [2:0] execution_source,
+    output wire [31:0] execution_data,
     input wire [31:0] query_group,
     output wire [31:0] participating, source_data,
     input wire write_valid,
@@ -26,24 +29,25 @@ module predicate_file #(
 
     // Clear precedes a masked write; forwarding uses the same order before the capturing edge.
     // 清零先于掩码写入；捕获边沿之前的旁路也遵循相同顺序。
-    function automatic [31:0] read_value(input [2:0] predicate);
+    function automatic [31:0] read_value(input [SLOT_BITS-1:0] slot, input [2:0] predicate);
         reg [ROW_BITS-1:0] row;
         reg [31:0] value;
         begin
-            row = ROW_BITS'(32'(query_slot)*7+32'(predicate));
+            row = ROW_BITS'(32'(slot)*7+32'(predicate));
             value = 0;
             if (predicate == 7) value = 32'hffffffff;
             else begin
-                if (!reset && !clear_slots[query_slot] && valid[row]) value = data[row];
-                if (write_accept && write_slot == query_slot && write_register == predicate)
+                if (!reset && !clear_slots[slot] && valid[row]) value = data[row];
+                if (write_accept && write_slot == slot && write_register == predicate)
                     value = (value & ~write_mask) | (write_data & write_mask);
             end
             read_value = value;
         end
     endfunction
-    wire [31:0] guard_data = read_value(query_guard[2:0]);
+    wire [31:0] guard_data = read_value(query_slot,query_guard[2:0]);
     assign participating = reset ? 32'b0 : query_group & (query_guard[3] ? ~guard_data : guard_data);
-    assign source_data = read_value(query_source);
+    assign source_data = read_value(query_slot,query_source);
+    assign execution_data = read_value(execution_slot,execution_source);
 
     genvar row;
     generate for (row = 0; row < SLOTS*7; row = row+1) begin: words

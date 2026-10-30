@@ -15,8 +15,9 @@ MODULES = {'cache': ('sector_cache', 'test_cache.cpp', ['sector_sram.sv', 'cache
            'scoreboard': ('lane_scoreboard', 'test_scoreboard.cpp', ['lane_scoreboard.sv']),
            'operand_unit': ('register_operand_unit', 'test_operand_unit.cpp',
                             ['register_bank.sv', 'predicate_file.sv', 'register_file.sv', 'collector_dispatch.sv', 'collector_payload.sv', 'operand_collector.sv',
-                             'integer_lane.sv', 'integer_vector.sv', 'integer_execute.sv', 'fp32_fma.sv', 'fp32_misc.sv', 'fp32_scalar_lane.sv', 'floating_execute.sv',
+                             'integer_lane.sv', 'integer_vector.sv', 'integer_execute.sv', 'fp32_fma.sv', 'fp32_misc.sv', 'fp32_scalar_lane.sv', 'floating_execute.sv', 'collective_execute.sv',
                              'writeback_payload.sv', 'writeback_unit.sv', 'register_operand_unit.sv']),
+           'collective': ('collective_execute', 'test_collective.cpp', ['collective_execute.sv']),
            'floating': ('floating_execute', 'test_floating.cpp', ['fp32_fma.sv', 'fp32_misc.sv', 'fp32_scalar_lane.sv', 'floating_execute.sv']),
            'integer': ('integer_execute', 'test_integer.cpp', ['integer_lane.sv', 'integer_vector.sv', 'integer_execute.sv']),
            'writeback': ('writeback_unit', 'test_writeback.cpp', ['writeback_payload.sv', 'writeback_unit.sv']),
@@ -227,6 +228,12 @@ def save_report(options, label, results):
                   None if options.synth else environment())
     results['_tool'] = {'executable': executable, 'version': version.strip()}
     (options.out/(label+'.json')).write_text(json.dumps(results, indent=2)+'\n')
+    # Preserve per-module evidence when several invocations share one output directory.
+    # 多次调用共用输出目录时，保留各模块自己的证据。
+    for name, record in results.items():
+        if name != '_tool':
+            (options.out/name/(label+'-manifest.json')).write_text(
+                json.dumps({name: record, '_tool': results['_tool']}, indent=2)+'\n')
 
 
 def parse_options():
@@ -265,6 +272,8 @@ def run_application():
     # A failed rerun must not leave a previous success manifest masquerading as the current result.
     # 复跑失败时不能留下此前成功清单，让它冒充本次结果。
     (options.out/(label+'.json')).unlink(missing_ok=True)
+    for name in names:
+        (options.out/name/(label+'-manifest.json')).unlink(missing_ok=True)
     results = {name: action(options, name) for name in names}
     save_report(options, label, results)
 

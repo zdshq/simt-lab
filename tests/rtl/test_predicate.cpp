@@ -70,8 +70,8 @@ void read_only_constant_and_empty_write() {
     require(!b.dut.source_data,"empty write changed data");
 }
 
-// Reference words update only at accepted writes; compare both combinational ports before and after capture.
-// 参考字仅在已接受写入时更新；在捕获前后分别核对两个组合读取端口。
+// Reference words update only at accepted writes; compare all three combinational ports before and after capture.
+// 参考字仅在已接受写入时更新；在捕获前后分别核对三个组合读取端口。
 void check_query(TestBench& b, const Reference& values, std::mt19937& random) {
     const uint32_t slot = random()%slots, guard = random()%16, source = random()%8, group = random();
     query(b,slot,guard,source,group);
@@ -79,6 +79,10 @@ void check_query(TestBench& b, const Reference& values, std::mt19937& random) {
     if (guard&8) active = ~active;
     require(b.dut.participating == (active&group),"random guard/group differs");
     require(b.dut.source_data == (source == 7 ? UINT32_MAX : values[slot][source]),"random source differs");
+    const uint32_t execution_slot = random()%slots, execution_source = random()%8;
+    b.dut.execution_slot = execution_slot; b.dut.execution_source = execution_source; b.dut.eval();
+    require(b.dut.execution_data == (execution_source == 7 ? UINT32_MAX : values[execution_slot][execution_source]),
+            "independent execution predicate port differs");
 }
 void randomized_reference() {
     TestBench b(nullptr); Reference values{}; std::mt19937 random(20261031);

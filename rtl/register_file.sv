@@ -22,6 +22,9 @@ module register_file #(
     input wire [2:0] predicate_query_source, predicate_write_register,
     input wire [31:0] predicate_query_group, predicate_write_mask, predicate_write_data,
     input wire predicate_write_valid,
+    input wire [SLOT_BITS-1:0] execution_predicate_slot,
+    input wire [2:0] execution_predicate_source,
+    output wire [31:0] execution_predicate_data,
     output wire [31:0] predicate_participating, predicate_source_data,
     output wire predicate_write_event, predicate_write_error, predicate_clock_enable
 );
@@ -41,6 +44,7 @@ module register_file #(
         .clk(storage_clock), .reset(reset), .clear_slots(clear_slots),
         .query_slot(predicate_query_slot), .query_guard(predicate_query_guard), .query_source(predicate_query_source),
         .query_group(predicate_query_group), .participating(predicate_participating), .source_data(predicate_source_data),
+        .execution_slot(execution_predicate_slot), .execution_source(execution_predicate_source), .execution_data(execution_predicate_data),
         .write_valid(predicate_write_valid), .write_slot(predicate_write_slot), .write_register(predicate_write_register),
         .write_mask(predicate_write_mask), .write_data(predicate_write_data), .write_accept(predicate_write_event),
         .write_error(predicate_write_error), .clock_enable(predicate_clock_enable)

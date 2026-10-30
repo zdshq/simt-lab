@@ -445,6 +445,21 @@ python3 tools/kernel_perf/perf.py run --config tools/kernel_perf/configs/memory-
 - 最终工具复跑 `memory-4070-final-smoke`：46 组/92 个原生样本及 30 组模型探针通过；另检查超时保留部分日志、缺少样本明确失败。它不与主实验的 590 样本合并统计。
 - 结果审计核对了冻结源码和两个可执行文件的 SHA-256，原始样本/模型结果和本次实际编译代码一致。后续增加测试注册、文档、工具日志透传和采集结果完整性检查，没有改动已测 CUDA/C++ kernel 源码。完整硬件目标保持 active。
 
+## 阶段 16：跨 lane 集合执行与第三谓词读口（2026-10-30）
+
+从 `a61020f` 接续，SHFL/VOTE/ELECT/ACTIVEMASK 在 collector 模式下改由真实 RTL 计算，控制端口与写回直连。没有回退到 C++ 求值。结构、命令和精确边界见 [RTL_COLLECTIVES.md](RTL_COLLECTIVES.md)。
+
+- 默认 Debug：27 套件/279 项，277 通过、2 跳过，9.42 秒。联合 Release 的 Tensor/cache/scoreboard/register 四项构建选项全开：48 套件/862 项全部通过（790 Python、72 C++），25.68 秒。执行时是否使用每个后端仍由各套件决定，不声称每项测试都同时启用全部后端。
+- 受影响独立电路共 21 项（集合 4、谓词 4、RF 5、直连顶层 8），RTL 和 Debug ASan/UBSan 都通过。独立场景总集合由原 76 变为 81，本次没有复跑所有未受影响模块。未重跑完整联合 C++ 后端 sanitizer 套件，不能把独立电路 sanitizer 冒充该项证据。
+- 集合四项中包含 3,000 组功能 ISA 差分、5,000 拍独立反压参考、非法成员/索引、空参与、重置和同拍替换。谓词 12,000 拍随机参考扩展为同时核对第三独立读口；直连顶层新增一项将发射与执行地址置于不同 warp。
+- 集合单元实际综合 55,423 generic cells/1,030 FF 位，32 槽三读口谓词文件 68,814 cells/7,392 FF 位；各自的相同 4 项测试在实际综合网表通过。完整联合顶层没有重新做门级综合，不声称已得到整 SM 面积。
+- 初次 CMake 接线把执行谓词端口也传给了 writeback 实例，编译明确拒绝；修正连接后通过。第一次独立工具调用同时给出 --synth/--gate-sim，被参数检查拒绝；随后按规定分开执行。
+- 首轮联合测试有两项新夹具错误：VOTE 期望误用了递增向量辅助函数，另一测试向 VOTE/ELECT 传了不适用的编码字段。按广播语义和 ISA 字段修正测试，保留原失败日志后，全 48 套件重跑通过；没有为通过测试修改运算或错误语义。
+- `tools/rtl.py` 原聚合清单会被同一输出目录的下一模块覆盖。新增各模块独立清单，并在该模块复跑前删除旧清单。为补齐被覆盖的原证据，保留已有记录并复跑对应的谓词/RF/集合小模块。最终 12 份清单的 RTL 源码及两份实际网表哈希均核对一致，见 `artifacts/rtl-collective-final/evidence-audit.json`。
+- 五个可选后端同时运行四类主机 Graph 各两次，数值独立校验通过，设备累计 64,500 模型拍。每次规约 75 条、小 Transformer 32 条集合指令来自真实 RTL 接收计数；向量/GEMM 不含这四类指令。结果在 `artifacts/rtl-collective-host/`。
+- 监控会话两次规约 Graph 通过；原版 nvidia-smi 经用户级入口与桥接层同时显示实卡及模拟器，实际分配 7 MiB、释放 0 MiB、退出消失。证据 `artifacts/rtl-collective-final/{allocated,freed,exited}.csv`；未变成 CUDA 或 PCIe 枚举。
+- 完整目标仍 active：SFU、分支/重聚/CTA 屏障控制、其余访存电路、整机 RTL 接线、参数辨识与最终硬件审计未完成。
+
 ## 明确边界
 
 - 功能模式和时序模式都在 CPU 上执行；不会利用 RTX 4070 SUPER 来获得模拟 GPU 的实际吞吐。

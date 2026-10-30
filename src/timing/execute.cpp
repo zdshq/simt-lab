@@ -69,6 +69,10 @@ void TimingMachine::launch(Inflight& entry) {
         partition.available[index] = cycle_ + interval;
         trace(entry, "execute"); return;
     }
+    if (entry.collector && entry.instruction.op >= Op::ELECT && entry.instruction.op <= Op::ACTIVEMASK) {
+        if (!launch_collective(entry)) { ++stats_.unit_stalls; return; }
+        partition.available[index] = cycle_ + interval; trace(entry, "execute"); return;
+    }
     take_collector(entry);
     partition.available[index] = cycle_ + interval;
     if (pipe == Pipe::async) start_async(entry);

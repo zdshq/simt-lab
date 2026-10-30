@@ -11,6 +11,7 @@ public:
         dut_.port_groups = banks;
         dut_.clk = 0; dut_.reset = 1; dut_.read_valid = 0; dut_.write_valid = 0; dut_.clear_slots = 0;
         dut_.predicate_write_valid = 0;
+        if constexpr (requires { dut_.execution_predicate_slot; }) { dut_.execution_predicate_slot = 0; dut_.execution_predicate_source = 7; }
         edge(); dut_.reset = 0; dut_.eval();
     }
     ~RtlRegisterFile() override { dut_.final(); }
