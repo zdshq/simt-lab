@@ -26,8 +26,8 @@ BarrierAction action(Op op) {
 bool TimingMachine::async_available(const Inflight& entry) {
     if (!entry.mask) return true;
     auto& sm = *sms_[entry.sm];
-    if (sm.transaction_retiring) { ++sm.async_stats.barrier_stalls; return false; }
-    if (sm.barrier_job) { ++sm.async_stats.barrier_stalls; return false; }
+    const bool blocked=sm.async_service ? !sm.async_service->foreground_ready() : bool(sm.barrier_job);
+    if (blocked) { ++sm.async_stats.barrier_stalls; return false; }
     const bool copy_full = sm.dma ? !sm.dma->available() : sm.copies.size() == machine_.config_.async.commands;
     if (entry.instruction.op == Op::CP_ASYNC && copy_full) {
         ++sm.async_stats.command_stalls; return false;
@@ -76,7 +76,8 @@ void TimingMachine::start_async(Inflight& entry) {
     if (i.op == Op::MB_INIT) reserve_barrier_record(entry, address);
     BarrierJob job{action(i.op)};
     job.instruction = entry.id; job.cta = entry.cta; job.address = address; job.remaining = entry.mask;
-    job.due = cycle_ + machine_.config_.async.barrier_latency;
+    if (sms_[entry.sm]->async_service) sms_[entry.sm]->async_service->accept_instruction(entry.id,entry.cta);
+    else job.due = cycle_ + machine_.config_.async.barrier_latency;
     sms_[entry.sm]->barrier_job = job; ++sms_[entry.sm]->async_stats.barrier_requests;
     entry.stage = Stage::async;
 }

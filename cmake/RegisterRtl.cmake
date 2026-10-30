@@ -43,10 +43,12 @@ function(simt_enable_register_rtl)
         VERILATOR_ARGS -Wall --unroll-count 4096)
     verilate(simt_register_circuit TOP_MODULE instruction_fetch PREFIX Vsimt_instruction_fetch
         SOURCES rtl/instruction_cache.sv rtl/instruction_fetch.sv VERILATOR_ARGS -Wall --unroll-count 4096)
+    verilate(simt_register_circuit TOP_MODULE async_service PREFIX Vsimt_async_service
+        SOURCES rtl/async_service.sv VERILATOR_ARGS -Wall --unroll-count 4096)
     target_compile_options(simt_register_circuit PRIVATE ${VERILATOR_CFLAGS})
     get_target_property(circuit_includes simt_register_circuit INTERFACE_INCLUDE_DIRECTORIES)
     set_property(TARGET simt_register_circuit PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${circuit_includes})
-    target_sources(simt_hardware PRIVATE src/rtl/register_file.cpp src/rtl/operand_collector.cpp src/rtl/warp_control.cpp src/rtl/warp_frontend.cpp src/rtl/cta_barrier.cpp src/rtl/transaction_table.cpp src/rtl/dma_engine.cpp src/rtl/warp_scheduler.cpp src/rtl/execution_arbiter.cpp src/rtl/instruction_decoder.cpp src/rtl/instruction_fetch.cpp)
+    target_sources(simt_hardware PRIVATE src/rtl/register_file.cpp src/rtl/operand_collector.cpp src/rtl/warp_control.cpp src/rtl/warp_frontend.cpp src/rtl/cta_barrier.cpp src/rtl/transaction_table.cpp src/rtl/dma_engine.cpp src/rtl/warp_scheduler.cpp src/rtl/execution_arbiter.cpp src/rtl/instruction_decoder.cpp src/rtl/instruction_fetch.cpp src/rtl/async_service.cpp)
     target_compile_definitions(simt_hardware PRIVATE SIMT_HAS_REGISTER_RTL=1)
     target_link_libraries(simt_hardware PRIVATE simt_register_circuit)
 endfunction()

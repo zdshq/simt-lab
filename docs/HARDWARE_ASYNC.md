@@ -2,7 +2,7 @@
 
 `simt-run --timing` 现已执行全部五条自定义异步指令：`MB_INIT`、`MB_EXPECT`、`MB_ARRIVE`、`MB_WAIT`、`CP_ASYNC`。global→shared 的每个载荷字节都经过缓存层次和 shared bank 端口；源数据不在指令发射时用宿主内存快照代替。
 
-默认仍使用下述 C++ 时序后端。启用 `--register-rtl --collector-rtl` 已将事务表、查找与计数、发布握手、CTA 回收及前端阶段等待/唤醒换为 [实际 RTL](RTL_TRANSACTION_TABLE.md)，DMA 的命令、分片、返回载荷和完成资格也已接入 [64/64 槽电路](RTL_DMA.md)。外部票据桥、返回响应选择与 shared bank 服务仍由 C++ 推进。下方早期实验保留原参数和结果，不能作为当前 RTL 的周期数据。
+默认仍使用下述 C++ 时序后端。启用 `--register-rtl --collector-rtl` 已将事务表、查找与计数、发布握手、CTA 回收及前端阶段等待/唤醒换为 [实际 RTL](RTL_TRANSACTION_TABLE.md)，DMA 的命令、分片、返回载荷和完成资格也已接入 [64/64 槽电路](RTL_DMA.md)。服务归属、等待计数和 DMA/回收/指令优先级已由 [异步服务 RTL](RTL_ASYNC_SERVICE.md) 接管；外部票据桥、返回响应选择、回收资格生成与 shared bank 服务仍由 C++ 推进。下方早期实验保留原参数和结果，不能作为当前 RTL 的周期数据。
 
 这是有限资源的研究型 DMA/事务屏障模型，不是 NVIDIA 原电路复刻。它在 CPU 上模拟数据与时钟，模型周期不代表 RTX 4070 SUPER、SM100 或 SM120 的实际延迟。
 

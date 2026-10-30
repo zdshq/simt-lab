@@ -2,6 +2,23 @@
 
 namespace simt {
 namespace {
+// Ownership and delay are read from the circuit; accepted/completed events are sampled at its edge.
+// 所有权和延迟直接读取电路；接受与完成事件在电路边沿采样。
+void service_statistics(std::ostream& out,const hw::AsyncService* unit,uint32_t limit) {
+    out << ",\"service_backend\":\"" << (unit ? "rtl" : "cpp") << '"';
+    if (!unit) return;
+    const auto state=unit->read(); const auto& s=unit->stats();
+    out << ",\"service\":{\"physical_ctas\":64,\"cta_limit\":" << limit << ",\"storage_bits\":143"
+        << ",\"owner_kind\":" << static_cast<uint32_t>(state.kind) << ",\"owner_id\":" << state.id
+        << ",\"owner_cta\":" << state.cta << ",\"owner_slot\":" << state.slot << ",\"cursor\":" << state.cursor
+        << ",\"remaining\":" << state.remaining << ",\"ready\":" << state.ready
+        << ",\"retirement_done\":" << state.retirement_done << ",\"pending\":" << state.pending
+        << ",\"clocks\":" << s.clocks << ",\"active_clocks\":" << s.active_clocks
+        << ",\"retries\":" << s.retries << ",\"retirement_acks\":" << s.retirement_acks
+        << ",\"accepted\":[" << s.accepted[0] << ',' << s.accepted[1] << ',' << s.accepted[2]
+        << "],\"completed\":[" << s.completed[0] << ',' << s.completed[1] << ',' << s.completed[2] << "]}";
+}
+
 // DMA counters come from clocked port events, not a software mirror of fragment progress.
 // DMA 计数来自时钟采样的端口事件，不使用片段进度的软件镜像。
 void dma_statistics(std::ostream& out, const hw::DmaEngine* unit) {
@@ -62,6 +79,7 @@ void TimingMachine::dump_async(std::ostream& out) const {
             << ",\"wait_queries\":" << s.wait_queries
             << ",\"phase_completions\":" << s.phase_completions;
         transaction_statistics(out,sms_[sm]->transactions.get());
+        service_statistics(out,sms_[sm]->async_service.get(),sms_[sm]->cta_owners.size());
         dma_statistics(out,sms_[sm]->dma.get()); out << '}';
     }
     out << ']';

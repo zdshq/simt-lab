@@ -23,6 +23,18 @@ class TransactionRtl:
                 self.assertEqual(table['phases'], sm['phase_completions'])
                 self.assertEqual(table['errors'], 0)
                 self.assertLessEqual(table['active_clocks'], table['clocks'])
+                self.assertEqual(sm['service_backend'], 'rtl')
+                service = sm['service']
+                self.assertEqual((service['physical_ctas'], service['storage_bits']), (64, 143))
+                self.assertEqual(service['accepted'], service['completed'])
+                foreground, dma_jobs, retired = service['accepted']
+                self.assertEqual(foreground + dma_jobs, sm['barrier_requests'])
+                self.assertEqual(dma_jobs, sm['completed'])
+                self.assertEqual(retired, service['retirement_acks'])
+                self.assertEqual(sum(service['accepted']) + service['retries'], table['commands'])
+                self.assertEqual(service['clocks'], result['hardware']['cycles'])
+                self.assertLessEqual(service['active_clocks'], service['clocks'])
+                self.assertEqual((service['owner_kind'], service['remaining'], service['pending']), (0, 0, 0))
                 self.assertEqual(sm['dma_backend'], 'rtl')
                 dma = sm['dma_engine']
                 self.assertEqual((dma['command_slots'], dma['fragment_slots'], dma['payload_bits']), (64, 64, 65536))

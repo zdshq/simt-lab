@@ -93,6 +93,6 @@ python3 artifacts/rtl-dma-final/build_adapter.py
 
 四类完整主机负载各运行两次 Graph，另两次监控 Transformer；Tensor、cache、scoreboard、register、collector 同时启用。Transformer 每次由 DMA RTL 实际分配 17 个片段，读写确认各 2176 B；两次 kernel 为 5735/5741 模型周期，上一事务表阶段为 5730/5738。输出字节逐份比较，周期和 trace 不要求与软件 DMA 相同。监控仍是 [NVML 管理面](NVIDIA_SMI.md)，没有增加 CUDA/PCIe 兼容。
 
-最终检查、网表仿真及失败记录见 [VALIDATION.md](VALIDATION.md)，源码/网表/二进制审计位于 `artifacts/rtl-dma-final/evidence-audit.json`。取指译码、异步后台服务次序、SFU、剩余访存电路、整机 RTL、实卡参数辨识和 PTX 异步矩阵协议仍按 [完整计划](HARDWARE_PLAN.md) 推进。
+最终检查、网表仿真及失败记录见 [VALIDATION.md](VALIDATION.md)，源码/网表/二进制审计位于 `artifacts/rtl-dma-final/evidence-audit.json`。取指/译码和 [异步服务仲裁](RTL_ASYNC_SERVICE.md) 后续已有 RTL；外部返回路由、SFU、剩余访存电路、整机 RTL、实卡参数辨识和 PTX 异步矩阵协议仍按 [完整计划](HARDWARE_PLAN.md) 推进。
 
 网表仿真使用原始 `gates.v`，工具从其端口元数据生成只含直接连线的 `dma_gate_wrapper.sv`。这样地址总线成为子模块内部信号，可用 Verilator 的 `split_var` 分析不同输出位之间的依赖；没有改变逻辑、增加时钟或关闭 UNOPT/UNOPTFLAT 告警。网表与包装文件的哈希均保存在验收审计中。

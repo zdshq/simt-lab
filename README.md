@@ -94,7 +94,7 @@ python3 examples/host_graph.py
 
 新增 [跨 warp 调度 RTL](docs/RTL_WARP_SCHEDULER.md)：每分区 32 个物理槽、325 位持久状态，每拍最多检查一个候选。轮转/固定优先级、拒绝重试、在途数及边界/访存串行化由电路决定，退休和 CTA 释放经过实际时钟；指令后备存储与前端实例间信号路由仍有 C++，跨分区执行准入现由下述仲裁电路提供。完整实例综合为 7,625 generic cells / 325 FF 位，五项独立 RTL、sanitizer 与实际网表检查通过。
 
-新增 [跨分区执行仲裁 RTL](docs/RTL_EXECUTION_ARBITER.md)：每 SM 八个物理分区、七类端口，使用硬件轮转选择 Tensor/异步候选，并保存 Tensor 归属与 24 个发射间隔计数器。完整实例为 6,360 generic cells / 778 FF 位；异步后台服务次序、指令后备存储和部分执行/访存仍有 C++。
+新增 [跨分区执行仲裁 RTL](docs/RTL_EXECUTION_ARBITER.md)：每 SM 八个物理分区、七类端口，使用硬件轮转选择 Tensor/异步候选，并保存 Tensor 归属与 24 个发射间隔计数器。完整实例为 6,360 generic cells / 778 FF 位；异步后台归属与次序已由下述服务电路接管，存储传输连接和部分执行/访存仍有 C++。
 
 新增 [原始机器码与操作数译码 RTL](docs/RTL_INSTRUCTION_DECODER.md)：每分区由原始 128 位指令驱动字段、合法位、执行类别与最多三个源请求，重复源合并和跨 lane 掩码由电路产生。实际执行不读取宿主预解码字段，完整综合为 1,941 个组合单元、零触发器；指令后备存储和前端实例间信号路由仍有 C++。
 
@@ -102,4 +102,6 @@ python3 examples/host_graph.py
 
 新增 [指令缓存与取指 RTL](docs/RTL_INSTRUCTION_FETCH.md)：每 SM 八个独立 4 KiB 指令缓存，实际数据/tag 同步读取，四字整行补充和单通道轮转均由电路完成；发射使用缓存返回的原始机器字。完整实例为 564,062 generic cells / 276,530 FF 位，普通 RTL、sanitizer 和综合网表验证通过。补充请求现已接入 [共享 L2/DRAM](docs/INSTRUCTION_MEMORY_HIERARCHY.md)，实际竞争请求容量与带宽；启动私有代码映射和指令缓存目前不跨 kernel 复用，传输连接与 DRAM 仍为 C++，尚无完整 SM 顶层。
 
-当前默认 Debug 运行 27 套件、279 项（277 通过，2 项未构建 RTL 而跳过）。当前联合 Release 构建通过 64 套件、974 项；本阶段另通过并行查询/完整 scoreboard 两模块共八项和实际适配器七项独立 ASan/UBSan 检查，未重跑完整联合 sanitizer 或整机综合。构建范围、实际结果与各阶段失败记录见 [验证记录](docs/VALIDATION.md)。不同构建包含既有场景复跑，独立 RTL 检查另计，各套件按其目的选择后端，并非全部同时启用所有 RTL。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。
+新增 [异步服务 RTL](docs/RTL_ASYNC_SERVICE.md)：每 SM 用 143 位触发器保存事务表归属、等待计数、回收完成与轮转游标，实际选择 DMA 完成、CTA 回收和前台指令；完整 64 槽选择电路综合为 5,892 generic cells。回收资格生成、shared bank 和外部票据路由仍有 C++。
+
+当前默认 Debug 运行 28 套件、284 项（282 通过，2 项未构建 RTL 而跳过）。当前联合 Release 构建通过 69 套件、999 项；本阶段另通过异步服务四项独立 RTL/sanitizer/综合网表检查及实际适配器三项 sanitizer 检查，未重跑完整联合 sanitizer 或整机综合。实际结果与各阶段失败记录见 [验证记录](docs/VALIDATION.md)。不同构建包含既有场景复跑，各套件按其目的选择后端，并非全部同时启用所有 RTL。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。

@@ -892,3 +892,42 @@ python3 artifacts/rtl-fetch-hierarchy-final/audit.py
 另有活监控会话的两次 Transformer Graph 重放。普通 nvidia-smi 再次查询真实显卡与模拟器、7 MiB 分配、释放归零和退出移除；直接系统二进制仍只显示实卡。管理面范围未变，不代表 CUDA/PCIe 枚举。
 
 审计记录四份未改变的电路证据、新适配器 sanitizer、十份主机报告、359 个源码/模板/规范文件和五个联合二进制，输出为 `artifacts/rtl-fetch-hierarchy-final/evidence-audit.json`。完整硬件目标仍在进行：存储连接和后台服务仲裁 RTL、其余执行/访存、整机顶层、实卡参数校准、PTX 异步矩阵协议和最终验收仍未完成；启动间代码映射复用也尚未实现。
+
+## 异步服务归属、延迟和回收仲裁 RTL（基线 0a5ed59）
+
+新增 [异步服务电路](RTL_ASYNC_SERVICE.md)，由真实寄存器保存单事务端口的所有者、32 位等待计数、回收完成及轮转游标。DMA 完成、CTA 回收、新异步指令的优先选择进入电路；前台多地址等待的延迟重装也进入电路。默认 C++ 后端保持原行为，collector RTL 路径删除原 `transaction_retiring` 和 `transaction_released` 状态，不再使用 `BarrierJob.due` 判断控制延迟。
+
+| 验证范围 | 实际结果 | 证据 |
+|---|---|---|
+| 联合 Release 全量 | 69 套件、999 项通过：867 Python / 132 C++ | `artifacts/rtl-async-service-final/joint-ctest.log`、`joint-tests.log` |
+| 普通 Debug 全量 | 28 套件、284 项：282 通过 / 2 条件跳过 | 同目录 `default-ctest.log`、`default-tests.log` |
+| 独立完整控制模块 | 4 项分别通过 RTL、ASan/UBSan 和实际综合网表 | `async_service/*-manifest.json`、`artifacts/rtl-async-service-sanitize/async_service/simulation-manifest.json` |
+| 实际适配器与完整电路 | 3 项 ASan/UBSan 通过 | `artifacts/rtl-async-service-adapter-sanitize/manifest.json` |
+| 初次接入的受影响回归 | 6 个异步/事务/DMA 套件通过 | `initial-ctest.log` |
+
+四项电路检查包含完整 64 槽两轮回收、最高位 ID/CTA/槽、表反压、DMA 优先、回收确认保持、同拍交接、等待重装、非法事件不提交、在途复位和 2,000 个随机任务。随机参考使用独立顺序队列及绝对时间戳，未复制 RTL 的游标搜索和倒计数。适配器检查显式时钟、查询快照、接受后引脚保持、额度、错误撤回及实例隔离。原异步整机检查新增真实服务状态与表命令守恒断言，覆盖多地址等待、不同延迟、满 DMA 池、CTA 复用、错误及恢复。
+
+Yosys/ABC 实际得到 **5,892 generic cells / 143 FF 位**，与设计状态位数相符，没有 RAM。四项驱动再次执行这个网表并全部通过；网表 SHA-256 为 `a140971dd3d2251145c3c3a33228eba92f8f6d42c6e362ce567b6f674ded445e`。计数只对应独立服务控制器，不能相加成未经整机综合验证的 GPU 面积。此次未重跑完整联合 sanitizer，也未执行整机综合。
+
+```sh
+cmake --build build-cache-rtl -j4
+ctest --test-dir build-cache-rtl --output-on-failure -j4
+cmake --build build -j4
+ctest --test-dir build --output-on-failure -j4
+python3 tools/rtl.py --module async_service --out artifacts/rtl-async-service-final
+python3 tools/rtl.py --module async_service --synth --out artifacts/rtl-async-service-final
+python3 tools/rtl.py --module async_service --gate-sim --out artifacts/rtl-async-service-final
+python3 tools/rtl.py --build build-cache-sanitize --module async_service --out artifacts/rtl-async-service-sanitize
+python3 artifacts/rtl-async-service-final/build_adapter.py
+python3 examples/hardware_host.py --build build-cache-rtl \
+  --register-rtl --collector-rtl --scoreboard-rtl --cache-rtl --tensor-rtl \
+  --out artifacts/rtl-async-service-host
+python3 artifacts/rtl-async-service-final/check_monitor.py
+python3 artifacts/rtl-async-service-final/audit.py
+```
+
+四类主机负载各重放两次，加监控会话两次 Transformer Graph，共十份实际报告通过独立数值参考与服务事件守恒检查；全部下载与上一阶段逐字节一致。两次 kernel 模型周期分别为向量 4846/5283、规约 4020/4306、GEMM 4359/4371、Transformer 20514/20798。本组样本周期未变，不代表所有可能负载逐拍等价，也不是实卡性能。
+
+普通 nvidia-smi 实际显示真实 4070 SUPER 和活模拟会话，7 MiB 分配、释放归零与退出移除通过；直接系统二进制只显示实卡。NVML 接入不是 CUDA/PCIe 设备枚举，Tensor 仍是项目自己的 4×4 阵列，不能将其描述为完整还原 NVIDIA Tensor Core。
+
+审计记录四份电路清单、实际网表、一份适配器 sanitizer 清单、十份主机报告、366 个源码/模板/规范文件与三个联合二进制，位于 `artifacts/rtl-async-service-final/evidence-audit.json`。剩余目标包括 CTA 可回收条件生成、访存互联/返回路由、shared/TMEM/DRAM、SFU、完整 SM/设备顶层、实卡校准、PTX 异步矩阵协议及最终验收；总目标继续进行。

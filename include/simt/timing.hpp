@@ -18,6 +18,7 @@
 #include "simt/execution_arbiter.hpp"
 #include "simt/instruction_decoder.hpp"
 #include "simt/instruction_fetch.hpp"
+#include "simt/async_service.hpp"
 #include <deque>
 
 namespace simt {
@@ -62,10 +63,9 @@ struct TimedSm {
     std::optional<BarrierJob> barrier_job;
     std::unique_ptr<hw::TransactionTable> transactions;
     std::unique_ptr<hw::DmaEngine> dma;
+    std::unique_ptr<hw::AsyncService> async_service;
     std::array<std::optional<hw::Ticket>,64> dma_reads, dma_writes;
     std::array<uint32_t,2> dma_return_cursor{};
-    std::optional<uint32_t> transaction_retiring;
-    bool transaction_released = false;
     AsyncStats async_stats;
     uint32_t copy_cursor = 0, copy_fragments = 0, barrier_entries = 0;
     explicit TimedSm(const hw::PipelineConfig& config, const hw::TensorConfig& tensor, const hw::AtomicConfig& atomic);
@@ -214,6 +214,8 @@ private:
     void reserve_barrier_record(const Inflight& entry, uint32_t address);
     void check_pending_shared_writes(uint32_t cta, uint32_t address, uint32_t bytes) const;
     void progress_async_units();
+    void offer_async_service(uint32_t sm);
+    void schedule_async_background(uint32_t sm);
     void progress_barrier(uint32_t sm);
     void prepare_barrier_job(uint32_t sm, BarrierJob& job);
     void progress_transaction_rtl(uint32_t sm, BarrierJob& job);

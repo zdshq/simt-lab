@@ -74,8 +74,11 @@ void TimingMachine::query_transaction_rtl(uint32_t sm, BarrierJob& job, uint32_t
     }
     frontend(entry.cta,entry.warp)->async_wait(mask,job.address,phase,phases);
     observe_frontend(entry.cta,entry.warp); job.remaining&=~mask; ++sms_[sm]->async_stats.wait_queries;
-    if (job.remaining) { job.submitted=false; job.due=cycle_+machine_.config_.async.barrier_latency; }
-    else { trace(entry,"barrier_wait_checked"); entry.stage=Stage::writeback; sms_[sm]->barrier_job.reset(); }
+    if (job.remaining) { job.submitted=false; sms_[sm]->async_service->retry(); }
+    else {
+        trace(entry,"barrier_wait_checked"); entry.stage=Stage::writeback;
+        sms_[sm]->async_service->complete(); sms_[sm]->barrier_job.reset();
+    }
 }
 
 void TimingMachine::route_transaction_release(uint32_t cta_id, uint32_t address, uint32_t phase) {
@@ -104,7 +107,7 @@ void TimingMachine::finish_transaction_rtl(uint32_t sm_id, BarrierJob& job, cons
         if (job.action==BarrierAction::issue) submit_async_copy(sm_id,job);
         trace(entry,"barrier_publish"); entry.stage=Stage::writeback;
     }
-    sm.barrier_job.reset();
+    sm.async_service->complete(); sm.barrier_job.reset();
 }
 
 void TimingMachine::progress_transaction_rtl(uint32_t sm, BarrierJob& job) {
@@ -118,18 +121,17 @@ void TimingMachine::progress_transaction_rtl(uint32_t sm, BarrierJob& job) {
 bool TimingMachine::retire_transaction_cta(const Cta& cta) {
     auto& sm=*sms_[cta.sm_id];
     if (!sm.transactions || cta.transactions.empty()) return true;
-    if (sm.transaction_retiring) {
-        if (*sm.transaction_retiring!=cta.block_id || !sm.transaction_released) return false;
-        sm.transaction_retiring.reset(); sm.transaction_released=false; return true;
-    }
-    if (sm.barrier_job || !sm.transactions->available()) return false;
-    sm.transactions->submit({hw::TransactionOp::release,cta.block_id}); sm.transaction_retiring=cta.block_id; return false;
+    const auto owner=sm.async_service->read();
+    if (owner.kind!=hw::AsyncOwner::retirement || owner.cta!=cta.block_id || !owner.retirement_done) return false;
+    sm.async_service->acknowledge_retirement(); return true;
 }
 void TimingMachine::progress_transaction_retirement(uint32_t sm_id) {
     auto& sm=*sms_[sm_id];
-    if (!sm.transaction_retiring || sm.transaction_released) return;
+    if (!sm.async_service) return;
+    const auto owner=sm.async_service->read();
+    if (owner.kind!=hw::AsyncOwner::retirement || owner.retirement_done) return;
     const auto result=sm.transactions->take(); if (!result) return;
     if (result->error) throw std::runtime_error(hw::transaction_error(result->error));
-    sm.transaction_released=true;
+    sm.async_service->complete();
 }
 }

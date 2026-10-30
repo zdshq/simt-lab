@@ -17,7 +17,7 @@ void TimingMachine::arbitrate_execution() {
                 if (entry.footprint.pipe==Pipe::async && !entry.mask) noop|=1u<<part;
             }
         }
-        sm->execution_arbiter->arbitrate(requests,noop,bool(sm->barrier_job || sm->transaction_retiring));
+        sm->execution_arbiter->arbitrate(requests,noop,!sm->async_service->foreground_ready());
     }
 }
 

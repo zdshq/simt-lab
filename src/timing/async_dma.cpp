@@ -90,8 +90,8 @@ DmaCommand& TimingMachine::find_copy(uint32_t sm_id, uint64_t id) {
 // 完成请求优先于新指令，使饱和 DMA 队列始终能够归还额度。
 void TimingMachine::complete_ready_copy(uint32_t sm_id) {
     auto& sm = *sms_[sm_id];
-    if (sm.barrier_job || sm.transaction_retiring) return;
-    if (sm.dma) { complete_dma_rtl(sm_id); return; }
+    if (sm.async_service) { schedule_async_background(sm_id); return; }
+    if (sm.barrier_job) return;
     for (const auto& copy : sm.copies) {
         if (copy.cursor != copy.bytes || !copy.fragments.empty()) continue;
         BarrierJob job{BarrierAction::complete}; job.copy = copy.id; job.cta = copy.cta; job.address = copy.address;
@@ -128,7 +128,7 @@ bool TimingMachine::background_work() const {
     for (const auto& sm : sms_) {
         if (sm->instruction_fetch && sm->instruction_fetch->busy()) return true;
         const bool copies=sm->dma ? sm->dma->commands()!=0 : !sm->copies.empty();
-        if (copies || sm->barrier_job || sm->transaction_retiring) return true;
+        if (copies || sm->barrier_job || (sm->async_service && sm->async_service->read().pending)) return true;
     }
     return false;
 }

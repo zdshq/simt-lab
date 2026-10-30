@@ -56,6 +56,7 @@ TimingMachine::TimingMachine(Machine& machine, std::shared_ptr<hw::HardwareConte
         if (instruction_image_) sms_.back()->instruction_fetch=hw::make_instruction_fetch(*memory_,*instruction_image_,sm,config.pipeline.partitions,owner_);
         if (config.pipeline.collector_rtl) sms_.back()->transactions = hw::make_transaction_table(config.async.barrier_slots);
         if (config.pipeline.collector_rtl) sms_.back()->dma = hw::make_dma_engine(config.async.commands, config.async.fragments, config.async.chunk_bytes);
+        if (config.pipeline.collector_rtl) sms_.back()->async_service=hw::make_async_service(config.pipeline.max_ctas,config.async.barrier_latency);
     }
     warps_.resize(config.blocks); cta_slots_.resize(config.blocks); scheduler_releasing_.resize(config.blocks);
 }
@@ -133,6 +134,7 @@ bool TimingMachine::cta_drained(const Cta& cta) const {
 // Resource credits return only after payload completion, including transaction-table entries.
 // 载荷完成后才归还资源额度，包括事务表条目。
 void TimingMachine::retire_ctas() {
+    for (uint32_t sm=0; sm<sms_.size(); ++sm) if (sms_[sm]->async_service) schedule_async_background(sm);
     for (auto& cta : machine_.ctas_) {
         if (!cta_drained(cta)) continue;
         if (!scheduler_releasing_[cta.block_id] && !retire_transaction_cta(cta)) continue;
@@ -197,6 +199,7 @@ bool TimingMachine::advance() {
         for (auto& table : sm->cta_tables) if (table) table->tick();
         if (sm->transactions) sm->transactions->tick();
         if (sm->dma) sm->dma->tick();
+        if (sm->async_service) sm->async_service->tick();
         if (sm->execution_arbiter) sm->execution_arbiter->tick();
         if (sm->instruction_fetch) sm->instruction_fetch->tick();
         for (auto& partition : sm->partitions) if (partition.scheduler) partition.scheduler->tick();

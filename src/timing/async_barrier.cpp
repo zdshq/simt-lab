@@ -100,7 +100,8 @@ void TimingMachine::query_async_wait(uint32_t sm_id, BarrierJob& job) {
 // 在完成操作释放 DMA 命令及控制任务之前，保存原始指令位置。
 void TimingMachine::progress_barrier(uint32_t sm_id) {
     auto& sm = *sms_[sm_id];
-    if (!sm.barrier_job || sm.barrier_job->due > cycle_) return;
+    if (!sm.barrier_job) return;
+    if (sm.async_service ? !sm.async_service->read().ready : sm.barrier_job->due>cycle_) return;
     auto& job = *sm.barrier_job;
     const auto cta = job.cta;
     const auto* origin = job.instruction ? inflight_.at(job.instruction).get() : nullptr;

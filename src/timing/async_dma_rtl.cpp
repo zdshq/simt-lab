@@ -40,7 +40,7 @@ void TimingMachine::complete_dma_rtl(uint32_t sm_id) {
     auto& sm=*sms_[sm_id]; const auto completion=sm.dma->completion(); if (!completion) return;
     BarrierJob job{BarrierAction::complete}; job.copy=completion->id; job.cta=completion->cta;
     job.address=completion->barrier; job.dma_completion=*completion;
-    job.due=cycle_+machine_.config_.async.barrier_latency;
+    sm.async_service->accept_background();
     sm.dma->claim(); sm.barrier_job=job; ++sm.async_stats.barrier_requests;
 }
 }
