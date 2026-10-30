@@ -758,3 +758,44 @@ python3 artifacts/rtl-decoder-final/audit.py
 审计核对四份模块清单、生成 RTL 和驱动源码哈希、综合网表、一份适配器 sanitizer 清单、十份主机报告、343 个源码/模板/规范文件、四个构建的生成译码文件及四个联合二进制。实际网表 SHA-256 为 `407e82041949b33c1e9d6b37e6032163ce662379c439b7d0cd8d51eef4407018`；完整映射见 `artifacts/rtl-decoder-final/evidence-audit.json`。
 
 完整目标保持 active。指令存储/取指与依赖查询直连、异步后台/CTA 服务次序、SFU/剩余访存、外部返回选择、整机 RTL、实卡校准、PTX 异步矩阵协议和最终硬件审计仍未完成。
+
+
+## 阶段 16：三源、目标与谓词的并行依赖查询（2026-10-30）
+
+从 `94fd4fb` 接续。原 scoreboard 的状态和阶段旁路已是 RTL，但实际指令仍在 C++ 中逐个调用 readable/writable/predicate_ready 并短路合并。本阶段将这部分改为固定三源、普通目标、两个谓词端口的组合电路，直接连接原同拍旁路状态；实际发射读取 RTL ready。guard 继续先通过独立谓词查询，实例间路由仍有 C++。结构及状态归属见 [RTL_DEPENDENCIES.md](RTL_DEPENDENCIES.md)。
+
+| 实际命令/范围 | 最终结果 |
+|---|---|
+| `cmake --build build -j4` / `ctest --test-dir build --output-on-failure` | 默认 Debug 27 套件、279 项运行：236 Python / 43 C++，277 通过、2 跳过，10.26 秒 |
+| `cmake -S . -B build-cache-rtl` / `cmake --build build-cache-rtl -j4` / `ctest --test-dir build-cache-rtl --output-on-failure` | 保留原联合选项；联合 Release 64 套件、974 项全部通过：862 Python / 112 C++，38.58 秒 |
+| `python3 tools/rtl.py --build build-release --module dependency_query --out artifacts/rtl-dependencies-final` | 三项独立电路检查通过：全部 128 种冲突组合、常量/空 mask/不相交 lane、16,000 组随机完整状态图 |
+| 同模块 `--synth` / `--gate-sim` | 完整 11,061 个组合单元、零 FF、无 SRAM；实际综合网表同三项通过 |
+| `python3 tools/rtl.py --build build-release --module warp_scoreboard --out artifacts/rtl-dependencies-final` | 完整 32 lane、63 普通寄存器、8 谓词五项检查通过，包含原有 6,400 事件差分与新增多端口/同拍旁路/撤回/RMW 分类 |
+| 同模块 `--synth` / `--gate-sim` | 完整 764,130 generic cells / 14,368 FF 位，无 SRAM，check -assert 和实际综合网表同五项通过 |
+| 两模块分别 `--build build-sanitize --out artifacts/rtl-dependencies-sanitize` | 三项查询/五项完整 scoreboard 的 ASan/UBSan 全部通过 |
+| `python3 artifacts/rtl-dependencies-final/build_adapter.py` | 实际适配器、完整 scoreboard 与 C++ 参考七项独立 ASan/UBSan 通过 |
+| `rtl_parallel_dependencies` | 五项实际 ISA/主机检查通过：第三源/最高 lane/多 CTA、WAW 与未收集读者 WAR、谓词目标/guard、合法及非法 SHFL 成员、失败后 Graph 重放与查询不推进状态 |
+
+独立模块共八项包含五项完整 scoreboard 场景的复跑，不称为新增八个不同场景。适配器七项已计入联合 C++ 数量，sanitizer 复跑不重复计数。默认 Release 与 sanitizer 参考库本轮重新构建，但没有运行它们的全量 CTest，也没有运行完整联合 sanitizer 或整 GPU 综合。
+
+首个增量构建先尝试旧 Ninja/Verilator 规则，未找到新 dependency_query 源文件，记录在 initial-build.log；显式重新配置使新源列表生效，之后联合构建通过。首轮完整回归 63/64 套件通过，新增 SHFL 测试因指定成员未全部参与动态指令而正确返回 membermask_not_subset。按既有 ISA 改为合法全 warp 跨 lane 读取，并将原程序保留为显式负例；没有放宽硬件执行校验。首次结果保留在 initial-joint-{ctest,tests}.log，最终结果在 joint-{ctest,tests}.log。
+
+两套电路清单均匹配当前 RTL 和测试驱动，综合网表没有使用小容量替代。完整 scoreboard 的触发器位数未变；报告中的查询次数/分类计数是宿主接口观测，不能算成新增硬件状态。原单查询接口同时改为选取旁路掩码后归约，故独立查询模块的 11,061 单元不能直接当作完整 scoreboard 相对旧版本的面积增量。
+
+五后端共同执行四类主机负载各两次 Graph，另运行两次监控 Transformer：
+
+```sh
+python3 examples/hardware_host.py --build build-cache-rtl \
+  --register-rtl --collector-rtl --scoreboard-rtl --cache-rtl --tensor-rtl \
+  --out artifacts/rtl-dependencies-host
+python3 artifacts/rtl-dependencies-final/check_monitor.py
+python3 artifacts/rtl-dependencies-final/audit.py
+```
+
+十份真实报告中，全部 scoreboard 的 dependency_queries 总和逐项等于译码器 operands 总和，分类冲突不超过实际被阻塞查询数。下载与上一译码阶段逐字节相同；删除新增的八个 scoreboard 查询观测字段后，完整 hardware/trace 也相同。模型周期仍为向量 4832/4850、规约 2021/2240、GEMM 3868/3416、Transformer 5736/5741。
+
+普通 nvidia-smi 经已安装用户入口再验证 RTX 4070 SUPER 与活模拟器共存、7 MiB 分配、释放为零和退出移除；直接系统绝对路径仍只见实卡。此证据仍仅对应 NVML 管理面，未新增 CUDA/PCIe 计算设备兼容。
+
+审计核对八份模块清单、两份实际综合网表、一份适配器 sanitizer 清单、十份报告、346 个源码/模板/规范文件以及三个联合二进制，保存在 artifacts/rtl-dependencies-final/evidence-audit.json。查询网表 SHA-256 为 `057a1bc94438adeb2ed42406dc4d5faaa87705169861282c4708469d9628fe64`，完整 scoreboard 为 `da8798a04e0bf1e6245cf3463c682b350ac73688fbaa21acf1ff66848bfa5114`。
+
+完整目标继续 active。指令存储/取指、前端顶层连接、异步后台/CTA 服务次序、SFU/剩余访存、外部返回选择、整机 RTL、实卡参数校准、PTX 异步矩阵协议和最终硬件审计仍未完成。

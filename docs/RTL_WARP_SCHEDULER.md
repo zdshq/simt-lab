@@ -2,7 +2,7 @@
 
 `--timing --register-rtl --collector-rtl` 现在为每个 SM 分区实例化一个 `warp_scheduler`。轮转位置、候选重试集合、物理 warp 槽归属、在途指令计数、边界串行化和访存顺序标志由 RTL 保存。主机不再用 `try_issue()` 循环不断尝试同一分区的多个 warp，也不以 `TimedWarp` 的软件计数判断此后端的发射资格或 CTA 排空。
 
-这是项目的有限端口调度器，不是 NVIDIA warp scheduler 的逆向复刻。[原始机器码与操作数译码](RTL_INSTRUCTION_DECODER.md) 已接入组合 RTL；指令存储/取指、各 scoreboard 查询的组合以及跨实例信号路由仍有 C++。本阶段解决候选选择与相关持久状态，尚未形成整 GPU RTL 顶层。
+这是项目的有限端口调度器，不是 NVIDIA warp scheduler 的逆向复刻。[原始机器码与操作数译码](RTL_INSTRUCTION_DECODER.md) 已接入组合 RTL；[指令依赖查询](RTL_DEPENDENCIES.md) 现已在 scoreboard 内通过固定端口并行完成；指令存储/取指及跨实例信号路由仍有 C++。本阶段解决候选选择与相关持久状态，尚未形成整 GPU RTL 顶层。
 
 ## 每个分区保存什么
 
@@ -27,7 +27,7 @@ flowchart LR
     S[32 个槽的状态与计数] --> E
     E --> R[轮转或固定优先级 / 跳过已拒绝候选]
     R --> P[单个候选 / 单次谓词查询]
-    P --> D[RTL 译码 / C++ 取指与依赖信号组合]
+    P --> D[RTL 译码与依赖查询 / C++ 取指和引脚路由]
     D --> A[RTL guard / 依赖 / 边界 / 访存 / 计数准入]
     C[collector 与写回容量] --> R
     A --> I[接受 / 预约资源 / 前端推进]
@@ -41,7 +41,7 @@ flowchart LR
 
 容量允许时，每分区每拍最多产生一个候选、完成一次 guard/依赖检查。拒绝会消耗本拍机会，不能在 C++ 中隐藏地换另一个 warp 继续发射。当前实现没有指令预取缓冲或多份并行译码器；单候选检查是明确的模型端口约束。
 
-候选返回的 guard-ready、dependencies-ready，以及本指令是否为边界/访存指令进入 RTL。guard 未就绪优先拒绝；随后检查边界前必须无在途指令、同 warp 不能重叠两条访存指令、寄存器依赖和计数上限。当前没有把这些逐寄存器查询都直接接成统一硬件依赖矩阵，信号组合边界明确保留。
+候选返回的 guard-ready、dependencies-ready，以及本指令是否为边界/访存指令进入 RTL。guard 未就绪优先拒绝；随后检查边界前必须无在途指令、同 warp 不能重叠两条访存指令、寄存器依赖和计数上限。scoreboard RTL 已用固定端口同时检查三源、目标和谓词依赖；实例间路由仍由宿主执行，尚未形成完整前端顶层。
 
 接受后才预约 collector/写回槽、登记 scoreboard 和推进前端；在本拍末的边沿更新调度器计数和状态。一个候选的决定作出后，适配器拒绝再次选择或更改分配/释放/退休事件，防止先前返回的接受结果被后续引脚变化撤销。
 
@@ -72,7 +72,7 @@ flowchart LR
 
 顶层 scoreboard/boundary/memory-order/collector/completion 停顿字段在此后端汇总实际调度器事件。与旧软件扫描每拍可能检查多个 warp 的计数口径不同，不宣称原始停顿统计或逐拍 trace 完全相同。发生错误后，设备的排空周期可能继续增加，而私有调度器的时钟停止。
 
-剩余 C++ 包括：CTA 资源分配策略、指令存储/取指、scoreboard 查询组合、实例间引脚路由、异步后台服务次序，以及尚未落实为电路的 SFU/访存部分。[跨分区执行仲裁](RTL_EXECUTION_ARBITER.md) 已负责 Tensor/异步候选轮转、Tensor 持有和发射间隔。寄存器和前端的权威数据分别见 [寄存器 RTL](RTL_REGISTERS.md) 与 [warp 前端](RTL_WARP_FRONTEND.md)。整个硬件目标继续以 [总计划](HARDWARE_PLAN.md) 为准。
+剩余 C++ 包括：CTA 资源分配策略、指令存储/取指、实例间引脚路由、异步后台服务次序，以及尚未落实为电路的 SFU/访存部分。[跨分区执行仲裁](RTL_EXECUTION_ARBITER.md) 已负责 Tensor/异步候选轮转、Tensor 持有和发射间隔。寄存器和前端的权威数据分别见 [寄存器 RTL](RTL_REGISTERS.md) 与 [warp 前端](RTL_WARP_FRONTEND.md)。整个硬件目标继续以 [总计划](HARDWARE_PLAN.md) 为准。
 
 ## 验证与复现
 

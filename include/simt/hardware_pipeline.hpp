@@ -25,6 +25,7 @@ class Scoreboard {
 public:
     bool readable(uint32_t reg, uint32_t mask) const;
     bool writable(uint32_t reg, uint32_t mask) const;
+    bool readers_clear(uint32_t reg, uint32_t mask) const;
     bool predicate_ready(uint32_t pred, uint32_t mask) const;
     void reserve_read(uint32_t reg, uint32_t mask);
     void collect_read(uint32_t reg, uint32_t mask);

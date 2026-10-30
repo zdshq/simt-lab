@@ -10,7 +10,7 @@ function(simt_enable_scoreboard_rtl)
     set(VERILATOR_BIN ${launcher})
     add_library(simt_scoreboard_circuit STATIC)
     verilate(simt_scoreboard_circuit TOP_MODULE warp_scoreboard PREFIX Vsimt_scoreboard
-        SOURCES rtl/scoreboard_cell.sv rtl/warp_scoreboard.sv
+        SOURCES rtl/dependency_query.sv rtl/scoreboard_cell.sv rtl/warp_scoreboard.sv
         VERILATOR_ARGS -Wall --unroll-count 4096)
     target_compile_options(simt_scoreboard_circuit PRIVATE ${VERILATOR_CFLAGS})
     get_target_property(circuit_includes simt_scoreboard_circuit INTERFACE_INCLUDE_DIRECTORIES)

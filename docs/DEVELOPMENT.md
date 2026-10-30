@@ -453,3 +453,16 @@
 - 四类主机负载各两次 Graph 和两次监控 Transformer 全部正确。十份下载逐字节相同，去掉新增译码计数后的完整 hardware/trace 与同场景上阶段报告相同；实际计数逐一匹配调度器。NVML 再次验证真实卡共存、7 MiB→0 MiB→退出移除，系统绝对路径只见实卡。
 - 新增 RTL_INSTRUCTION_DECODER.md，同步 README、前端/调度/谓词说明、硬件计划、来源和验证记录。四份模块清单、网表、适配器、十份报告、343 个源码/模板/规范文件、四份生成译码和四个二进制的审计见 artifacts/rtl-decoder-final/evidence-audit.json。
 - 完整目标保持 active。指令存储/取指、依赖查询直连、异步后台/CTA 次序、SFU/访存执行、外部返回、整机 RTL、实卡校准及 PTX 异步矩阵协议仍需继续；Tensor 为自定义研究电路，NVML 可见不代表 CUDA/PCIe 兼容。
+
+
+## 阶段 16 增量：scoreboard 的并行依赖端口（2026-10-30）
+
+- 从干净的 `94fd4fb` 继续；上一轮译码完成提交，属于实际进展。本轮继续移除硬件路径中的宿主依赖归约，遵循 coding-standards，无子代理参与。
+- 新增 dependency_query.sv：三个普通源、一个普通目标、两个谓词端口直接读取 scoreboard 的同拍旁路。七位冲突向量分别表示三个 RAW、WAW、WAR 和两类谓词写者，ready 由电路归约。宿主只路由字段并记录观测，不逐次查询和短路合并。
+- scoreboard_cell 输出真实 next_writers 与 next_readers 非零掩码，父模块固定连接 63 个寄存器和 R63 常量。没有新增影子表或持久状态。guard 先走原独立查询，实例间引脚与当前 warp 选择仍由 C++ 路由，未声称形成完整前端顶层。
+- 独立查询三项、完整 scoreboard 五项均通过 RTL、ASan/UBSan 和实际综合网表；适配器七项另通过独立 sanitizer。综合分别为 11,061 cells / 0 FF 和 764,130 cells / 14,368 FF，无 SRAM 或工艺面积结论。
+- 默认 Debug 27 套件/279 项运行，277 通过、2 跳过；联合 Release 64 套件/974 项全通过，862 Python / 112 C++。新增五项实际 ISA/主机检查覆盖全部分区、第三源、最高 lane、WAW/WAR、谓词、跨 lane 与错误恢复。未执行完整联合 sanitizer 或整机综合。
+- 初次构建沿用旧源列表导致缺少新模块，重新配置后通过。首轮 SHFL 测试违反已有成员掩码语义，改为合法跨 lane 算例并保留原负例，未改变执行规则。原失败日志与最终验收命令见 VALIDATION.md。
+- 四类主机负载各两次 Graph 和两次监控 Transformer 下载正确；去除新增八个 scoreboard 字段后完整 hardware/trace 与上阶段相同。查询计数逐项匹配译码操作数事件，NVML 再验证实卡共存、7 MiB→0 MiB→退出移除。
+- 新增 RTL_DEPENDENCIES.md，同步相关结构说明、计划、来源与 README。八份模块清单、两个网表、适配器、十份报告、346 个源码/模板/规范文件和三个二进制审计位于 artifacts/rtl-dependencies-final/evidence-audit.json。
+- 完整目标保持 active；指令存储/取指、前端连接、异步后台/CTA 次序、SFU/访存、外部返回、整机 RTL、实卡校准与 PTX 异步矩阵协议仍须继续。

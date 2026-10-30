@@ -134,11 +134,39 @@ void randomized_event_stream() {
     }
 }
 
+// Instruction ports observe the same forwarding state while legacy query inputs change independently.
+// 指令端口读取同一份旁路状态，旧查询输入可独立变化。
+void parallel_issue_ports_and_forwarding() {
+    TestBench b(nullptr); Reference reference;
+    event(b,reference,0,2,5,1); event(b,reference,1,2,62,0x80000000);
+    event(b,reference,2,0,9,3); event(b,reference,3,4,6,32); commit(b);
+    b.dut.issue_source_registers=5|(62<<6)|(63<<12);
+    b.dut.issue_source_masks[0]=1; b.dut.issue_source_masks[1]=0x80000000; b.dut.issue_source_masks[2]=UINT32_MAX;
+    b.dut.issue_destination=9; b.dut.issue_write_mask=2;
+    b.dut.issue_predicate=6; b.dut.issue_predicate_mask=32;
+    b.dut.issue_source_predicate=6; b.dut.issue_source_predicate_mask=64;
+    for (uint32_t reg=0; reg<64; ++reg) {
+        compare(b.dut,reference,reg,UINT32_MAX);
+        require(b.dut.issue_blocked==51 && !b.dut.issue_ready,"parallel query depends on legacy query pins");
+    }
+    event(b,reference,0,3,5,1); event(b,reference,1,3,62,0x80000000);
+    event(b,reference,2,1,9,2); event(b,reference,3,5,6,32);
+    require(b.dut.issue_ready && !b.dut.issue_blocked,"retire/collect bypass did not reach all issue ports");
+    b.dut.command_valid=0; b.dut.eval();
+    require(b.dut.issue_blocked==51,"query committed pending releases without a clock");
+    b.dut.command_valid=15; commit(b);
+    require(b.dut.issue_ready,"committed releases were lost");
+    event(b,reference,0,0,5,1); event(b,reference,1,2,5,1);
+    b.dut.issue_destination=5; b.dut.issue_write_mask=1; b.dut.eval();
+    require(b.dut.issue_blocked==25,"read-modify-write forwarding lost RAW/WAW/WAR distinction");
+}
+
 void run_cases() {
     run_case("warp scoreboard forwarding and clock ownership", combinational_forwarding_and_clock);
     run_case("warp scoreboard masks predicates atomic rejection and reset", masks_predicates_and_atomic_rejection);
     run_case("warp scoreboard bounded readers and same-cycle release", reader_saturation_and_release_forwarding);
     run_case("warp scoreboard 6400-event independent differential", randomized_event_stream);
+    run_case("warp scoreboard parallel instruction ports and same-cycle forwarding",parallel_issue_ports_and_forwarding);
 }
 
 int run_application() {

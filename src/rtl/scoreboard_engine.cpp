@@ -12,6 +12,7 @@ public:
     }
     ~RtlScoreboard() override { dut_.final(); }
     bool query(ScoreQuery kind, uint32_t reg, uint32_t mask) const override;
+    DependencyResult dependencies(const DependencyQuery& query) const override;
     void update(ScoreCommand command, uint32_t reg, uint32_t mask) override;
     void tick() override;
     uint64_t cycle() const override { return cycle_; }
@@ -45,6 +46,20 @@ bool RtlScoreboard::query(ScoreQuery kind, uint32_t reg, uint32_t mask) const {
     if (kind == ScoreQuery::readable) return dut_.readable;
     if (kind == ScoreQuery::writable) return dut_.writable;
     return dut_.predicate_ready;
+}
+
+// All hazards are selected and reduced by the circuit; these assignments only route query pins.
+// 全部冒险由电路选择并归约；这些赋值仅路由查询引脚。
+DependencyResult RtlScoreboard::dependencies(const DependencyQuery& q) const {
+    validate_dependency_query(q); dut_.issue_source_registers=0;
+    for (uint32_t port=0; port<3; ++port) {
+        dut_.issue_source_registers|=q.registers[port]<<(port*6);
+        dut_.issue_source_masks[port]=q.masks[port];
+    }
+    dut_.issue_destination=q.destination; dut_.issue_write_mask=q.write_mask;
+    dut_.issue_predicate=q.predicate; dut_.issue_predicate_mask=q.predicate_mask;
+    dut_.issue_source_predicate=q.source_predicate; dut_.issue_source_predicate_mask=q.source_predicate_mask;
+    dut_.eval(); return {bool(dut_.issue_ready),dut_.issue_blocked};
 }
 
 void RtlScoreboard::update(ScoreCommand command, uint32_t reg, uint32_t mask) {

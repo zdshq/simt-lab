@@ -2,7 +2,7 @@
 
 启用 `--timing --register-rtl --collector-rtl` 后，每个 SM 分区使用一个组合译码电路。被调度器选中的 warp 提供 PC，宿主从模块原始映像读取四个 32 位机器字；字段、合法位、流水线类别、寄存器请求和 lane 掩码均由 RTL 产生。实际发射不再读取宿主预解码对象中的执行字段，也不调用 C++ `instruction_footprint()`。
 
-这是自定义 ISA 的 59 个 opcode，不是 NVIDIA SASS/PTX 译码。指令映像存储、PC 越界检查、部分静态跳转目标验证、scoreboard 查询组合与跨实例路由仍有 C++；没有指令缓存、取指延迟模型或完整 SM 顶层。本阶段只完成译码路径。
+这是自定义 ISA 的 59 个 opcode，不是 NVIDIA SASS/PTX 译码。指令映像存储、PC 越界检查、部分静态跳转目标验证、跨实例路由仍有 C++；[指令依赖查询](RTL_DEPENDENCIES.md) 已在 scoreboard 内接入并行电路；没有指令缓存、取指延迟模型或完整 SM 顶层。本阶段只完成译码路径。
 
 ## 机器字怎样进入电路
 
@@ -63,4 +63,4 @@ python3 artifacts/rtl-decoder-final/build_adapter.py
 
 首次独立运行前先构建相应 build 的库与生成目标；综合和网表验证须选同一个 build 的实际生成文件。清单记录 RTL、生成源码、测试驱动与网表哈希。完整回归、Graph/NVML 与失败记录见 [验证记录](VALIDATION.md)，原始证据在 `artifacts/rtl-decoder-final/`。
 
-指令存储/取指、依赖查询直连、异步后台和 CTA 服务次序、SFU/剩余访存、外部返回选择、整机 RTL、实卡参数校准和 PTX 异步矩阵协议仍未完成。不能用本阶段的局部电路与综合网表证明整 GPU 已还原，剩余目标见 [硬件计划](HARDWARE_PLAN.md)。
+指令存储/取指、前端顶层连接、异步后台和 CTA 服务次序、SFU/剩余访存、外部返回选择、整机 RTL、实卡参数校准和 PTX 异步矩阵协议仍未完成。不能用本阶段的局部电路与综合网表证明整 GPU 已还原，剩余目标见 [硬件计划](HARDWARE_PLAN.md)。

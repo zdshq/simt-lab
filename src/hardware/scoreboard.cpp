@@ -7,8 +7,11 @@ bool Scoreboard::readable(uint32_t reg, uint32_t mask) const {
 }
 
 bool Scoreboard::writable(uint32_t reg, uint32_t mask) const {
+    return readable(reg,mask) && readers_clear(reg,mask);
+}
+
+bool Scoreboard::readers_clear(uint32_t reg, uint32_t mask) const {
     if (reg == 63) return true;
-    if (!readable(reg, mask)) return false;
     for (uint32_t lane = 0; lane < 32; ++lane)
         if ((mask & (uint32_t{1} << lane)) && readers_.at(reg)[lane]) return false;
     return true;

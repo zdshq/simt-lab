@@ -2,7 +2,7 @@
 
 `SIMT_SCOREBOARD_RTL=ON` 构建和 `--timing --scoreboard-rtl` 已将寄存器 RAW/WAW/WAR 与谓词写依赖交给实际 RTL 状态。C++ 不再为这个后端保存另一份写者表或读者计数。普通算术、访存、Tensor、异步搬运及主机 Graph 都通过同一依赖接口执行。
 
-这一步接入的是依赖控制电路。寄存器**数据**另可选择 [寄存器 RTL](RTL_REGISTERS.md)，collector/读仲裁另有 [直连后端](RTL_COLLECTOR.md)，写回请求排序仍为 C++；独立 `register_arbiter.sv` 尚未接入整机。它不是完整 RTL SM，也不是 NVIDIA scoreboard 的逆向复刻。
+这一步接入的是依赖控制电路。寄存器**数据**另可选择 [寄存器 RTL](RTL_REGISTERS.md)，collector/读仲裁另有 [直连后端](RTL_COLLECTOR.md)，写回也已有 [有限完成存储与仲裁 RTL](RTL_WRITEBACK.md)。[并行指令依赖查询](RTL_DEPENDENCIES.md) 现已直接连接 scoreboard 同拍旁路状态；实例间路由仍有 C++。它不是完整 RTL SM，也不是 NVIDIA scoreboard 的逆向复刻。
 
 ## 每个物理 warp 槽保存什么
 
@@ -46,9 +46,9 @@ flowchart LR
 
 旧 `lane_scoreboard.sv` 每拍只接受一个更新，仍保留为独立基元与历史验证。简单地对每次 C++ 方法调用打一次时钟，会把一次指令发射扩成多个未声明的硬件周期，无法与其他执行单元共用时钟。
 
-首版新模块允许 16 个任意顺序事件串联更新所有 lane 计数。实际综合得到 2,741,408 个 generic cells。根据上述真实流水线约束，最终 `scoreboard_cell.sv` 先解码阶段事件，读者只经过一次减法和一次加法，写者经过释放/预约掩码；阶段版完整模块降为 763,640 个 generic cells；最后加入显式时钟门控为 763,658，较首版减少约 72%，触发器位数仍为 14,368。
+以下为并行查询接入前的历史综合结果。首版新模块允许 16 个任意顺序事件串联更新所有 lane 计数。实际综合得到 2,741,408 个 generic cells。根据上述真实流水线约束，最终 `scoreboard_cell.sv` 先解码阶段事件，读者只经过一次减法和一次加法，写者经过释放/预约掩码；阶段版完整模块降为 763,640 个 generic cells；最后加入显式时钟门控为 763,658，较首版减少约 72%，触发器位数仍为 14,368。
 
-该统计包含所有 63 个寄存器子实例和谓词/查询控制。通用事件解码与逐 lane 状态仍有明显面积代价；没有声称这是紧凑 FPGA 设计，更不能将 generic cells 当成 NAND2 等效门数、工艺面积、频率或整 GPU 成本。组合路径未进行工艺时序收敛；时钟门当前依赖低电平控制约束，尚未映射到工艺 ICG 或 FPGA 专用时钟网络。
+当前增加三源/目标/谓词并行查询后的完整实例为 764,130 generic cells / 14,368 FF 位，详细结构与新验证见 [RTL_DEPENDENCIES.md](RTL_DEPENDENCIES.md)。该统计包含所有 63 个寄存器子实例和谓词/查询控制。通用事件解码与逐 lane 状态仍有明显面积代价；没有声称这是紧凑 FPGA 设计，更不能将 generic cells 当成 NAND2 等效门数、工艺面积、频率或整 GPU 成本。组合路径未进行工艺时序收敛；时钟门当前依赖低电平控制约束，尚未映射到工艺 ICG 或 FPGA 专用时钟网络。
 
 ## 构建与运行
 
@@ -83,4 +83,4 @@ Debug sanitizer 的大型电路仿真可能超过默认的单次主机响应等�
 
 最终独立电路证据位于 `artifacts/rtl-scoreboard-gated/` 和 `rtl-scoreboard-gated-sanitize/`；首版面积与阶段优化记录分别保留在 `rtl-scoreboard-integrated/`、`rtl-scoreboard-phases/`。最终完整主机产物位于 `rtl-scoreboard-gated-host/`。各构建的实际通过范围、失败与重跑记录见 [VALIDATION.md](VALIDATION.md)。
 
-寄存器数据已另有可选 RTL 后端；collector 和读仲裁亦有直连后端；写回仲裁整机接入、其余 RTL 连接、实卡校准、PTX 异步矩阵协议和最终审计仍按 [HARDWARE_PLAN.md](HARDWARE_PLAN.md) 继续，不能用本模块的通过证明整颗 GPU 已经完成。
+寄存器数据已另有可选 RTL 后端；collector 和读仲裁亦有直连后端；写回仲裁已经接入；其余 RTL 连接、实卡校准、PTX 异步矩阵协议和最终审计仍按 [HARDWARE_PLAN.md](HARDWARE_PLAN.md) 继续，不能用本模块的通过证明整颗 GPU 已经完成。

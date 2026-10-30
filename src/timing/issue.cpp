@@ -5,11 +5,15 @@
 
 namespace simt {
 bool TimingMachine::dependencies(uint32_t cta, uint32_t warp, Group group, const Footprint& f) const {
-    const auto& board = *warps_[cta][warp].scoreboard;
-    for (const auto& use : f.reads) if (!board.readable(use.reg, use.mask)) return false;
-    if (f.destination && !board.writable(*f.destination, f.write_mask)) return false;
-    if (f.predicate && !board.predicate_ready(*f.predicate, f.write_mask)) return false;
-    return !f.source_predicate || board.predicate_ready(*f.source_predicate, group.mask);
+    hw::DependencyQuery query;
+    if (f.reads.size()>query.registers.size()) throw std::runtime_error("scoreboard_source_port_capacity");
+    for (uint32_t port=0; port<f.reads.size(); ++port) {
+        query.registers[port]=f.reads[port].reg; query.masks[port]=f.reads[port].mask;
+    }
+    if (f.destination) { query.destination=*f.destination; query.write_mask=f.write_mask; }
+    if (f.predicate) { query.predicate=*f.predicate; query.predicate_mask=f.write_mask; }
+    if (f.source_predicate) { query.source_predicate=*f.source_predicate; query.source_predicate_mask=group.mask; }
+    return warps_[cta][warp].scoreboard->issue_ready(query);
 }
 
 bool TimingMachine::capacity(uint32_t sm, uint32_t partition) {

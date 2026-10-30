@@ -121,8 +121,13 @@ void scoreboard_stats(std::ostream& out, const std::vector<std::unique_ptr<Timed
             if (!board) continue;
             if (!first) out << ',';
             first = false;
+            const auto& dependencies=board->dependency_stats();
             out << "{\"sm\":" << sm << ",\"slot\":" << slot << ",\"backend\":\"" << board->name()
-                << "\",\"clocks\":" << board->cycle() << ",\"active_clocks\":" << board->active_cycles() << '}';
+                << "\",\"clocks\":" << board->cycle() << ",\"active_clocks\":" << board->active_cycles()
+                << ",\"issue_source_ports\":3,\"issue_predicate_ports\":2,\"dependency_queries\":" << dependencies.queries
+                << ",\"dependency_blocked\":" << dependencies.blocked << ",\"raw_conflicts\":" << dependencies.raw
+                << ",\"waw_conflicts\":" << dependencies.waw << ",\"war_conflicts\":" << dependencies.war
+                << ",\"predicate_conflicts\":" << dependencies.predicate << '}';
         }
     out << ']';
 }

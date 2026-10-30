@@ -9,8 +9,8 @@ module scoreboard_cell #(
     input wire [PORTS-1:0] selected,
     input wire [PORTS*3-1:0] commands,
     input wire [PORTS*LANES-1:0] masks,
-    input wire [LANES-1:0] query_mask,
-    output reg readable, writable,
+    output wire [LANES-1:0] pending_writers,
+    output reg [LANES-1:0] pending_readers,
     output reg [PORTS-1:0] errors, blocked
 );
     reg [LANES-1:0] writers, next_writers, retired_writers;
@@ -21,6 +21,7 @@ module scoreboard_cell #(
     integer port, lane, kind, reset_lane, last_phase, current_phase;
     reg [2:0] operation;
     reg retire_error, collect_error, read_error, write_error, read_blocked;
+    assign pending_writers=next_writers;
 
     // Retire old writers, collect old readers, reserve new readers, then reserve the issuing writer.
     // 依次释放旧写者、收集旧读者、预约新读者，最后预约发射指令的写者。
@@ -64,9 +65,8 @@ module scoreboard_cell #(
         if (present[1]) errors[positions[1]] = collect_error;
         if (present[0]) begin errors[positions[0]] = read_error; blocked[positions[0]] = read_blocked; end
         if (present[2]) errors[positions[2]] = write_error;
-        readable = (next_writers & query_mask) == 0; writable = readable;
         for (lane = 0; lane < LANES; lane = lane+1)
-            if (query_mask[lane] && next_readers[lane] != 0) writable = 0;
+            pending_readers[lane] = next_readers[lane] != 0;
     end
 
     always @(posedge clk) begin

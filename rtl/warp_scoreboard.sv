@@ -10,6 +10,14 @@ module warp_scoreboard #(
     input wire [2:0] query_predicate,
     input wire [LANES-1:0] query_mask,
     output wire readable, writable, predicate_ready, clock_enable,
+    input wire [17:0] issue_source_registers,
+    input wire [3*LANES-1:0] issue_source_masks,
+    input wire [5:0] issue_destination,
+    input wire [LANES-1:0] issue_write_mask,
+    input wire [2:0] issue_predicate, issue_source_predicate,
+    input wire [LANES-1:0] issue_predicate_mask, issue_source_predicate_mask,
+    output wire [6:0] issue_blocked,
+    output wire issue_ready,
     input wire [PORTS-1:0] command_valid,
     input wire [PORTS*3-1:0] command,
     input wire [PORTS*6-1:0] command_register,
@@ -20,7 +28,10 @@ module warp_scoreboard #(
     // 事件输入只在 clk 为低时改变；空事件总线门控全部预约存储。
     assign clock_enable = reset || (|command_valid);
     wire event_clock = clk && clock_enable;
-    wire [62:0] register_readable, register_writable;
+    wire [64*LANES-1:0] pending_writers, pending_readers;
+    wire [8*LANES-1:0] pending_predicates;
+    assign pending_writers[63*LANES+:LANES]=0;
+    assign pending_readers[63*LANES+:LANES]=0;
     wire [PORTS-1:0] cell_errors [0:62], cell_blocked [0:62];
     genvar reg_index, event_index;
     generate for (reg_index = 0; reg_index < 63; reg_index = reg_index+1) begin: registers
@@ -31,8 +42,9 @@ module warp_scoreboard #(
         end
         scoreboard_cell #(.LANES(LANES), .PORTS(PORTS), .READER_BITS(READER_BITS)) state (
             .clk(event_clock), .reset(reset), .selected(selected), .commands(command), .masks(command_mask),
-            .query_mask(query_mask), .readable(register_readable[reg_index]),
-            .writable(register_writable[reg_index]), .errors(cell_errors[reg_index]), .blocked(cell_blocked[reg_index])
+            .pending_writers(pending_writers[reg_index*LANES+:LANES]),
+            .pending_readers(pending_readers[reg_index*LANES+:LANES]),
+            .errors(cell_errors[reg_index]), .blocked(cell_blocked[reg_index])
         );
     end endgenerate
 
@@ -69,9 +81,23 @@ module warp_scoreboard #(
         end
         command_ready = command_ready & ~command_error;
     end
-    assign readable = query_register == 63 || register_readable[query_register];
-    assign writable = query_register == 63 || register_writable[query_register];
+    wire [LANES-1:0] query_writers=pending_writers[32'(query_register)*LANES+:LANES];
+    wire [LANES-1:0] query_readers=pending_readers[32'(query_register)*LANES+:LANES];
+    assign readable = (query_writers & query_mask)==0;
+    assign writable = readable && (query_readers & query_mask)==0;
     assign predicate_ready = query_predicate == 7 || (next_predicates[query_predicate] & query_mask) == 0;
+
+    genvar query_pred;
+    generate for (query_pred=0; query_pred<8; query_pred=query_pred+1) begin: predicate_wires
+        assign pending_predicates[query_pred*LANES+:LANES]=next_predicates[query_pred];
+    end endgenerate
+    dependency_query #(.LANES(LANES)) issue (
+        .writers(pending_writers), .readers(pending_readers), .predicates(pending_predicates),
+        .source_registers(issue_source_registers), .source_masks(issue_source_masks),
+        .destination(issue_destination), .write_mask(issue_write_mask), .predicate(issue_predicate),
+        .source_predicate(issue_source_predicate), .predicate_mask(issue_predicate_mask),
+        .source_predicate_mask(issue_source_predicate_mask), .blocked(issue_blocked), .ready(issue_ready)
+    );
 
     always @(posedge event_clock)
         for (reset_pred = 0; reset_pred < 8; reset_pred = reset_pred+1)
