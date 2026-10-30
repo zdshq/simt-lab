@@ -16,6 +16,7 @@ TimedSm::TimedSm(const hw::PipelineConfig& config, const hw::TensorConfig& tenso
     : resources(config), owners(config.max_warps),
       shared(hw::make_shared_engine({65536, 32, 2, 8, atomic.latency},config.collector_rtl)),
       tmem({131072, tensor.tmem_banks, tensor.tmem_latency, 8}), array(hw::make_tensor_engine(tensor)) {
+    if (config.collector_rtl) resource_unit=hw::make_cta_resources(config);
     if (config.collector_rtl) execution_arbiter=hw::make_execution_arbiter(config.partitions,
         {config.integer_interval,config.float_interval,config.special_interval});
     for (uint32_t part = 0; part < config.partitions; ++part) {
@@ -60,7 +61,7 @@ TimingMachine::TimingMachine(Machine& machine, std::shared_ptr<hw::HardwareConte
         if (config.pipeline.collector_rtl) sms_.back()->dma = hw::make_dma_engine(config.async.commands, config.async.fragments, config.async.chunk_bytes);
         if (config.pipeline.collector_rtl) sms_.back()->async_service=hw::make_async_service(config.pipeline.max_ctas,config.async.barrier_latency);
     }
-    warps_.resize(config.blocks); cta_slots_.resize(config.blocks); scheduler_releasing_.resize(config.blocks);
+    warps_.resize(config.blocks); cta_slots_.resize(config.blocks);
 }
 
 TimingMachine::~TimingMachine() { hardware_->physical.detach(local_base_, uint64_t{machine_.config_.blocks} * 32); }
@@ -86,18 +87,25 @@ bool TimingMachine::admit() {
         progress = false;
         for (uint32_t sm = 0; sm < sms_.size() && machine_.next_block_ < config.blocks; ++sm) {
             const auto block = machine_.next_block_;
-            const auto residency = sms_[sm]->resources.acquire(block, config.threads, config.cta_shared_bytes);
-            if (!residency) continue;
-            ++machine_.next_block_; place(block, sm, *residency);
+            if (sms_[sm]->resource_unit) {
+                const auto grant=sms_[sm]->resource_unit->acquire(block,config.threads,config.cta_shared_bytes);
+                if (!grant) continue;
+                place(block,sm,grant->residency,grant->slot);
+            } else {
+                const auto residency=sms_[sm]->resources.acquire(block,config.threads,config.cta_shared_bytes);
+                if (!residency) continue;
+                place(block,sm,*residency);
+            }
+            ++machine_.next_block_;
             progress = true; any = true;
         }
     }
     return any;
 }
 
-void TimingMachine::place(uint32_t block, uint32_t sm, const hw::Residency& residency) {
+void TimingMachine::place(uint32_t block, uint32_t sm, const hw::Residency& residency, uint32_t slot) {
     machine_.initialize_cta(block, sm);
-    admit_cta_barrier(block, sm);
+    admit_cta_barrier(block, sm, slot);
     const auto shared_size=machine_.config_.cta_shared_bytes;
     sms_[sm]->shared->attach(machine_.ctas_[block].shared,cta_slots_[block]*((shared_size+127)/128*128),shared_size);
     warps_[block].resize(residency.slots.size());
@@ -127,7 +135,12 @@ void TimingMachine::place(uint32_t block, uint32_t sm, const hw::Residency& resi
 // Exited lanes still own their CTA while issued instructions or DMA commands are outstanding.
 // lane 退出后，只要已发射指令或 DMA 命令仍未完成，就继续持有 CTA。
 bool TimingMachine::cta_drained(const Cta& cta) const {
-    if (cta.completed || cta.warps.empty() || pending_copy(cta.block_id)) return false;
+    if (cta.completed || cta.warps.empty()) return false;
+    if (auto& unit=sms_[cta.sm_id]->resource_unit) {
+        const auto state=unit->query(cta.block_id);
+        return state && (state->drained || state->releasing);
+    }
+    if (pending_copy(cta.block_id)) return false;
     for (uint32_t wi = 0; wi < cta.warps.size(); ++wi) {
         if (warp_inflight(cta.block_id,wi)) return false;
         for (auto state : cta.warps[wi].state) if (state != LaneState::exited) return false;
@@ -141,7 +154,8 @@ void TimingMachine::retire_ctas() {
     for (uint32_t sm=0; sm<sms_.size(); ++sm) if (sms_[sm]->async_service) schedule_async_background(sm);
     for (auto& cta : machine_.ctas_) {
         if (!cta_drained(cta)) continue;
-        if (!scheduler_releasing_[cta.block_id] && !retire_transaction_cta(cta)) continue;
+        const auto releasing=sms_[cta.sm_id]->resource_unit && sms_[cta.sm_id]->resource_unit->query(cta.block_id)->releasing;
+        if (!releasing && !retire_transaction_cta(cta)) continue;
         if (!release_scheduler_cta(cta)) continue;
         auto& sm = *sms_[cta.sm_id];
         if (!sm.transactions) for (const auto& [address, barrier] : cta.transactions) {
@@ -149,12 +163,14 @@ void TimingMachine::retire_ctas() {
             if (barrier.bytes || barrier.issued) throw std::runtime_error("incomplete_async_transaction");
         }
         for (const auto& warp : warps_[cta.block_id]) sm.owners[warp.slot].reset();
-        sm.shared->detach(cta.shared); sm.resources.release(cta.block_id);
+        sm.shared->detach(cta.shared);
+        if (sm.resource_unit) sm.resource_unit->release(cta.block_id);
+        else sm.resources.release(cta.block_id);
         if (!sm.cta_owners.empty()) sm.cta_owners[cta_slots_[cta.block_id]].reset();
         sm.allocated_columns -= sm.tensor_columns[cta.block_id];
         sm.tensor_columns.erase(cta.block_id);
         sm.barrier_entries -= static_cast<uint32_t>(cta.transactions.size());
-        cta.completed = true; scheduler_releasing_[cta.block_id]=false; ++machine_.completed_;
+        cta.completed = true; ++machine_.completed_;
         Inflight event; event.cta = cta.block_id; event.sm = cta.sm_id; trace(event, "cta_retire");
     }
 }
@@ -181,7 +197,7 @@ bool TimingMachine::issue_partition(uint32_t sm_id, uint32_t part) {
 // Pending execution or memory transactions distinguish latency stalls from genuine deadlock.
 // 待完成执行或内存事务用于区分延迟等待与真正死锁。
 bool TimingMachine::advance() {
-    if (machine_.completed_ == machine_.config_.blocks) return true;
+    if (machine_.completed_ == machine_.config_.blocks && resources_empty()) return true;
     if (cycle_ - started_ >= machine_.config_.max_cycles) throw std::runtime_error("cycle_limit_exceeded");
     if (external_clock_) {
         if (hardware_->cycle() <= cycle_) throw std::runtime_error("hardware_clock_not_advanced");
@@ -198,6 +214,10 @@ bool TimingMachine::advance() {
     // Physical scoreboard slots persist across CTA reuse and commit once after the cycle's events.
     // 物理 scoreboard 槽在 CTA 复用时保持实例，每拍事件结束后只提交一次。
     for (auto& sm : sms_) {
+        if (sm->resource_unit) {
+            sm->resource_unit->tick();
+            stats_.peak_ctas=std::max(stats_.peak_ctas,sm->resource_unit->stats().peak_ctas);
+        }
         for (auto& board : sm->scoreboards) if (board) board->tick();
         for (auto& control : sm->controls) if (control) control->tick();
         for (auto& table : sm->cta_tables) if (table) table->tick();
@@ -213,6 +233,6 @@ bool TimingMachine::advance() {
     retire_ctas();
     if (!issued && inflight_.empty() && !background_work() && machine_.completed_ != machine_.config_.blocks && !admit())
         throw std::runtime_error(machine_.deadlock_message());
-    return machine_.completed_ == machine_.config_.blocks;
+    return machine_.completed_ == machine_.config_.blocks && resources_empty();
 }
 }

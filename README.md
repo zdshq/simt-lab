@@ -106,4 +106,6 @@ python3 examples/host_graph.py
 
 新增 [shared SRAM 与 bank RTL](docs/RTL_SHARED.md)：collector 后端的普通 shared 访存、DMA 目的写入、屏障发布和 Tensor 供数共用每 SM 一份 64 KiB 电路。32 个 bank 使用真实字节阵列、有效位、同步读及掩码写，八个向量槽保存请求和返回，硬件处理年龄选择、广播、冲突和十种整数原子操作；C++ shared 字节只保留写事件快照。物理区域绑定、入站客户调用、外部路由和 TMEM/constant/DRAM 仍有 C++。
 
-当前默认 Debug 运行 28 套件、284 项（282 通过，2 项未构建 RTL 而跳过）。本阶段联合 Release 通过 71 套件、1006 项；shared 的五项独立 RTL、sanitizer 和完整综合网表检查、实际适配器的四项 sanitizer 检查也已通过，未执行整机联合 sanitizer 或整 GPU 综合。实际结果与失败记录见 [验证记录](docs/VALIDATION.md)。不同构建包含既有场景复跑，各套件按其目的选择后端，并非全部同时启用所有 RTL。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。
+新增 [CTA 资源准入与退休 RTL](docs/RTL_CTA_RESOURCES.md)：64 个 CTA 记录、32 个物理 warp、寄存器/shared 额度和 DMA/事务清理状态由电路保存；原始 lane 状态和在途数在硬件内归约成回收资格。每 SM 每拍最多接受一个 CTA，槽复用等待调度器释放与资源归还边沿。跨 SM 请求、区域地址绑定和整机路由仍有 C++。
+
+当前默认 Debug 运行 28 套件、284 项（282 通过，2 项未构建 RTL 而跳过）。本阶段联合 Release 通过 73 套件、1014 项；CTA 资源控制器的五项独立 RTL、sanitizer 和完整综合网表检查、实际适配器的四项 sanitizer 检查也已通过，未执行整机联合 sanitizer 或整 GPU 综合。实际结果与失败记录见 [验证记录](docs/VALIDATION.md)。不同构建包含既有场景复跑，各套件按其目的选择后端，并非全部同时启用所有 RTL。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。

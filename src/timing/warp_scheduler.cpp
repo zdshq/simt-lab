@@ -50,9 +50,9 @@ uint32_t TimingMachine::warp_inflight(uint32_t cta,uint32_t wi) const {
 // 退休等待物理释放边沿完成，之后才能将资源分配给新 CTA。
 bool TimingMachine::release_scheduler_cta(const Cta& cta) {
     auto& sm=*sms_[cta.sm_id];
-    if (!sm.partitions.front().scheduler || scheduler_releasing_[cta.block_id]) return true;
+    if (!sm.partitions.front().scheduler || sm.resource_unit->query(cta.block_id)->releasing) return true;
     for (const auto& warp : warps_[cta.block_id])
         sm.partitions[warp.slot%sm.partitions.size()].scheduler->release(warp.slot/sm.partitions.size());
-    scheduler_releasing_[cta.block_id]=true; return false;
+    sm.resource_unit->begin_release(cta.block_id); return false;
 }
 }

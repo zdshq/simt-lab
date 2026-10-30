@@ -60,4 +60,13 @@ function(simt_enable_register_rtl)
     set_property(TARGET simt_shared_circuit PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${shared_includes})
     target_sources(simt_hardware PRIVATE src/rtl/shared_engine.cpp)
     target_link_libraries(simt_hardware PRIVATE simt_shared_circuit)
+    add_library(simt_cta_resource_circuit STATIC)
+    verilate(simt_cta_resource_circuit TOP_MODULE cta_resources PREFIX Vsimt_cta_resources
+        SOURCES rtl/cta_resource_totals.sv rtl/cta_resource_slot.sv rtl/cta_resources.sv
+        VERILATOR_ARGS -Wall --unroll-count 4096)
+    target_compile_options(simt_cta_resource_circuit PRIVATE ${VERILATOR_CFLAGS})
+    get_target_property(resource_includes simt_cta_resource_circuit INTERFACE_INCLUDE_DIRECTORIES)
+    set_property(TARGET simt_cta_resource_circuit PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${resource_includes})
+    target_sources(simt_hardware PRIVATE src/rtl/cta_resources.cpp)
+    target_link_libraries(simt_hardware PRIVATE simt_cta_resource_circuit)
 endfunction()

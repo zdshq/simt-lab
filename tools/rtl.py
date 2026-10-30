@@ -12,6 +12,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = {'cache': ('sector_cache', 'test_cache.cpp', ['sector_sram.sv', 'cache_lru.sv', 'sector_cache.sv']),
+           'cta_resources': ('cta_resources', 'test_cta_resources.cpp', ['cta_resource_totals.sv', 'cta_resource_slot.sv', 'cta_resources.sv']),
            'shared': ('shared_memory', 'test_shared.cpp', ['shared_bank.sv', 'shared_select.sv', 'shared_memory.sv']),
            'async_service': ('async_service', 'test_async_service.cpp', ['async_service.sv']),
            'instruction_fetch': ('instruction_fetch', 'test_instruction_fetch.cpp', ['instruction_cache.sv', 'instruction_fetch.sv']),
@@ -104,6 +105,7 @@ def compiler_flags(options):
     if 'SIMT_REGISTER_RTL:BOOL=ON' in (options.build/'CMakeCache.txt').read_text():
         libraries += ' '+str(options.build/'libsimt_register_circuit.a')
         libraries += ' '+str(options.build/'libsimt_shared_circuit.a')
+        libraries += ' '+str(options.build/'libsimt_cta_resource_circuit.a')
     if sanitized(options):
         includes += ' -fsanitize=address,undefined -fno-omit-frame-pointer'
         libraries += ' -fsanitize=address,undefined'

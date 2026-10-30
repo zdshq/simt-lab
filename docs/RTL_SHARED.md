@@ -65,7 +65,7 @@ CTA 退休须先消费所有相关请求，随后解除物理区域映射；历�
 
 接口提供实际接受/消费、bank 服务、广播、未获服务 lane、原子开始/完成和时钟计数。`hardware.shared[]` 同时报告 `backend=rtl`、物理容量与剩余请求数。统计来自硬件握手和写返回事件，不通过宿主读取字节估算。
 
-C++ 仍负责物理区域分配与绑定、入站客户之间的调用顺序、向量检查、外部 ticket 路由和观测快照。TMEM、constant 及 DRAM 后端仍有独立 C++ 模型。当前 shared SRAM 与 L1 数据 SRAM 是两个独立模块，没有实现 NVIDIA 式可重新划分的统一 L1/shared 容量。完整 GPU 顶层和校准继续见 [硬件计划](HARDWARE_PLAN.md)。
+后续 [CTA 资源电路](RTL_CTA_RESOURCES.md) 已接管物理 CTA/warp 槽选择、shared 额度和退休资格。C++ 仍负责将额度绑定到区域地址、入站客户之间的调用顺序、向量检查、外部 ticket 路由和观测快照。TMEM、constant 及 DRAM 后端仍有独立 C++ 模型。当前 shared SRAM 与 L1 数据 SRAM 是两个独立模块，没有实现 NVIDIA 式可重新划分的统一 L1/shared 容量。完整 GPU 顶层和校准继续见 [硬件计划](HARDWARE_PLAN.md)。
 
 ## 完整容量综合
 

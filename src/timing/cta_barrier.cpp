@@ -9,15 +9,13 @@ bool uses_barrier_table(Op op) { return op==Op::BAR_SYNC || op==Op::BAR_ARRIVE |
 
 // Physical CTA table slots survive block retirement and are cleared before their next owner starts.
 // 物理 CTA 表槽在 block 退休后保留，在下个所有者启动前清零。
-void TimingMachine::admit_cta_barrier(uint32_t cta, uint32_t sm_id) {
+void TimingMachine::admit_cta_barrier(uint32_t cta, uint32_t sm_id, uint32_t slot) {
     auto& sm=*sms_[sm_id];
     if (sm.cta_tables.empty()) return;
-    const auto found=std::find(sm.cta_owners.begin(),sm.cta_owners.end(),std::nullopt);
-    if (found==sm.cta_owners.end()) throw std::runtime_error("cta_barrier_slot_exhausted");
-    const auto slot=static_cast<uint32_t>(found-sm.cta_owners.begin());
+    if (slot>=sm.cta_owners.size() || sm.cta_owners[slot]) throw std::runtime_error("cta_barrier_slot_exhausted");
     auto& table=sm.cta_tables[slot];
     if (!table) table=hw::make_cta_barrier();
-    table->initialize(machine_.config_.threads); *found=cta; cta_slots_[cta]=slot;
+    table->initialize(machine_.config_.threads); sm.cta_owners[slot]=cta; cta_slots_[cta]=slot;
 }
 hw::CtaBarrierEngine* TimingMachine::cta_barrier(uint32_t cta) const {
     auto& sm=*sms_[machine_.ctas_[cta].sm_id];

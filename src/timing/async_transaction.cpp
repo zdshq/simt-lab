@@ -94,6 +94,7 @@ void TimingMachine::finish_transaction_rtl(uint32_t sm_id, BarrierJob& job, cons
     if (result.error) throw std::runtime_error(hw::transaction_error(result.error));
     if (job.action==BarrierAction::wait) { query_transaction_rtl(sm_id,job,result.record.phase); return; }
     auto& sm=*sms_[sm_id]; auto& cta=machine_.ctas_[job.cta]; const auto& r=result.record;
+    if (job.action==BarrierAction::initialize) sm.resource_unit->initialize_table(job.cta);
     job.next={r.phase,r.expected,r.arrivals,r.bytes,r.issued};
     cta.transactions[job.address]=job.next; cta.reserved_transactions.erase(job.address);
     if (result.advanced) { ++sm.async_stats.phase_completions; route_transaction_release(job.cta,job.address,r.phase); }
@@ -120,7 +121,8 @@ void TimingMachine::progress_transaction_rtl(uint32_t sm, BarrierJob& job) {
 // 先验证全部所属记录，再用第二遍扫描归还槽位；被拒绝的退休不能部分释放记录。
 bool TimingMachine::retire_transaction_cta(const Cta& cta) {
     auto& sm=*sms_[cta.sm_id];
-    if (!sm.transactions || cta.transactions.empty()) return true;
+    if (!sm.transactions || !sm.resource_unit->query(cta.block_id)->table_used) return true;
+    if (!sm.resource_unit->query(cta.block_id)->table_clean) return false;
     const auto owner=sm.async_service->read();
     if (owner.kind!=hw::AsyncOwner::retirement || owner.cta!=cta.block_id || !owner.retirement_done) return false;
     sm.async_service->acknowledge_retirement(); return true;
@@ -132,6 +134,7 @@ void TimingMachine::progress_transaction_retirement(uint32_t sm_id) {
     if (owner.kind!=hw::AsyncOwner::retirement || owner.retirement_done) return;
     const auto result=sm.transactions->take(); if (!result) return;
     if (result->error) throw std::runtime_error(hw::transaction_error(result->error));
+    sm.resource_unit->clean_table(owner.cta);
     sm.async_service->complete();
 }
 }

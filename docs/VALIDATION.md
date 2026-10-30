@@ -992,3 +992,59 @@ python3 artifacts/rtl-shared-final/audit.py
 最终审计通过：四份电路清单、适配器 sanitizer 清单、实际网表及其测试可执行文件、十份主机报告、374 个源码/模板/规范文件和三个联合二进制均已核对。生成头文件缓存的来源与哈希也单独记录，未将缓存探测算作硬件验证。完整证据位于 `artifacts/rtl-shared-final/evidence-audit.json`；网表可执行文件 SHA-256 为 `437ea8bec47ebaab855ed6f7568c3d9bf873e5d52c9d33a77321cefbd4d05df7`。五项网表检查全部通过，但没有进行形式等价证明、整机联合 sanitizer 或整 GPU 综合。
 
 剩余工作包括区域准入/绑定与客户仲裁 RTL、访存互联和外部返回路由、TMEM/constant/DRAM、SFU、整数内部流水级、完整 SM/设备顶层、实卡校准、PTX 异步矩阵协议和最终验收。[总计划](HARDWARE_PLAN.md) 继续进行。
+
+
+## CTA 资源准入、排空与退休 RTL（基线 b682669）
+
+collector RTL 路径改用每 SM 的完整 64 CTA 记录、32 物理 warp 资源控制器。CTA/warp 选择、寄存器和 shared 额度、有效 lane 掩码、DMA 未完成数、事务表清理及两阶段退休均保存于电路。前端和调度器的原始状态在 RTL 内归约，回收掩码直接连接异步服务；不再使用 C++ `SmResources` 分配实际 RTL 资源，也移除了 `scheduler_releasing_` 软件阶段数组。结构、边沿和剩余 C++ 边界见 [RTL_CTA_RESOURCES.md](RTL_CTA_RESOURCES.md)。
+
+| 验证范围 | 实际结果 | 证据 |
+|---|---|---|
+| 联合 Release 全量 | 73 套件、1014 项全部通过：874 Python / 140 C++ | `artifacts/rtl-cta-resources-final/joint-ctest.log`、`joint-tests.log` |
+| 默认 Debug 全量 | 28 套件、284 项：282 通过 / 2 条件跳过 | 同目录 `default-ctest.log`、`default-tests.log` |
+| 完整容量独立 RTL | 5 项通过 | `cta_resources/simulation-manifest.json` |
+| 独立 RTL ASan/UBSan | 相同 5 项通过 | `artifacts/rtl-cta-resources-sanitize/cta_resources/simulation-manifest.json` |
+| 真实适配器与完整电路 ASan/UBSan | 4 项通过 | `artifacts/rtl-cta-resources-adapter-sanitize/manifest.json` |
+| 完整控制器综合与网表 | 相同 5 项通过，结构检查零问题 | `cta_resources/synthesis-manifest.json`、`gate-manifest.json` |
+
+独立电路检查覆盖全部 32 warp、最高 CTA 槽 63、最高 warp 31、32 位 CTA 编号、1,024 线程、65,536 B shared、部分 warp 的有效 lane、完整 32 位 inflight、并行释放、保持授权不被晚到释放改变、DMA 数 0–64、事务清理、非法批次无部分提交和在途复位。1,500 次随机请求用独立空闲集合/额度参考检查选择和守恒；没有用原 RTL 算法的镜像输出作为期望值。
+
+实际适配器验证查询不产生隐藏时钟、同拍只有一个输入请求、事件拒绝只撤回本事件、新前端状态不破坏已锁存的旧 CTA 释放资格、完整容量和实例隔离。四项新整机检查验证资源上限、部分 warp、40 CTA/双 SM、每 SM 每拍一个准入、退出后等待 DMA/事务清理、1,024 线程 CTA 复用以及最终额度归还边沿。原异步、Tensor、控制、缓存和主机契约全部复跑通过。局部 sanitizer 不代表整 GPU 联合 sanitizer。
+
+初次 lint 发现 `matches` 为 SystemVerilog 保留字，改为 `query_matches`；另发现旧 Verilator 对同一个数组内的树形索引报告 UNOPTFLAT，改用 generate 作用域内的节点标量表达真实六层树，没有关闭警告。日志保存在 `initial-lint.txt`、`array-tree-lint.log`。首轮独立 C++ 驱动缺少 `<optional>` 头文件，补齐后通过，原日志为 `missing-optional-include.log`。集成检查还明确了退休交接：begin_release 已锁存排空条件，最终 release 不重复读取可能已属于新 CTA 的前端旁路信号；针对这一边界增加实际驱动检查。
+
+完整控制器由 Yosys 0.40 / ABC 综合，显式 `--no-share` 关闭资源共享优化，未缩小容量或关闭结构检查。实际映射为 **85,734 generic cells / 6,912 FF 位 / 78,822 组合单元**。64 个记录各 92 位，加 32 个 32 位有效 lane 掩码，FF 计数与结构相符。网表 SHA-256 为 `51104702b3d60327b474ffb55c94bbd13cbcfe6397356789dcffa1cdff82e0cd`，实际测试可执行文件 SHA-256 为 `d006de65e05030176506d60eb83c8bf1e6ed819432b8c5cd12f49e886f91511d`。这些不是 NAND2 门数、LUT 数、工艺面积或完整 SM 成本；没有形式等价证明与物理时序结果。
+
+```sh
+cmake -S . -B build-cache-rtl
+cmake --build build-cache-rtl -j8
+ctest --test-dir build-cache-rtl --output-on-failure -j6
+cmake -S . -B build
+cmake --build build -j8
+ctest --test-dir build --output-on-failure -j6
+python3 tools/rtl.py --module cta_resources --jobs 8 --out artifacts/rtl-cta-resources-final
+python3 tools/rtl.py --build build-sanitize --module cta_resources --jobs 8 --out artifacts/rtl-cta-resources-sanitize
+python3 tools/rtl.py --module cta_resources --synth --no-share --jobs 8 --out artifacts/rtl-cta-resources-final
+python3 tools/rtl.py --module cta_resources --gate-sim --jobs 8 --out artifacts/rtl-cta-resources-final
+python3 artifacts/rtl-cta-resources-final/build_adapter.py
+python3 examples/hardware_host.py --build build-cache-rtl \
+  --register-rtl --collector-rtl --scoreboard-rtl --cache-rtl --tensor-rtl \
+  --out artifacts/rtl-cta-resources-host
+python3 artifacts/rtl-cta-resources-final/check_monitor.py
+python3 artifacts/rtl-cta-resources-final/audit.py
+```
+
+四类主机 Graph 负载各重放两次，加监控会话两次 Transformer，共十份报告通过原数值参考，全部下载结果与上一阶段逐字节一致。报告核对了真实资源事件、DMA/事务/执行端口守恒、源码/驱动哈希与最终排空。模型新增最后一个归还额度的边沿，部分后续任务还受持久 DRAM 调度状态影响，不解释为 NVIDIA 性能变化。
+
+| 负载 | 本阶段两次 kernel 模型周期 | 上一阶段 |
+|---|---|---|
+| 向量 | 4847 / 5284 | 4846 / 5283 |
+| 规约 | 4024 / 4309 | 4023 / 4309 |
+| GEMM | 4362 / 4374 | 4361 / 4373 |
+| Transformer | 20688 / 20972 | 20687 / 20971 |
+
+普通 nvidia-smi 同时显示实卡和运行中的模拟器，7 MiB 分配、释放归零和退出移除再次通过；直接 `/usr/bin/nvidia-smi -L` 只显示实卡。桥接未改动 CUDA 驱动，也没有 PCIe 枚举能力。
+
+最终审计为四份电路清单、一份实际适配器 sanitizer 清单、十份主机报告、384 个源码/模板/规范文件及三个联合可执行文件，位于 `artifacts/rtl-cta-resources-final/evidence-audit.json`。未重新综合未改动的巨大 shared 模块，保留其前阶段证据。
+
+剩余工作包括跨 SM/区域地址绑定与入站客户仲裁 RTL、存储互联和外部返回路由、TMEM/constant/DRAM、SFU、整数内部流水级、完整 SM/设备顶层、实卡校准、PTX 异步矩阵协议和最终验收。[总计划](HARDWARE_PLAN.md) 继续进行。

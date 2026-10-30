@@ -2,19 +2,14 @@
 #include <stdexcept>
 
 namespace simt {
-// Host wiring describes eligible physical CTA slots; the circuit chooses their service order.
-// 宿主连线描述符合条件的物理 CTA 槽，电路决定服务顺序。
+// Resource-controller outputs drive retirement requests without software lane or DMA reductions.
+// 资源控制器输出直接驱动退休请求，不使用软件 lane 或 DMA 归约。
 void TimingMachine::offer_async_service(uint32_t sm_id) {
     auto& sm=*sms_[sm_id]; hw::AsyncServiceInputs inputs;
     inputs.table_ready=sm.transactions->available();
-    const auto owner=sm.async_service->read();
-    for (uint32_t slot=0; slot<sm.cta_owners.size(); ++slot) {
-        if (!sm.cta_owners[slot]) continue;
-        const auto cta=*sm.cta_owners[slot]; inputs.retire_ctas[slot]=cta;
-        if (scheduler_releasing_[cta] || machine_.ctas_[cta].transactions.empty()) continue;
-        if (owner.kind==hw::AsyncOwner::retirement && owner.cta==cta) continue;
-        if (cta_drained(machine_.ctas_[cta])) inputs.retire_requests|=uint64_t{1}<<slot;
-    }
+    refresh_resources(sm_id);
+    const auto resources=sm.resource_unit->read();
+    inputs.retire_ctas=resources.owners; inputs.retire_requests=resources.cleanup;
     if (const auto completion=sm.dma->completion()) {
         inputs.dma_valid=true; inputs.dma_id=completion->id; inputs.dma_cta=completion->cta;
     }

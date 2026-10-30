@@ -19,6 +19,7 @@
 #include "simt/instruction_decoder.hpp"
 #include "simt/instruction_fetch.hpp"
 #include "simt/async_service.hpp"
+#include "simt/cta_resources.hpp"
 #include <deque>
 
 namespace simt {
@@ -44,6 +45,7 @@ struct Partition {
 };
 struct TimedSm {
     hw::SmResources resources;
+    std::unique_ptr<hw::CtaResources> resource_unit;
     std::vector<Partition> partitions;
     std::vector<std::optional<WarpOwner>> owners;
     std::vector<std::unique_ptr<hw::ScoreboardEngine>> scoreboards;
@@ -124,14 +126,15 @@ private:
     std::vector<std::unique_ptr<TimedSm>> sms_;
     std::vector<std::vector<TimedWarp>> warps_;
     std::vector<uint32_t> cta_slots_;
-    std::vector<bool> scheduler_releasing_;
     std::map<uint64_t, std::unique_ptr<Inflight>> inflight_;
     std::deque<HardwareEvent> trace_;
     TimingStats stats_;
     uint64_t cycle_ = 0, next_ = 1, next_copy_ = 1;
     std::optional<hw::Ticket> submit_memory(uint32_t sm, const hw::WarpAccess& access);
     bool admit();
-    void place(uint32_t block, uint32_t sm, const hw::Residency& residency);
+    void place(uint32_t block, uint32_t sm, const hw::Residency& residency, uint32_t slot=0);
+    void refresh_resources(uint32_t sm);
+    bool resources_empty() const;
     bool cta_drained(const Cta& cta) const;
     void retire_ctas();
     bool issue_partition(uint32_t sm, uint32_t partition);
@@ -179,7 +182,7 @@ private:
     std::optional<Group> select_warp_group(uint32_t cta, uint32_t warp);
     void issue_frontend(const Inflight& entry);
     void advance_warp_pc(const Inflight& entry);
-    void admit_cta_barrier(uint32_t cta, uint32_t sm);
+    void admit_cta_barrier(uint32_t cta, uint32_t sm, uint32_t slot);
     hw::CtaBarrierEngine* cta_barrier(uint32_t cta) const;
     bool cta_barrier_available(const Inflight& entry);
     std::optional<uint32_t> accept_cta_barrier(const Inflight& entry);
@@ -253,6 +256,7 @@ private:
     void dump_execution_arbiters(std::ostream& out) const;
     void dump_instruction_decoders(std::ostream& out) const;
     void dump_instruction_fetch(std::ostream& out) const;
+    void dump_cta_resources(std::ostream& out) const;
     void dump_memory(std::ostream& out) const;
     void dump_tensor(std::ostream& out) const;
     void dump_async(std::ostream& out) const;

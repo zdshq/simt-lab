@@ -16,6 +16,7 @@ void TimingMachine::submit_async_copy(uint32_t sm_id, const BarrierJob& job) {
     copy.phase = job.next.phase; copy.bytes = i.imm;
     auto& sm = *sms_[sm_id];
     if (sm.dma) sm.dma->submit({copy.id,copy.cta,copy.source,copy.destination,copy.address,copy.phase,copy.bytes});
+    if (sm.resource_unit) sm.resource_unit->start_dma(copy.cta);
     sm.copies.push_back(copy); ++sm.async_stats.copies;
     sm.async_stats.peak_commands = std::max(sm.async_stats.peak_commands, uint64_t{sm.copies.size()});
     trace_copy(copy, "copy_submitted");
@@ -104,6 +105,7 @@ void TimingMachine::finish_copy(uint32_t sm_id, uint64_t id) {
     auto& sm = *sms_[sm_id];
     for (auto at = sm.copies.begin(); at != sm.copies.end(); ++at) {
         if (at->id != id) continue;
+        if (sm.resource_unit) sm.resource_unit->finish_dma(at->cta);
         trace_copy(*at, "copy_complete"); ++sm.async_stats.completed; sm.copies.erase(at); return;
     }
     throw std::runtime_error("unknown_dma_completion");
@@ -124,8 +126,8 @@ bool TimingMachine::pending_copy(uint32_t cta) const {
 }
 
 bool TimingMachine::background_work() const {
-    for (bool releasing : scheduler_releasing_) if (releasing) return true;
     for (const auto& sm : sms_) {
+        if (sm->resource_unit && (sm->resource_unit->pending() || sm->resource_unit->read().releasing)) return true;
         if (sm->instruction_fetch && sm->instruction_fetch->busy()) return true;
         const bool copies=sm->dma ? sm->dma->commands()!=0 : !sm->copies.empty();
         if (copies || sm->barrier_job || (sm->async_service && sm->async_service->read().pending)) return true;
