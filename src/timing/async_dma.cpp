@@ -14,7 +14,9 @@ void TimingMachine::submit_async_copy(uint32_t sm_id, const BarrierJob& job) {
     copy.warp = entry.warp; copy.pc = entry.group.pc; copy.source = read_register(entry.operands, i.ra, lane);
     copy.destination = read_register(entry.operands, i.rb, lane); copy.address = job.address;
     copy.phase = job.next.phase; copy.bytes = i.imm;
-    auto& sm = *sms_[sm_id]; sm.copies.push_back(copy); ++sm.async_stats.copies;
+    auto& sm = *sms_[sm_id];
+    if (sm.dma) sm.dma->submit({copy.id,copy.cta,copy.source,copy.destination,copy.address,copy.phase,copy.bytes});
+    sm.copies.push_back(copy); ++sm.async_stats.copies;
     sm.async_stats.peak_commands = std::max(sm.async_stats.peak_commands, uint64_t{sm.copies.size()});
     trace_copy(copy, "copy_submitted");
 }
@@ -49,6 +51,7 @@ bool TimingMachine::service_copy_fragment(DmaCommand& copy, DmaFragment& fragmen
 // 写入确认归还暂存容量，不依赖 warp 是否继续执行。
 void TimingMachine::service_copy_fragments(uint32_t sm_id) {
     auto& sm = *sms_[sm_id];
+    if (sm.dma) { service_dma_rtl(sm_id); return; }
     for (auto& copy : sm.copies) {
         auto at = copy.fragments.begin();
         while (at != copy.fragments.end()) {
@@ -62,6 +65,7 @@ void TimingMachine::service_copy_fragments(uint32_t sm_id) {
 // 每 SM 每拍最多一个片段按轮转顺序进入有限读写暂存池。
 void TimingMachine::admit_copy_fragment(uint32_t sm_id) {
     auto& sm = *sms_[sm_id]; const auto& config = machine_.config_.async;
+    if (sm.dma) return;
     if (sm.copy_fragments == config.fragments) { ++sm.async_stats.fragment_stalls; return; }
     for (uint32_t offset = 0; offset < sm.copies.size(); ++offset) {
         const auto at = (sm.copy_cursor + offset) % sm.copies.size(); auto& copy = sm.copies[at];
@@ -87,6 +91,7 @@ DmaCommand& TimingMachine::find_copy(uint32_t sm_id, uint64_t id) {
 void TimingMachine::complete_ready_copy(uint32_t sm_id) {
     auto& sm = *sms_[sm_id];
     if (sm.barrier_job || sm.transaction_retiring) return;
+    if (sm.dma) { complete_dma_rtl(sm_id); return; }
     for (const auto& copy : sm.copies) {
         if (copy.cursor != copy.bytes || !copy.fragments.empty()) continue;
         BarrierJob job{BarrierAction::complete}; job.copy = copy.id; job.cta = copy.cta; job.address = copy.address;
@@ -119,7 +124,10 @@ bool TimingMachine::pending_copy(uint32_t cta) const {
 }
 
 bool TimingMachine::background_work() const {
-    for (const auto& sm : sms_) if (!sm->copies.empty() || sm->barrier_job || sm->transaction_retiring) return true;
+    for (const auto& sm : sms_) {
+        const bool copies=sm->dma ? sm->dma->commands()!=0 : !sm->copies.empty();
+        if (copies || sm->barrier_job || sm->transaction_retiring) return true;
+    }
     return false;
 }
 }

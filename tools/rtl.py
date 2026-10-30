@@ -12,6 +12,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = {'cache': ('sector_cache', 'test_cache.cpp', ['sector_sram.sv', 'cache_lru.sv', 'sector_cache.sv']),
+           'dma_engine': ('dma_engine', 'test_dma_engine.cpp', ['dma_select.sv', 'dma_command.sv', 'dma_fragment.sv', 'dma_engine.sv']),
            'scoreboard': ('lane_scoreboard', 'test_scoreboard.cpp', ['lane_scoreboard.sv']),
            'operand_unit': ('register_operand_unit', 'test_operand_unit.cpp',
                             ['register_bank.sv', 'predicate_file.sv', 'register_file.sv', 'collector_dispatch.sv', 'collector_payload.sv', 'operand_collector.sv',
@@ -112,10 +113,30 @@ def execute_simulation(options, destination, executable, label):
     return run([str(executable)], destination, label, env)
 
 
+# Keep mapped buses internal so old Verilator can split bit dependencies without hiding loop warnings.
+# 将映射后的总线置于内部，使旧版 Verilator 能拆分位依赖，而不隐藏环路告警。
+def dma_gate_wrapper(destination):
+    ports = json.loads((destination/'gates.json').read_text())['modules']['dma_engine']['ports']
+    declarations = []
+    for name, port in ports.items():
+        width = '' if len(port['bits']) == 1 else f"[{len(port['bits'])-1}:0] "
+        declarations.append(f"    {port['direction']} wire {width}{name}")
+    wrapper = destination/'dma_gate_wrapper.sv'
+    wrapper.write_text('// Preserve the gate ports with direct wires only.\n'
+                       '// 仅用直接连线保持网表端口。\n'
+                       'module dma_gate_wrapper(\n'+',\n'.join(declarations)+'\n);\n    dma_engine mapped('
+                       + ','.join(f'.{name}({name})' for name in ports)+');\nendmodule\n')
+    config = destination/'dma_gate.vlt'
+    config.write_text('`verilator_config\nsplit_var -module "dma_engine" -var "read_addresses"\n'
+                      'split_var -module "dma_engine" -var "write_addresses"\n')
+    return [str(config), str(wrapper)]
+
+
 def simulation_sources(options, name, destination):
     _, test, files = MODULES[name]
     if options.gate_sim:
-        return ['-Wno-DECLFILENAME', '-Wno-UNUSED', str(destination/'gates.v'), str(options.simcells),
+        wrapper = dma_gate_wrapper(destination) if name == 'dma_engine' else []
+        return ['-Wno-DECLFILENAME', '-Wno-UNUSED', *wrapper, str(destination/'gates.v'), str(options.simcells),
                 str(ROOT/'tests/rtl'/test)]
     parameters = [f'-GSETS={options.sets}', f'-GWAYS={options.ways}'] if name == 'cache' else []
     if name in ('register_file', 'operand_unit', 'predicate'): parameters = [f'-GSLOTS={options.rf_slots}']
@@ -139,8 +160,9 @@ def simulation(options, name):
     if name == 'predicate': flags += f' -DSIMT_RTL_SLOTS={options.rf_slots}'
     if name == 'transaction_table': flags += f' -DTRANSACTION_SLOTS={options.transaction_slots}'
     if name in ('collector', 'dispatch', 'writeback', 'integer', 'floating'): flags += f' -DCOLLECTOR_ENTRIES={options.collector_entries}'
+    simulation_top = 'dma_gate_wrapper' if options.gate_sim and name == 'dma_engine' else top
     command = [tool('verilator'), '--cc', '--exe', '--build', '-j', str(options.jobs),
-               '-Wall', '--unroll-count', '4096', '--top-module', top, '--Mdir', str(destination/objects),
+               '-Wall', '--unroll-count', '4096', '--top-module', simulation_top, '--prefix', 'V'+top, '--Mdir', str(destination/objects),
                '-CFLAGS', flags, '-LDFLAGS', libraries]+simulation_sources(options, name, destination)
     if not sanitized(options): command.append('--trace')
     # Old Verilator archives retain removed split objects; rebuild the archive from the current object list.
@@ -149,6 +171,7 @@ def simulation(options, name):
     run(command, destination, label+'-build', environment())
     output = execute_simulation(options, destination, destination/objects/('V'+top), label)
     verify_unchanged(paths, original_sources)
+    if options.gate_sim: verify_netlist(destination, files, cache_parameters(options, name))
     print(output, end='', flush=True)
     return {'checks': len([line for line in output.splitlines() if line.startswith('PASS ')]),
             'command': command, 'parameters': cache_parameters(options, name),

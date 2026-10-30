@@ -40,8 +40,9 @@ void TimingMachine::collect_rtl_operands() {
 bool TimingMachine::async_dispatch_eligible(const Inflight& entry) const {
     if (entry.footprint.pipe != Pipe::async || !entry.mask) return true;
     const auto& sm = *sms_[entry.sm];
+    const bool copy_ready=sm.dma ? sm.dma->available() : sm.copies.size()<machine_.config_.async.commands;
     return !sm.barrier_job && (entry.instruction.op != Op::CP_ASYNC ||
-                              sm.copies.size() < machine_.config_.async.commands);
+                              copy_ready);
 }
 
 void TimingMachine::dispatch_collector_operands() {

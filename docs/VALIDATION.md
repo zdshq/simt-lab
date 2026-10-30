@@ -598,3 +598,33 @@ Transformer 每次为 8 条表命令、54 次搜索读、5 次发布、一次阶
 本轮共复跑受影响的 12 项独立电路场景，其余独立模块未全部重跑；完整表没有做 1,024 条通用门展开/网表仿真，完整联合 sanitizer 与整 GPU 综合也未执行。13 份模块清单、三份实际网表哈希、完整 RAM 几何、两个适配器 sanitizer 结果、十份主机报告、301 个源码文件与四个联合二进制审计见 `artifacts/rtl-transaction-final/evidence-audit.json`；同目录保留 `audit.py`、全量 CTest 日志和适配器构建脚本。
 
 最后只修正异步退休函数的英中注释，使其描述已经验证的 RTL 等待顺序，不改变执行代码。重新编译后四个已验收可执行文件的 SHA-256 完全相同，记录在 `comment-rebuild.json`，因此没有重复运行同一批测试。整个硬件目标仍未完成：DMA 片段与返回、跨 warp/跨分区仲裁、SFU/访存电路、整机 RTL、实机参数辨识和 PTX 异步矩阵协议继续按总计划推进。
+
+## 阶段 16：完整 DMA 命令/片段池与返回载荷电路（2026-10-30）
+
+从 `680a038` 接续，把 DMA 的权威描述符、游标、分片、地址/掩码、请求保持、返回载荷、未完成数和完成资格接入 RTL。完整物理几何始终为每 SM 64 命令槽与 64 片段槽；运行额度保持 1～64，不使用小配置冒充完整验收。外部内存票据选择、shared 服务和互联仍有 C++，详细边界见 [RTL_DMA.md](RTL_DMA.md)。
+
+| 实际命令/范围 | 结果 |
+|---|---|
+| `cmake --build build -j4` / `ctest --test-dir build --output-on-failure` | 默认 Debug 27 套件、279 项运行：236 Python / 43 C++，277 通过、2 跳过；9.86 秒 |
+| `cmake --build build-cache-rtl -j4` / `ctest --test-dir build-cache-rtl --output-on-failure` | 联合 Release 56 套件、936 项全部通过：842 Python / 94 C++；32.77 秒 |
+| `python3 tools/rtl.py --build build-release --module dma_engine --out artifacts/rtl-dma-final` | 完整 64/64 RTL 六项通过：满槽/最高槽、逆序响应、反压保持、尾部/chunk/地址进位、错误/复位、360 条随机描述符及长命令公平性 |
+| 同模块 `--build build-sanitize --out artifacts/rtl-dma-sanitize` | 同六项 ASan/UBSan 通过，无地址或未定义行为报告 |
+| 同模块 `--synth --out artifacts/rtl-dma-final` | 完整 64/64 配置 `check -assert` 通过；400,338 generic cells / 87,547 FF 位，无推断 SRAM。包含 64×1,024 位无复位载荷触发器 |
+| 同模块 `--gate-sim --out artifacts/rtl-dma-final` | 使用实际综合网表和同一逐字节参考，六项全部通过；透明包装及 `split_var` 解决旧工具的总线分析问题，没有屏蔽环路告警 |
+| `python3 artifacts/rtl-dma-final/build_adapter.py` | 实际 DMA 适配器和完整电路四项独立 ASan/UBSan 通过，覆盖显式时钟、观察副本、原始返回位、33 位地址、事件数、独立实例、容量和拒绝后恢复 |
+| `rtl_transaction_execution` | 扩展为 30 项；每个成功 kernel 对照 DMA 硬件容量、时钟、请求/返回/确认字节/释放及占用归零。新增实际访存占满 64 片段，以及活查询和在途 DMA 失败后重新执行 |
+
+首轮适配器/既有内存异步/事务执行的三个目标套件也已通过，随后补充容量和失败恢复测试，再运行上表的完整回归。新增四项 C++ 适配器与两项 Python 检查使联合构建从 55 套件/930 项增至 56 套件/936 项；六项独立 RTL 场景另计，不把 RTL、sanitizer 与网表复跑重复算作新场景。
+
+五种后端同时启用运行向量、规约、GEMM、Transformer，各两次 Graph；另外运行两次监控 Transformer。十份 kernel 报告逐份核对真实后端、DMA 事件与动态 trace、最终占用和下载字节。与 `rtl-transaction-host` 对照，全部下载内容相同。Transformer 每次分配 17 个片段，读写确认各 2176 B，kernel 周期从 5730/5738 变为 5735/5741；其他三个负载周期保持相同。没有宣称完整 trace 相同或真实 GPU 性能变化。
+
+监控会话完成 Transformer 后，普通 `nvidia-smi` 实际显示真实 4070 SUPER 与模拟设备；7 MiB 分配、释放至零、退出移除均通过。直接 `/usr/bin/nvidia-smi` 始终只列实卡。证据在 `artifacts/rtl-dma-final/{list,table,native-list}.txt` 与 `{allocated,freed,exited}.csv`，仍属于 NVML 管理面接入。
+
+本轮保留的失败与修复：
+
+- 初始 RTL lint 报八个宽度告警，改为显式位宽转换后严格 lint 通过；日志 `initial-lint.log`。
+- 首轮独立驱动把旧 Verilator 的原生 C 数组当作有 `.begin()` 的容器；改为 `std::begin` 后通过，原日志 `rtl-run.log`。
+- 初始适配器 sanitizer 构建把项目的 `-Werror` 同时用于旧版厂商 runtime，触发其自身 `sign-compare`。随后单独编译厂商 runtime，仍对项目适配器和测试启用 `-Wall -Wextra -Werror`，全部代码仍接受 sanitizer 插桩；原日志 `adapter-sanitize-run.log`。
+- 第一次网表编译把共享地址位生成其他 lane 进位的逻辑视作宽输出总线反馈，报 UNOPT/UNOPTFLAT。直接对顶层 public 端口添加 `split_var` 又被 SPLITVAR 拒绝；日志 `gate-run.log`、`gate-split-lint.log`。最终工具生成仅直接连线的顶层包装，让实际网表的地址总线作为内部信号分位分析，严格 lint 与全部六项行为通过。原始 `gates.v` 未改动，未降低容量或关闭这些告警。
+
+`artifacts/rtl-dma-final/audit.py` 核对四份独立工具清单、完整几何、实际网表和透明包装哈希、一份适配器 sanitizer 清单、十份主机报告、311 个源码文件和三个联合二进制；结果保存在 `evidence-audit.json`。本轮仅复跑新增 DMA 的六项独立场景；其余独立模块、完整联合 sanitizer 和整 GPU 综合未重跑。跨 warp/跨分区仲裁、SFU/剩余访存、外部内存返回选择、整机 RTL、实卡校准和 PTX 异步矩阵协议仍未完成，目标保持 active。

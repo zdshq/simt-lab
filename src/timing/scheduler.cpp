@@ -46,6 +46,7 @@ TimingMachine::TimingMachine(Machine& machine, std::shared_ptr<hw::HardwareConte
     for (uint32_t sm = 0; sm < config.sms; ++sm) {
         sms_.push_back(std::make_unique<TimedSm>(config.pipeline, config.tensor, config.atomic));
         if (config.pipeline.collector_rtl) sms_.back()->transactions = hw::make_transaction_table(config.async.barrier_slots);
+        if (config.pipeline.collector_rtl) sms_.back()->dma = hw::make_dma_engine(config.async.commands, config.async.fragments, config.async.chunk_bytes);
     }
     warps_.resize(config.blocks); cta_slots_.resize(config.blocks);
 }
@@ -182,6 +183,7 @@ bool TimingMachine::advance() {
         for (auto& control : sm->controls) if (control) control->tick();
         for (auto& table : sm->cta_tables) if (table) table->tick();
         if (sm->transactions) sm->transactions->tick();
+        if (sm->dma) sm->dma->tick();
         for (auto& partition : sm->partitions) if (partition.registers) partition.registers->tick();
     }
     retire_ctas();

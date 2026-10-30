@@ -1,6 +1,7 @@
 #pragma once
 #include "simt/hardware_memory.hpp"
 #include "simt/machine.hpp"
+#include "simt/dma_engine.hpp"
 
 namespace simt {
 enum class FragmentStage { read, write };
@@ -25,6 +26,7 @@ struct BarrierJob {
     std::optional<hw::Ticket> ticket{};
     bool prepared = false, phase_advanced = false;
     bool submitted = false, publication_done = false;
+    std::optional<hw::DmaCompletion> dma_completion{};
 };
 struct AsyncStats {
     uint64_t copies = 0, completed = 0, read_bytes = 0, write_bytes = 0, fragments = 0;

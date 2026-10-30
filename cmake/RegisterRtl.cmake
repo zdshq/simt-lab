@@ -28,10 +28,12 @@ function(simt_enable_register_rtl)
         SOURCES rtl/lane_popcount.sv rtl/cta_barrier_record.sv rtl/cta_barrier.sv VERILATOR_ARGS -Wall --unroll-count 4096)
     verilate(simt_register_circuit TOP_MODULE transaction_table PREFIX Vsimt_transaction_table
         SOURCES rtl/transaction_update.sv rtl/transaction_table.sv VERILATOR_ARGS -Wall --unroll-count 4096)
+    verilate(simt_register_circuit TOP_MODULE dma_engine PREFIX Vsimt_dma_engine
+        SOURCES rtl/dma_select.sv rtl/dma_command.sv rtl/dma_fragment.sv rtl/dma_engine.sv VERILATOR_ARGS -Wall --unroll-count 4096)
     target_compile_options(simt_register_circuit PRIVATE ${VERILATOR_CFLAGS})
     get_target_property(circuit_includes simt_register_circuit INTERFACE_INCLUDE_DIRECTORIES)
     set_property(TARGET simt_register_circuit PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES ${circuit_includes})
-    target_sources(simt_hardware PRIVATE src/rtl/register_file.cpp src/rtl/operand_collector.cpp src/rtl/warp_control.cpp src/rtl/warp_frontend.cpp src/rtl/cta_barrier.cpp src/rtl/transaction_table.cpp)
+    target_sources(simt_hardware PRIVATE src/rtl/register_file.cpp src/rtl/operand_collector.cpp src/rtl/warp_control.cpp src/rtl/warp_frontend.cpp src/rtl/cta_barrier.cpp src/rtl/transaction_table.cpp src/rtl/dma_engine.cpp)
     target_compile_definitions(simt_hardware PRIVATE SIMT_HAS_REGISTER_RTL=1)
     target_link_libraries(simt_hardware PRIVATE simt_register_circuit)
 endfunction()

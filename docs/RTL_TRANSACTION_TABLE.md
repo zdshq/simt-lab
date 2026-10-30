@@ -2,7 +2,7 @@
 
 `--timing --register-rtl --collector-rtl` 已把 MB_INIT、MB_EXPECT、MB_ARRIVE、CP_ASYNC 的字节预约/完成及 MB_WAIT 的事务查询接入 RTL。每 SM 的事务记录由同步 RAM 保存，地址查询、人数/字节算术、阶段推进、等待 shared 写确认和 CTA 回收扫描均由电路执行。warp 前端直接比较原始阶段令牌并保存、唤醒等待线程。
 
-这是本项目自定义异步 ISA 的电路。它没有实现 NVIDIA 的完整 `cp.async`、TMA 或非阻塞 MMA 协议，也没有证明 NVIDIA 使用下面的事务表组织。DMA 片段生成、内存请求、shared bank 仲裁、不同地址的等待 lane 分组、跨实例连线及控制任务准入仍由 C++ 推进；完整 RTL GPU 尚未完成。
+这是本项目自定义异步 ISA 的电路。它没有实现 NVIDIA 的完整 `cp.async`、TMA 或非阻塞 MMA 协议，也没有证明 NVIDIA 使用下面的事务表组织。DMA 片段生成、请求及返回载荷已由后续 [DMA RTL](RTL_DMA.md) 接管；外部内存票据、shared bank 仲裁、不同地址的等待 lane 分组、跨实例连线及控制任务准入仍有 C++；完整 RTL GPU 尚未完成。
 
 ## 记录到底存在什么地方
 

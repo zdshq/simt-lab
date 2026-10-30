@@ -63,6 +63,9 @@ struct TimedSm {
     std::deque<DmaCommand> copies;
     std::optional<BarrierJob> barrier_job;
     std::unique_ptr<hw::TransactionTable> transactions;
+    std::unique_ptr<hw::DmaEngine> dma;
+    std::array<std::optional<hw::Ticket>,64> dma_reads, dma_writes;
+    std::array<uint32_t,2> dma_return_cursor{};
     std::optional<uint32_t> transaction_retiring;
     bool transaction_released = false;
     AsyncStats async_stats;
@@ -221,6 +224,10 @@ private:
     void commit_async_instruction(Inflight& entry);
     void submit_async_copy(uint32_t sm, const BarrierJob& job);
     void service_copy_fragments(uint32_t sm);
+    void service_dma_rtl(uint32_t sm);
+    void return_dma_rtl(uint32_t sm, bool write);
+    void request_dma_rtl(uint32_t sm, bool write);
+    void complete_dma_rtl(uint32_t sm);
     bool service_copy_fragment(DmaCommand& copy, DmaFragment& fragment);
     void admit_copy_fragment(uint32_t sm);
     void complete_ready_copy(uint32_t sm);

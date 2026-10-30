@@ -25,7 +25,8 @@ void TimingMachine::submit_transaction_rtl(uint32_t sm, BarrierJob& job) {
     if (!unit.available()) return;
     hw::TransactionCommand command{operation(job.action),job.cta,job.address};
     if (job.action==BarrierAction::complete) {
-        const auto& copy=find_copy(sm,job.copy); command.amount=copy.bytes; command.phase=copy.phase;
+        if (job.dma_completion) { command.amount=job.dma_completion->bytes; command.phase=job.dma_completion->phase; }
+        else { const auto& copy=find_copy(sm,job.copy); command.amount=copy.bytes; command.phase=copy.phase; }
     } else {
         const auto& entry=*inflight_.at(job.instruction); const auto& i=entry.instruction;
         command.amount=i.imm;
@@ -93,7 +94,10 @@ void TimingMachine::finish_transaction_rtl(uint32_t sm_id, BarrierJob& job, cons
     job.next={r.phase,r.expected,r.arrivals,r.bytes,r.issued};
     cta.transactions[job.address]=job.next; cta.reserved_transactions.erase(job.address);
     if (result.advanced) { ++sm.async_stats.phase_completions; route_transaction_release(job.cta,job.address,r.phase); }
-    if (job.action==BarrierAction::complete) finish_copy(sm_id,job.copy);
+    if (job.action==BarrierAction::complete) {
+        if (job.dma_completion) sm.dma->release(*job.dma_completion);
+        finish_copy(sm_id,job.copy);
+    }
     else {
         auto& entry=*inflight_.at(job.instruction);
         if (job.action==BarrierAction::arrive) write_register(entry.result,entry.instruction.rd,std::countr_zero(entry.mask),result.token);
