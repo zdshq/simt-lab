@@ -12,6 +12,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = {'cache': ('sector_cache', 'test_cache.cpp', ['sector_sram.sv', 'cache_lru.sv', 'sector_cache.sv']),
+           'instruction_fetch': ('instruction_fetch', 'test_instruction_fetch.cpp', ['instruction_cache.sv', 'instruction_fetch.sv']),
            'instruction_decoder': ('instruction_decoder', 'test_instruction_decoder.cpp', ['instruction_operands.sv', 'instruction_decoder.sv']),
            'execution_arbiter': ('execution_arbiter', 'test_execution_arbiter.cpp', ['execution_arbiter.sv']),
            'warp_scheduler': ('warp_scheduler', 'test_warp_scheduler.cpp', ['warp_issue_slot.sv', 'warp_scheduler.sv']),

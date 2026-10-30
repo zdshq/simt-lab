@@ -126,6 +126,7 @@ bool TimingMachine::pending_copy(uint32_t cta) const {
 bool TimingMachine::background_work() const {
     for (bool releasing : scheduler_releasing_) if (releasing) return true;
     for (const auto& sm : sms_) {
+        if (sm->instruction_fetch && sm->instruction_fetch->busy()) return true;
         const bool copies=sm->dma ? sm->dma->commands()!=0 : !sm->copies.empty();
         if (copies || sm->barrier_job || sm->transaction_retiring) return true;
     }

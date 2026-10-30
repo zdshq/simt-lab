@@ -51,6 +51,7 @@ TimingMachine::TimingMachine(Machine& machine, std::shared_ptr<hw::HardwareConte
     started_ = cycle_ = hardware_->cycle();
     for (uint32_t sm = 0; sm < config.sms; ++sm) {
         sms_.push_back(std::make_unique<TimedSm>(config.pipeline, config.tensor, config.atomic));
+        if (config.pipeline.collector_rtl) sms_.back()->instruction_fetch=hw::make_instruction_fetch(machine.module_.image,config.pipeline.partitions);
         if (config.pipeline.collector_rtl) sms_.back()->transactions = hw::make_transaction_table(config.async.barrier_slots);
         if (config.pipeline.collector_rtl) sms_.back()->dma = hw::make_dma_engine(config.async.commands, config.async.fragments, config.async.chunk_bytes);
     }
@@ -195,6 +196,7 @@ bool TimingMachine::advance() {
         if (sm->transactions) sm->transactions->tick();
         if (sm->dma) sm->dma->tick();
         if (sm->execution_arbiter) sm->execution_arbiter->tick();
+        if (sm->instruction_fetch) sm->instruction_fetch->tick();
         for (auto& partition : sm->partitions) if (partition.scheduler) partition.scheduler->tick();
         for (auto& partition : sm->partitions) if (partition.decoder) partition.decoder->tick();
         for (auto& partition : sm->partitions) if (partition.registers) partition.registers->tick();

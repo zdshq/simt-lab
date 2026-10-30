@@ -46,9 +46,8 @@ def record_store_race(record_first):
     p.emit('MOVI', rd=1, imm=8192).emit('MOVI', rd=6, imm=128)
     p.emit('IMAD', rd=2, ra=0, rb=6, rc=1).emit('BAR_SYNC', rd=0)
     p.emit('BRA', imm='writer', guard=1)
-    if not record_first:
-        for _ in range(4):
-            p.emit('NOP')
+    # Keep the competing store and reservation in one instruction line.
+    # 将竞争的写入与预约放在同一指令缓存行内。
     p.emit('MB_INIT', ra=1, imm=1, guard=0).emit('EXIT').label('writer')
     if record_first:
         for _ in range(4):
@@ -210,7 +209,7 @@ class DmaPipelineTest(SimulationCase):
         self.execute(p, error='mbarrier_overlaps_pending_copy')
 
     def test_record_reservation_protects_pending_and_future_stores(self):
-        self.execute(record_store_race(False), '--threads', 64, error='mbarrier_overlaps_pending_store')
+        self.execute(record_store_race(False), '--threads', 64, '--partitions', 1, error='mbarrier_overlaps_pending_store')
         self.execute(record_store_race(True), '--threads', 64, '--mbarrier-latency', 64,
                      error='write_overlaps_mbarrier')
 

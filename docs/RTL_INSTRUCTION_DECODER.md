@@ -1,14 +1,14 @@
 # 原始机器码与操作数译码 RTL
 
-启用 `--timing --register-rtl --collector-rtl` 后，每个 SM 分区使用一个组合译码电路。被调度器选中的 warp 提供 PC，宿主从模块原始映像读取四个 32 位机器字；字段、合法位、流水线类别、寄存器请求和 lane 掩码均由 RTL 产生。实际发射不再读取宿主预解码对象中的执行字段，也不调用 C++ `instruction_footprint()`。
+启用 `--timing --register-rtl --collector-rtl` 后，每个 SM 分区使用一个组合译码电路。被调度器选中的 warp 提供 PC，[指令缓存](RTL_INSTRUCTION_FETCH.md) 通过同步读取或完整补充提供四个 32 位机器字；字段、合法位、流水线类别、寄存器请求和 lane 掩码均由 RTL 产生。实际发射不再读取宿主预解码对象中的执行字段，也不调用 C++ `instruction_footprint()`。
 
-这是自定义 ISA 的 59 个 opcode，不是 NVIDIA SASS/PTX 译码。指令映像存储、PC 越界检查、部分静态跳转目标验证、跨实例路由仍有 C++；[指令依赖查询](RTL_DEPENDENCIES.md) 已在 scoreboard 内接入并行电路；没有指令缓存、取指延迟模型或完整 SM 顶层。本阶段只完成译码路径。
+这是自定义 ISA 的 59 个 opcode，不是 NVIDIA SASS/PTX 译码。指令后备存储、部分静态跳转目标验证和跨实例路由仍有 C++；PC 越界由取指电路检查；[指令依赖查询](RTL_DEPENDENCIES.md) 已在 scoreboard 内接入并行电路；同步指令缓存与有限补充通道已在后续阶段接入，仍没有完整 SM 顶层。下述综合数字仅对应组合译码器。
 
 ## 机器字怎样进入电路
 
 ```mermaid
 flowchart LR
-    W[RTL warp 调度器与 PC 前端] --> M[C++ 原始指令映像]
+    W[RTL warp 调度器与 PC 前端] --> M[RTL 指令缓存 / 补充通道]
     M --> E[128 位编码与合法位 RTL]
     E --> G[guard 依赖与谓词读取]
     G --> O[操作数角色及 lane 掩码 RTL]
@@ -18,7 +18,7 @@ flowchart LR
     C --> I
 ```
 
-`Module::from_bytes()` 同时保存原始机器字 `image` 与功能后端使用的 `code`。RTL 路径直接读取前者；没有将预解码对象重新编码的后备路径。只有 `code` 而缺少匹配长度的 `image` 会明确报错。加载器仍提前拒绝非法编码，因此 CLI 通常在运行之前报告这类错误；直接 C++ 测试修改已加载映像，另行验证电路自身也拒绝未知 opcode 和保留位。
+`Module::from_bytes()` 同时保存原始机器字 `image` 与功能后端使用的 `code`。RTL 路径通过缓存补充读取前者；没有将预解码对象重新编码的后备路径。只有 `code` 而缺少匹配长度的 `image` 会明确报错。加载器仍提前拒绝非法编码，因此 CLI 通常在运行之前报告这类错误；直接 C++ 测试修改已加载映像，另行验证电路自身也拒绝未知 opcode 和保留位。
 
 `tools/gen_isa.py` 从规范 `isa/isa.json` 生成 `instruction_encoding.sv`。每个字段按固定位置取线，59 项 case 给出允许的 128 位掩码；未知 opcode 优先报错，其次检查未使用字段与保留位。生成阶段同时产出原有 C++/Python 接口，构建阶段核对依赖；独立 RTL 工具拒绝使用与当前 schema 或模板不一致的旧生成文件。
 
@@ -63,4 +63,4 @@ python3 artifacts/rtl-decoder-final/build_adapter.py
 
 首次独立运行前先构建相应 build 的库与生成目标；综合和网表验证须选同一个 build 的实际生成文件。清单记录 RTL、生成源码、测试驱动与网表哈希。完整回归、Graph/NVML 与失败记录见 [验证记录](VALIDATION.md)，原始证据在 `artifacts/rtl-decoder-final/`。
 
-指令存储/取指、前端顶层连接、异步后台和 CTA 服务次序、SFU/剩余访存、外部返回选择、整机 RTL、实卡参数校准和 PTX 异步矩阵协议仍未完成。不能用本阶段的局部电路与综合网表证明整 GPU 已还原，剩余目标见 [硬件计划](HARDWARE_PLAN.md)。
+指令后备存储与数据层次接入、前端顶层连接、异步后台和 CTA 服务次序、SFU/剩余访存、外部返回选择、整机 RTL、实卡参数校准和 PTX 异步矩阵协议仍未完成。不能用本阶段的局部电路与综合网表证明整 GPU 已还原，剩余目标见 [硬件计划](HARDWARE_PLAN.md)。

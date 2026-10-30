@@ -2,7 +2,7 @@
 
 `--timing --register-rtl --collector-rtl` 现在为每个 SM 分区实例化一个 `warp_scheduler`。轮转位置、候选重试集合、物理 warp 槽归属、在途指令计数、边界串行化和访存顺序标志由 RTL 保存。主机不再用 `try_issue()` 循环不断尝试同一分区的多个 warp，也不以 `TimedWarp` 的软件计数判断此后端的发射资格或 CTA 排空。
 
-这是项目的有限端口调度器，不是 NVIDIA warp scheduler 的逆向复刻。[原始机器码与操作数译码](RTL_INSTRUCTION_DECODER.md) 已接入组合 RTL；[指令依赖查询](RTL_DEPENDENCIES.md) 现已在 scoreboard 内通过固定端口并行完成；指令存储/取指及跨实例信号路由仍有 C++。本阶段解决候选选择与相关持久状态，尚未形成整 GPU RTL 顶层。
+这是项目的有限端口调度器，不是 NVIDIA warp scheduler 的逆向复刻。[原始机器码与操作数译码](RTL_INSTRUCTION_DECODER.md) 已接入组合 RTL；[指令依赖查询](RTL_DEPENDENCIES.md) 现已在 scoreboard 内通过固定端口并行完成；[指令缓存与取指](RTL_INSTRUCTION_FETCH.md) 已接入同步存储和补充仲裁，指令后备存储及跨实例信号路由仍有 C++。本阶段解决候选选择与相关持久状态，尚未形成整 GPU RTL 顶层。
 
 ## 每个分区保存什么
 
@@ -27,7 +27,7 @@ flowchart LR
     S[32 个槽的状态与计数] --> E
     E --> R[轮转或固定优先级 / 跳过已拒绝候选]
     R --> P[单个候选 / 单次谓词查询]
-    P --> D[RTL 译码与依赖查询 / C++ 取指和引脚路由]
+    P --> D[RTL 译码与依赖查询 / RTL 取指 / C++ 引脚路由]
     D --> A[RTL guard / 依赖 / 边界 / 访存 / 计数准入]
     C[collector 与写回容量] --> R
     A --> I[接受 / 预约资源 / 前端推进]
@@ -72,7 +72,7 @@ flowchart LR
 
 顶层 scoreboard/boundary/memory-order/collector/completion 停顿字段在此后端汇总实际调度器事件。与旧软件扫描每拍可能检查多个 warp 的计数口径不同，不宣称原始停顿统计或逐拍 trace 完全相同。发生错误后，设备的排空周期可能继续增加，而私有调度器的时钟停止。
 
-剩余 C++ 包括：CTA 资源分配策略、指令存储/取指、实例间引脚路由、异步后台服务次序，以及尚未落实为电路的 SFU/访存部分。[跨分区执行仲裁](RTL_EXECUTION_ARBITER.md) 已负责 Tensor/异步候选轮转、Tensor 持有和发射间隔。寄存器和前端的权威数据分别见 [寄存器 RTL](RTL_REGISTERS.md) 与 [warp 前端](RTL_WARP_FRONTEND.md)。整个硬件目标继续以 [总计划](HARDWARE_PLAN.md) 为准。
+剩余 C++ 包括：CTA 资源分配策略、指令后备存储、实例间引脚路由、异步后台服务次序，以及尚未落实为电路的 SFU/访存部分。[跨分区执行仲裁](RTL_EXECUTION_ARBITER.md) 已负责 Tensor/异步候选轮转、Tensor 持有和发射间隔。寄存器和前端的权威数据分别见 [寄存器 RTL](RTL_REGISTERS.md) 与 [warp 前端](RTL_WARP_FRONTEND.md)。整个硬件目标继续以 [总计划](HARDWARE_PLAN.md) 为准。
 
 ## 验证与复现
 

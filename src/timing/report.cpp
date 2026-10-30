@@ -368,6 +368,7 @@ void TimingMachine::dump(std::ostream& out) const {
     dump_statistics(out);
     dump_execution_arbiters(out);
     dump_instruction_decoders(out);
+    dump_instruction_fetch(out);
     scheduler_stats(out,sms_);
     scoreboard_stats(out, sms_);
     control_stats(out, sms_);

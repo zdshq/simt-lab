@@ -13,6 +13,9 @@ from simt_lab import Program
 
 class RtlCollector:
     execution_timeout = 120
+    # Synchronous instruction lookups space these independent issues two clocks apart.
+    # 同步指令查询使这些独立发射间隔两个时钟。
+    writeback_float_latency = 8
 
     def execute(self, program, *options, **kwargs):
         report = super().execute(program, '--timing', '--register-rtl', '--collector-rtl', *options, **kwargs)
@@ -97,7 +100,7 @@ class WritebackCapacity(RtlCollector, SimulationCase):
         program = Program()
         for reg in range(40):
             program.emit('MOVI', rd=reg, imm=100+reg)
-        result = self.execute(program.emit('EXIT'), '--threads', 1, '--int-latency', 100, '--hardware-trace')
+        result = self.execute(program.emit('EXIT'), '--threads', 1, '--int-latency', 1000, '--hardware-trace')
         self.assertGreater(result['hardware']['completion_stalls'], 0)
         self.assertEqual([self.registers(result, reg)[0] for reg in range(40)], list(range(100, 140)))
         trace = result['hardware']['trace']

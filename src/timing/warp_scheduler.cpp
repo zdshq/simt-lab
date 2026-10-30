@@ -29,8 +29,9 @@ bool TimingMachine::issue_scheduled_group(uint32_t cta_id,uint32_t wi,Group grou
     const auto sm=machine_.ctas_[cta_id].sm_id; auto& timed=warps_[cta_id][wi];
     auto& partition=sms_[sm]->partitions[timed.slot%sms_[sm]->partitions.size()];
     auto& scheduler=*partition.scheduler; auto& decoder=*partition.decoder;
-    if (group.pc>=machine_.module_.image.size()) throw std::runtime_error("pc_out_of_range");
-    const auto i=decoder.inspect(machine_.module_.image[group.pc]);
+    const auto words=sms_[sm]->instruction_fetch->lookup(timed.slot%sms_[sm]->partitions.size(),group.pc);
+    if (!words) return false;
+    const auto i=decoder.inspect(*words);
     if (!timed.scoreboard->predicate_ready(i.guard&7,group.mask)) return scheduler.decide(false,false,false,false);
     const auto predicates=probe_predicates(cta_id,wi,i,group);
     auto footprint=decoder.operands(predicates.participating);

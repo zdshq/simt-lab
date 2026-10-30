@@ -40,7 +40,7 @@ class ParallelDependencies(SimulationCase):
         result=self.execute(p,'--threads',1)
         self.assertEqual(self.registers(result,0)[0],99)
         self.assertGreater(sum(b['waw_conflicts'] for b in result['hardware']['scoreboards']),0)
-        p=Program().emit('MOVI',rd=0,imm=3).emit('MOVI',rd=4,imm=7).emit('MOVI',rd=8,imm=2)
+        p=Program().emit('NOP').emit('MOVI',rd=0,imm=3).emit('MOVI',rd=4,imm=7).emit('MOVI',rd=8,imm=2)
         p.emit('IMAD',rd=16,ra=0,rb=4,rc=8).emit('MOVI',rd=8,imm=99).emit('EXIT')
         result=self.execute(p,'--threads',1)
         self.assertEqual((self.registers(result,16)[0],self.registers(result,8)[0]),(23,99))

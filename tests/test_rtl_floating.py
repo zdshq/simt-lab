@@ -67,7 +67,7 @@ class FloatingPipeline(SimulationCase):
         p = Program()
         for register in range(40):
             p.emit('FADD', rd=register, ra=Z, rb=Z)
-        result = self.execute(p.emit('EXIT'), '--threads', 1, '--fp-latency', 100)
+        result = self.execute(p.emit('EXIT'), '--threads', 1, '--fp-latency', 1000)
         hardware = result['hardware']
         self.assertGreater(hardware['completion_stalls'], 0)
         self.assertEqual(sum(unit['accepted'] for unit in hardware['floating_units']), 40)

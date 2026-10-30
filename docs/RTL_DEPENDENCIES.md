@@ -2,7 +2,7 @@
 
 启用 `--timing --scoreboard-rtl` 后，一条指令的依赖不再通过 C++ 循环逐个查询并合并。每个物理 warp 的 scoreboard 直接连接 `dependency_query.sv`，一次组合求值同时判断三个普通源、一个普通目标和两个谓词端口。真实发射使用电路的 `ready` 输出。
 
-这套端口数量、逐 lane 预约和旁路拓扑是项目设计，不是 NVIDIA scoreboard 的精确逆向。译码、调度、寄存器数据可分别选择各自 RTL；最完整的当前路径使用 `--register-rtl --collector-rtl --scoreboard-rtl`。实例间引脚路由、指令映像、CTA 资源分配和部分后台执行仍有 C++，没有形成完整 RTL GPU。
+这套端口数量、逐 lane 预约和旁路拓扑是项目设计，不是 NVIDIA scoreboard 的精确逆向。译码、调度、寄存器数据可分别选择各自 RTL；最完整的当前路径使用 `--register-rtl --collector-rtl --scoreboard-rtl`。实例间引脚路由、指令后备映像、CTA 资源分配和部分后台执行仍有 C++，没有形成完整 RTL GPU。
 
 ## 状态怎样接到查询端口
 

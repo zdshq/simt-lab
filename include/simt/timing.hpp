@@ -17,6 +17,7 @@
 #include "simt/warp_scheduler.hpp"
 #include "simt/execution_arbiter.hpp"
 #include "simt/instruction_decoder.hpp"
+#include "simt/instruction_fetch.hpp"
 #include <deque>
 
 namespace simt {
@@ -53,6 +54,7 @@ struct TimedSm {
     hw::BankedShared tmem;
     std::unique_ptr<hw::TensorEngine> array;
     std::unique_ptr<hw::ExecutionArbiter> execution_arbiter;
+    std::unique_ptr<hw::InstructionFetch> instruction_fetch;
     std::optional<uint64_t> tensor_owner;
     std::map<uint32_t, uint32_t> tensor_columns;
     uint32_t allocated_columns = 0;
@@ -247,6 +249,7 @@ private:
     void dump_statistics(std::ostream& out) const;
     void dump_execution_arbiters(std::ostream& out) const;
     void dump_instruction_decoders(std::ostream& out) const;
+    void dump_instruction_fetch(std::ostream& out) const;
     void dump_memory(std::ostream& out) const;
     void dump_tensor(std::ostream& out) const;
     void dump_async(std::ostream& out) const;

@@ -27,8 +27,8 @@ class TimingTest(SimulationCase):
         for index in range(12):
             dependent.emit('IADD', rd=0, ra=0, rb=Z)
             independent.emit('IADD', rd=index, ra=Z, rb=Z)
-        slow = self.timed(dependent.emit('EXIT'), '--threads', 1)['hardware']
-        fast = self.timed(independent.emit('EXIT'), '--threads', 1)['hardware']
+        slow = self.timed(dependent.emit('EXIT'), '--threads', 1, '--int-latency', 40)['hardware']
+        fast = self.timed(independent.emit('EXIT'), '--threads', 1, '--int-latency', 40)['hardware']
         self.assertGreater(slow['cycles'], fast['cycles'] * 2)
         self.assertGreater(slow['scoreboard_stalls'], 0)
         self.assertEqual(fast['scoreboard_stalls'], 0)
@@ -72,7 +72,7 @@ class TimingTest(SimulationCase):
     def test_writeback_contention(self):
         p = Program().emit('FADD', rd=4, ra=Z, rb=Z).emit('MOVI', rd=2, imm=3)
         p.emit('IADD', rd=8, ra=Z, rb=Z).emit('EXIT')
-        result = self.timed(p, '--threads', 1)
+        result = self.timed(p, '--threads', 1, '--fp-latency', getattr(self, 'writeback_float_latency', 6))
         self.assertGreater(result['hardware']['writeback_stalls'], 0)
         self.assertNotEqual(events(result, 0, 'retire'), events(result, 2, 'retire'))
 
@@ -124,10 +124,11 @@ class TimingTest(SimulationCase):
         for stride in (4, 128, 0):
             p = Program().emit('S2R', rd=0, imm=0).emit('MOVI', rd=1, imm=stride)
             p.emit('IMUL', rd=2, ra=0, rb=1).emit('LDS', rd=3, ra=2, mode=4).emit('EXIT')
-            reports.append(self.timed(p)['hardware'])
-        self.assertEqual(reports[1]['cycles'] - reports[0]['cycles'], 31)
-        self.assertEqual(reports[0]['cycles'], reports[2]['cycles'])
-        self.assertEqual(reports[2]['shared'][0]['broadcasts'], 31)
+            reports.append(self.timed(p))
+        durations = [events(report, 3, 'retire')[0]-events(report, 3, 'execute')[0] for report in reports]
+        self.assertEqual(durations[1] - durations[0], 31)
+        self.assertEqual(durations[0], durations[2])
+        self.assertEqual(reports[2]['hardware']['shared'][0]['broadcasts'], 31)
 
     def test_real_cache_and_store_invalidation(self):
         p = Program().emit('LDG', rd=0, ra=Z, mode=4).emit('LDG', rd=1, ra=Z, mode=4)

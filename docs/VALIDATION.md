@@ -799,3 +799,50 @@ python3 artifacts/rtl-dependencies-final/audit.py
 审计核对八份模块清单、两份实际综合网表、一份适配器 sanitizer 清单、十份报告、346 个源码/模板/规范文件以及三个联合二进制，保存在 artifacts/rtl-dependencies-final/evidence-audit.json。查询网表 SHA-256 为 `057a1bc94438adeb2ed42406dc4d5faaa87705169861282c4708469d9628fe64`，完整 scoreboard 为 `da8798a04e0bf1e6245cf3463c682b350ac73688fbaa21acf1ff66848bfa5114`。
 
 完整目标继续 active。指令存储/取指、前端顶层连接、异步后台/CTA 服务次序、SFU/剩余访存、外部返回选择、整机 RTL、实卡参数校准、PTX 异步矩阵协议和最终硬件审计仍未完成。
+## 指令缓存与取指 RTL 阶段（基线 6dca143）
+
+本阶段把实际发射前的原始指令读取接入有限同步缓存。每 SM 八个物理分区、每分区 4 KiB 数据与 64 行 tag/有效位，缺失经过单通道轮转补齐四个 128 位字；发射不能越过该路径读取宿主预解码对象。结构、生命周期及后备存储模型边界见 [RTL_INSTRUCTION_FETCH.md](RTL_INSTRUCTION_FETCH.md)。
+
+最终验收：
+
+| 范围 | 结果 | 本地证据 |
+|---|---|---|
+| 联合 Release 全量 | 66 套件，983 项通过：867 Python / 116 C++ | `artifacts/rtl-fetch-final/joint-ctest.log`、`joint-tests.log` |
+| 普通 Debug 全量 | 27 套件，279 项：277 通过 / 2 按条件跳过 | `default-ctest.log`、`default-tests.log` |
+| 完整八缓存独立 RTL | 5 项通过 | `instruction_fetch/simulation.log` |
+| 独立 RTL ASan/UBSan | 5 项通过 | `artifacts/rtl-fetch-sanitize/instruction_fetch/` |
+| 实际适配器 ASan/UBSan | 4 项通过 | `artifacts/rtl-fetch-adapter-sanitize/` |
+| 完整综合网表 | 5 项通过 | `instruction_fetch/gate.log` |
+
+局部 sanitizer 不等于整机联合 sanitizer。综合对象未缩小参数：中间数据/tag 存储定义为 128×256 与 24×64，层次实例数为八，总计 274,432 位；最终通用映射为 564,062 个单元、276,530 个 FF 位。未映射 SRAM 宏或 FPGA BRAM，没有工艺面积/频率结论。
+
+初次联合回归 64 套件中 16 套件失败，发现补充结束进入 HOLD 的那一拍，尚未被译码器取走的指令没有计入 busy，旧的整机死锁检测提前触发。实际电路增加 `response_seen`，只在查询响应被取走或候选废弃排空后解除待处理状态，并新增独立 RTL/网表检查；没有删除死锁检测或加入任意宽限时间。初始日志保存在 `initial-joint-*`，修复前网表移至 `instruction_fetch-before-response-fix/`。
+
+修复后 65 套件中尚有 5 套件失败，原因是原有时序压力用例未包含冷取指：整 kernel 周期掩盖依赖链和 shared bank 差异，跨行缺失又使写回竞争、满完成队列和 pending store/WAR 不再重叠。保留原行为断言并修正刺激：依赖链延迟统一设为 40，bank 检查改为 LDS 的 execute→retire 时长，RTL 写回竞争配置 FP 延迟为 8，满队列压力延迟为 1,000；竞争的共享写入/屏障预约放入同一指令行并共享分区，WAR 的旧源收集与新写入放入同一指令行。仍要求原来的 31 拍 bank 差异、32 个完成槽满载及相应冲突/拒绝事件。
+
+新整机测试首次也暴露两处测试代码错误：八个单 warp CTA 的槽分配不会自动覆盖所有分区，已改为一个八 warp CTA；Graph 下载调用改用真实公开 API `device.d2h()`。失败日志 `response-fix-*`、`targeted-ctest.log`、`targeted-races.log` 均保留。最终完整回归验证上述修改在普通和 RTL 后端上成立。
+
+```sh
+cmake --build build-cache-rtl -j4
+ctest --test-dir build-cache-rtl --output-on-failure
+cmake --build build -j4
+ctest --test-dir build --output-on-failure
+python3 examples/hardware_host.py --build build-cache-rtl \
+  --register-rtl --collector-rtl --scoreboard-rtl --cache-rtl --tensor-rtl \
+  --out artifacts/rtl-fetch-host
+python3 artifacts/rtl-fetch-final/check_monitor.py
+python3 artifacts/rtl-fetch-final/audit.py
+```
+
+四类主机上传→Graph→下载各重放两次，独立数学参考通过，且八份下载与依赖查询阶段逐字节相同；另有监控会话中的两次 Transformer 重放。十份实际报告均核对取指/补充守恒、译码与依赖查询计数、执行端口和已排空的异步状态。新增取指等待会改变模型时序，不能再要求完整 hardware/trace 与上一阶段相同。
+
+| 负载 | 本阶段两次 kernel 模型周期 | 上一阶段 |
+|---|---|---|
+| 向量 | 4832 / 4850 | 4832 / 4850 |
+| 规约 | 2913 / 3077 | 2021 / 2240 |
+| GEMM | 4028 / 3931 | 3868 / 3416 |
+| Transformer | 17092 / 17092 | 5736 / 5741 |
+
+普通 nvidia-smi 再次实际列出 RTX 4070 SUPER 与 `SIMT Lab 2 SM (simulator)`，7 MiB 分配、释放至零、退出移除均通过；直接 `/usr/bin/nvidia-smi -L` 仍只列出实卡。这是已有用户入口与 NVML 桥接层的真实状态查询，不是新增 CUDA 驱动或 PCIe 设备。
+
+审计核对四份电路清单、一份实际综合网表、一份适配器 sanitizer 清单、十份主机报告、355 个源码/模板/规范文件和三个联合二进制，记录在 `artifacts/rtl-fetch-final/evidence-audit.json`。综合网表 SHA-256 为 `017d8cb2ce76010f1147b46896ce27fd7f3779d9b22951cd9f3c66dbb142b7d0`。仍未完成后备指令存储与数据层次连接、完整前端顶层、后台服务仲裁、其余执行/访存、整 GPU RTL、实卡校准及 PTX 异步矩阵协议；[总计划](HARDWARE_PLAN.md) 继续进行。

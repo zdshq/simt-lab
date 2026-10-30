@@ -22,7 +22,7 @@ add_library(simt_core src/machine.cpp src/execution.cpp src/control.cpp src/coll
     src/timing/execute.cpp src/timing/integer.cpp src/timing/floating.cpp src/timing/collective.cpp src/timing/control.cpp src/timing/cta_barrier.cpp src/timing/registers.cpp src/timing/collectors.cpp src/timing/writeback.cpp src/timing/memory.cpp src/timing/retire.cpp src/timing/report.cpp
     src/hardware/tensor_array.cpp src/hardware/tensor_engine.cpp src/timing/tensor_transfer.cpp src/timing/tensor_control.cpp
     src/timing/tensor_tile.cpp src/timing/tensor_operands.cpp src/timing/async_launch.cpp
-    src/timing/async_barrier.cpp src/timing/async_transaction.cpp src/timing/async_dma.cpp src/timing/async_dma_rtl.cpp src/timing/async_report.cpp src/timing/atomic.cpp src/timing/warp_scheduler.cpp src/timing/execution_arbiter.cpp src/timing/execution_report.cpp src/timing/decoder_report.cpp ${GENERATED_DIR}/isa.hpp)
+    src/timing/async_barrier.cpp src/timing/async_transaction.cpp src/timing/async_dma.cpp src/timing/async_dma_rtl.cpp src/timing/async_report.cpp src/timing/atomic.cpp src/timing/warp_scheduler.cpp src/timing/execution_arbiter.cpp src/timing/execution_report.cpp src/timing/decoder_report.cpp src/timing/fetch_report.cpp ${GENERATED_DIR}/isa.hpp)
 add_dependencies(simt_core generate_isa)
 target_include_directories(simt_core PUBLIC include ${GENERATED_DIR})
 target_compile_options(simt_core PRIVATE -Wall -Wextra -Wpedantic -Werror -ffp-contract=off)
@@ -44,7 +44,7 @@ add_library(simt_hardware src/hardware/port.cpp src/hardware/dram.cpp src/hardwa
     src/hardware/cache_request.cpp src/hardware/cache_fill.cpp src/hardware/coalescer.cpp src/hardware/shared.cpp
     src/hardware/hierarchy.cpp src/hardware/scoreboard.cpp src/hardware/scoreboard_engine.cpp src/hardware/register_file.cpp src/hardware/resources.cpp src/hardware/local.cpp
     src/hardware/atomic_queue.cpp src/hardware/atomic_execute.cpp src/hardware/shared_atomic.cpp
-    src/hardware/lifetime.cpp src/hardware/context.cpp src/hardware/warp_control.cpp src/hardware/warp_frontend.cpp src/hardware/cta_barrier.cpp src/hardware/transaction_table.cpp src/hardware/dma_engine.cpp src/hardware/warp_scheduler.cpp src/hardware/execution_arbiter.cpp src/hardware/instruction_decoder.cpp)
+    src/hardware/lifetime.cpp src/hardware/context.cpp src/hardware/warp_control.cpp src/hardware/warp_frontend.cpp src/hardware/cta_barrier.cpp src/hardware/transaction_table.cpp src/hardware/dma_engine.cpp src/hardware/warp_scheduler.cpp src/hardware/execution_arbiter.cpp src/hardware/instruction_decoder.cpp src/hardware/instruction_fetch.cpp)
 target_link_libraries(simt_hardware PUBLIC simt_storage)
 add_dependencies(simt_hardware generate_isa)
 target_include_directories(simt_hardware PUBLIC ${GENERATED_DIR})
@@ -216,6 +216,12 @@ if(SIMT_REGISTER_RTL)
     target_link_libraries(test-rtl-decoder-path PRIVATE simt_core)
     target_compile_options(test-rtl-decoder-path PRIVATE -Wall -Wextra -Wpedantic -Werror)
     add_test(NAME rtl_instruction_decoder_path COMMAND test-rtl-decoder-path)
+    add_executable(test-rtl-instruction-fetch tests/test_rtl_instruction_fetch.cpp)
+    target_link_libraries(test-rtl-instruction-fetch PRIVATE simt_hardware)
+    target_compile_options(test-rtl-instruction-fetch PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    add_test(NAME rtl_instruction_fetch_adapter COMMAND test-rtl-instruction-fetch)
+    add_simt_test(rtl_instruction_fetch_execution test_rtl_instruction_fetch.py)
+    set_tests_properties(rtl_instruction_fetch_execution PROPERTIES TIMEOUT 300)
     add_executable(test-rtl-writeback tests/test_rtl_writeback.cpp)
     target_link_libraries(test-rtl-writeback PRIVATE simt_hardware)
     target_compile_options(test-rtl-writeback PRIVATE -Wall -Wextra -Wpedantic -Werror)
