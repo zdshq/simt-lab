@@ -19,6 +19,7 @@ TimedSm::TimedSm(const hw::PipelineConfig& config, const hw::TensorConfig& tenso
     for (uint32_t part = 0; part < config.partitions; ++part) {
         partitions.emplace_back(config.register_banks);
         if (config.register_rtl) partitions.back().registers = hw::make_register_file(config.partitions, config.register_banks, config.collector_rtl ? config.collectors : 0);
+        if (config.collector_rtl) partitions.back().scheduler = hw::make_warp_scheduler(32/config.partitions);
     }
     scoreboards.resize(config.max_warps); controls.resize(config.max_warps);
     if (config.collector_rtl) { cta_tables.resize(config.max_ctas); cta_owners.resize(config.max_ctas); }
@@ -48,7 +49,7 @@ TimingMachine::TimingMachine(Machine& machine, std::shared_ptr<hw::HardwareConte
         if (config.pipeline.collector_rtl) sms_.back()->transactions = hw::make_transaction_table(config.async.barrier_slots);
         if (config.pipeline.collector_rtl) sms_.back()->dma = hw::make_dma_engine(config.async.commands, config.async.fragments, config.async.chunk_bytes);
     }
-    warps_.resize(config.blocks); cta_slots_.resize(config.blocks);
+    warps_.resize(config.blocks); cta_slots_.resize(config.blocks); scheduler_releasing_.resize(config.blocks);
 }
 
 TimingMachine::~TimingMachine() { hardware_->physical.detach(local_base_, uint64_t{machine_.config_.blocks} * 32); }
@@ -98,6 +99,8 @@ void TimingMachine::place(uint32_t block, uint32_t sm, const hw::Residency& resi
         }
         auto& file = sms_[sm]->partitions[slot % sms_[sm]->partitions.size()].registers;
         if (file) file->clear(slot / sms_[sm]->partitions.size());
+        auto& scheduler=sms_[sm]->partitions[slot % sms_[sm]->partitions.size()].scheduler;
+        if (scheduler) scheduler->allocate(slot / sms_[sm]->partitions.size());
         auto& board = sms_[sm]->scoreboards[slot];
         if (!board) board = hw::make_scoreboard_engine(machine_.config_.pipeline.scoreboard_rtl);
         warps_[block][warp].slot = slot;
@@ -113,7 +116,7 @@ void TimingMachine::place(uint32_t block, uint32_t sm, const hw::Residency& resi
 bool TimingMachine::cta_drained(const Cta& cta) const {
     if (cta.completed || cta.warps.empty() || pending_copy(cta.block_id)) return false;
     for (uint32_t wi = 0; wi < cta.warps.size(); ++wi) {
-        if (warps_[cta.block_id][wi].inflight) return false;
+        if (warp_inflight(cta.block_id,wi)) return false;
         for (auto state : cta.warps[wi].state) if (state != LaneState::exited) return false;
     }
     return true;
@@ -124,7 +127,8 @@ bool TimingMachine::cta_drained(const Cta& cta) const {
 void TimingMachine::retire_ctas() {
     for (auto& cta : machine_.ctas_) {
         if (!cta_drained(cta)) continue;
-        if (!retire_transaction_cta(cta)) continue;
+        if (!scheduler_releasing_[cta.block_id] && !retire_transaction_cta(cta)) continue;
+        if (!release_scheduler_cta(cta)) continue;
         auto& sm = *sms_[cta.sm_id];
         if (!sm.transactions) for (const auto& [address, barrier] : cta.transactions) {
             static_cast<void>(address);
@@ -136,7 +140,7 @@ void TimingMachine::retire_ctas() {
         sm.allocated_columns -= sm.tensor_columns[cta.block_id];
         sm.tensor_columns.erase(cta.block_id);
         sm.barrier_entries -= static_cast<uint32_t>(cta.transactions.size());
-        cta.completed = true; ++machine_.completed_;
+        cta.completed = true; scheduler_releasing_[cta.block_id]=false; ++machine_.completed_;
         Inflight event; event.cta = cta.block_id; event.sm = cta.sm_id; trace(event, "cta_retire");
     }
 }
@@ -146,6 +150,7 @@ void TimingMachine::retire_ctas() {
 bool TimingMachine::issue_partition(uint32_t sm_id, uint32_t part) {
     auto& sm = *sms_[sm_id];
     auto& partition = sm.partitions[part];
+    if (partition.scheduler) return issue_partition_rtl(sm_id,part);
     for (uint32_t offset = 0; offset < sm.owners.size(); ++offset) {
         auto slot = (partition.cursor + offset) % sm.owners.size();
         if (machine_.config_.warp_policy == Policy::min_pc) slot = offset;
@@ -184,6 +189,7 @@ bool TimingMachine::advance() {
         for (auto& table : sm->cta_tables) if (table) table->tick();
         if (sm->transactions) sm->transactions->tick();
         if (sm->dma) sm->dma->tick();
+        for (auto& partition : sm->partitions) if (partition.scheduler) partition.scheduler->tick();
         for (auto& partition : sm->partitions) if (partition.registers) partition.registers->tick();
     }
     retire_ctas();

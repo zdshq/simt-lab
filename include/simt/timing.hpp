@@ -14,6 +14,7 @@
 #include "simt/warp_frontend.hpp"
 #include "simt/cta_barrier.hpp"
 #include "simt/transaction_table.hpp"
+#include "simt/warp_scheduler.hpp"
 #include <deque>
 
 namespace simt {
@@ -39,6 +40,7 @@ struct WarpOwner { uint32_t cta, warp; };
 struct Partition {
     hw::RegisterPorts ports;
     std::unique_ptr<hw::RegisterFile> registers;
+    std::unique_ptr<hw::WarpScheduler> scheduler;
     std::array<std::optional<uint64_t>,32> collector_owners;
     uint32_t cursor = 0;
     std::array<uint64_t, 7> available{};
@@ -125,6 +127,7 @@ private:
     std::vector<std::unique_ptr<TimedSm>> sms_;
     std::vector<std::vector<TimedWarp>> warps_;
     std::vector<uint32_t> cta_slots_;
+    std::vector<bool> scheduler_releasing_;
     std::map<uint64_t, std::unique_ptr<Inflight>> inflight_;
     std::deque<HardwareEvent> trace_;
     TimingStats stats_;
@@ -135,6 +138,10 @@ private:
     bool cta_drained(const Cta& cta) const;
     void retire_ctas();
     bool issue_partition(uint32_t sm, uint32_t partition);
+    bool issue_partition_rtl(uint32_t sm, uint32_t partition);
+    bool issue_scheduled_group(uint32_t cta, uint32_t warp, Group group);
+    bool release_scheduler_cta(const Cta& cta);
+    uint32_t warp_inflight(uint32_t cta, uint32_t warp) const;
     bool try_issue(uint32_t cta, uint32_t warp);
     bool issue_group(uint32_t cta, uint32_t warp, Group group);
     bool dependencies(uint32_t cta, uint32_t warp, Group group, const Footprint& footprint) const;

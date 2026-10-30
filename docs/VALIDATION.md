@@ -628,3 +628,54 @@ Transformer 每次为 8 条表命令、54 次搜索读、5 次发布、一次阶
 - 第一次网表编译把共享地址位生成其他 lane 进位的逻辑视作宽输出总线反馈，报 UNOPT/UNOPTFLAT。直接对顶层 public 端口添加 `split_var` 又被 SPLITVAR 拒绝；日志 `gate-run.log`、`gate-split-lint.log`。最终工具生成仅直接连线的顶层包装，让实际网表的地址总线作为内部信号分位分析，严格 lint 与全部六项行为通过。原始 `gates.v` 未改动，未降低容量或关闭这些告警。
 
 `artifacts/rtl-dma-final/audit.py` 核对四份独立工具清单、完整几何、实际网表和透明包装哈希、一份适配器 sanitizer 清单、十份主机报告、311 个源码文件和三个联合二进制；结果保存在 `evidence-audit.json`。本轮仅复跑新增 DMA 的六项独立场景；其余独立模块、完整联合 sanitizer 和整 GPU 综合未重跑。跨 warp/跨分区仲裁、SFU/剩余访存、外部内存返回选择、整机 RTL、实卡校准和 PTX 异步矩阵协议仍未完成，目标保持 active。
+
+## 阶段 16：跨 warp 候选端口、在途计数和串行化 RTL（2026-10-30）
+
+从 `74d77dd` 接续。collector 后端现在每分区实例化完整 32 槽调度器，由 RTL 保存轮转、重试、live、在途数和边界/访存状态。每拍最多检查一个候选，实际退休进入同拍旁路，CTA 资源等释放边沿后归还。取指译码、依赖查询组合与跨分区共享资源仲裁仍有 C++，详细字段、时钟与策略边界见 [RTL_WARP_SCHEDULER.md](RTL_WARP_SCHEDULER.md)。
+
+| 实际命令/范围 | 最终结果 |
+|---|---|
+| `cmake --build build -j4` / `ctest --test-dir build --output-on-failure` | 默认 Debug 27 套件、279 项运行：236 Python / 43 C++；277 通过、2 跳过，9.85 秒 |
+| `cmake --build build-cache-rtl -j4` / `ctest --test-dir build-cache-rtl --output-on-failure` | 联合 Release 58 套件、945 项全部通过：847 Python / 98 C++，35.21 秒；各套件按目的选择后端 |
+| `python3 tools/rtl.py --build build-release --module warp_scheduler --out artifacts/rtl-scheduler-final` | 完整 32 槽五项通过：容量、三种策略与反压、串行化/退休旁路、错误原子性/复用，以及 12,000 拍随机参考 |
+| 同模块 `--build build-sanitize --out artifacts/rtl-scheduler-sanitize` | 相同五项 ASan/UBSan 通过，包括最高槽 31 和全部槽分别 32 个在途计数 |
+| 同模块 `--synth --out artifacts/rtl-scheduler-final` | 完整容量 `check -assert` 通过，7,625 generic cells / 325 FF 位，32 份槽状态子模块，无 SRAM |
+| 同模块 `--build build-release --gate-sim --out artifacts/rtl-scheduler-final` | 最终实际综合网表通过同五项行为检查，不使用缩小容量或修改后的网表 |
+| `python3 artifacts/rtl-scheduler-final/build_adapter.py` | 实际适配器和完整 RTL 的四项独立 ASan/UBSan 通过：显式时钟、观察副本、事件阶段、独立实例和拒绝恢复 |
+| `rtl_warp_scheduler_execution` | 新增五项检查通过，覆盖 32 warp、1/2/4/8 分区、被阻塞的最高优先级 warp、访存/FENCE 顺序、7 CTA/37 线程槽复用，以及主机查询和错误恢复 |
+
+默认回归之后的最后两处修复仅涉及可选 RTL：逐槽计数连线，以及适配器在决定后拒绝生命周期事件。最终联合回归、独立 RTL/sanitizer、实际综合/网表和适配器 sanitizer 均包含这些修复。没有把默认构建的两个跳过项计作通过，也没有把同一场景的多种构建重复计为新检查。
+
+五后端同时启用执行向量、规约、GEMM、Transformer，各两次 Graph 重放；另外两次监控 Transformer。实际命令为：
+
+```sh
+python3 examples/hardware_host.py --build build-cache-rtl \
+  --register-rtl --collector-rtl --scoreboard-rtl --cache-rtl --tensor-rtl \
+  --out artifacts/rtl-scheduler-host
+python3 artifacts/rtl-scheduler-final/check_monitor.py
+python3 artifacts/rtl-scheduler-final/audit.py
+```
+
+十份报告逐一检查后端身份、硬件容量、时钟、每拍最多一次候选、发射/退休与 trace 一致、分配/释放一致及最终占用归零。实际写回容量限制每分区总在途数不超过 32；独立电路满计数测试的 1,024 总和仅用于验证位宽。下载内容与前一 DMA 阶段逐字节相同。
+
+| 两次 Graph kernel 的模型周期 | 前一 DMA 阶段 | 当前调度器 |
+|---|---:|---:|
+| vector_add | 4831 / 4850 | 4832 / 4850 |
+| reduction | 2008 / 2240 | 2021 / 2240 |
+| gemm | 3867 / 3416 | 3868 / 3416 |
+| tiny_transformer | 5735 / 5741 | 5736 / 5741 |
+
+变化来自有限候选机会和 CTA 释放阶段。停顿计数按实际硬件事件汇总，不沿用软件多候选扫描的计数口径；未宣称逐拍轨迹相同或实卡性能变化。
+
+监控会话完成实际 Transformer 后，已安装的普通 `nvidia-smi` 入口显示 RTX 4070 SUPER 和活模拟器；7 MiB 分配、释放到零、退出移除均通过。直接 `/usr/bin/nvidia-smi -L` 仍只显示实卡。列表、表格与 CSV 位于 `artifacts/rtl-scheduler-final/`，此功能仍属于 NVML 管理面，没有增加 CUDA/PCIe 兼容。
+
+保留的失败与修复：
+
+- `initial-lint.log`：候选扫描临时整数的高位未使用；改为明确五位槽号和位宽转换，没有屏蔽告警。
+- `rtl-run.log`、`rtl-run-2.log`：测试最初缺少 `<optional>`，随后同一 `auto` 声明混用不同 Verilator 输出类型；分别补齐头文件和显式整数类型。
+- `sanitize-run.log`、`adapter-sanitize-run.log`：旧版 Verilator 对最高槽的动态 packed 切片生成了越界 C++ 访问。改为逐槽六位连线数组，并静态连接观察总线；随后重新执行 RTL、sanitizer、综合、网表、适配器和联合回归。最终单元数为 7,625，早期未修复版本的综合数字不作为验收结果。
+- 人工复查补充了适配器阶段约束：决定后禁止新的 probe 或分配/释放/退休，避免先前接受结果被后续引脚变化撤销。负例已加入实际适配器检查；这项修复来自审查，没有虚构失败日志。
+
+审计脚本核对四份模块清单、完整容量与实际网表、一份适配器 sanitizer 清单、十份主机报告、320 个源码文件及三个联合二进制，结果保存在 `evidence-audit.json`。最终网表 SHA-256 为 `52bdd1e149078421899e565f42fbce11d6fc6028e276435b2812af2be4aea6c3`。本阶段只复跑新增调度电路的五项独立场景，未重跑全部历史独立模块、完整联合 sanitizer 或整 GPU 综合。
+
+完整目标保持 active：取指译码、依赖查询组合、跨分区仲裁、SFU/剩余访存、外部内存返回选择、整机 RTL、实卡参数辨识、PTX 异步矩阵协议与最终硬件审计仍须继续。

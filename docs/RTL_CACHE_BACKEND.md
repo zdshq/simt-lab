@@ -120,4 +120,4 @@ python3 tools/rtl.py --module cache --ways 8 --gate-sim --out artifacts/rtl-cach
 
 ## 尚未完成
 
-当前是 CPU 执行的混合仿真。缓存和 Tensor 电路已经参与计算，但 DRAM、warp 调度、合并器、维护队列、一致性协调、CP 和主机接口仍是 C++；[scoreboard RTL](RTL_SCOREBOARD.md) 已接入依赖控制，[寄存器数据 RTL](RTL_REGISTERS.md) 也可同时启用，还可连接 [collector/读仲裁 RTL](RTL_COLLECTOR.md)，但写回排序与整体控制尚未形成完整 RTL SM。没有 FPGA bitstream、布局布线、NVIDIA 门级还原或实卡参数校准。完整目标继续以 [HARDWARE_PLAN.md](HARDWARE_PLAN.md) 为准。
+当前是 CPU 执行的混合仿真。缓存和 Tensor 电路已经参与计算，但 DRAM、取指译码、跨分区仲裁、合并器、维护队列、一致性协调、CP 和主机接口仍有 C++；[scoreboard RTL](RTL_SCOREBOARD.md) 已接入依赖控制，[寄存器数据 RTL](RTL_REGISTERS.md)、[collector/读仲裁 RTL](RTL_COLLECTOR.md)、[写回 RTL](RTL_WRITEBACK.md) 与 [跨 warp 调度 RTL](RTL_WARP_SCHEDULER.md) 也已可选接入。尚未形成完整 RTL SM，没有 FPGA bitstream、布局布线、NVIDIA 门级还原或完整实卡参数校准。完整目标继续以 [HARDWARE_PLAN.md](HARDWARE_PLAN.md) 为准。

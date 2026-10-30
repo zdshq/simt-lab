@@ -9,6 +9,41 @@ std::string timing_location(uint32_t cta, uint32_t sm, uint32_t warp, uint32_t p
 }
 
 namespace {
+// Scheduler counters describe one physical probe port, including rejected candidates and committed lifecycle events.
+// 调度器计数描述一个物理候选检查端口，包括拒绝候选及已提交的生命周期事件。
+void scheduler_stats(std::ostream& out,const std::vector<std::unique_ptr<TimedSm>>& sms) {
+    out << ",\"warp_schedulers\":["; bool first=true;
+    for (uint32_t sm=0; sm<sms.size(); ++sm) for (uint32_t part=0; part<sms[sm]->partitions.size(); ++part) {
+        const auto& unit=sms[sm]->partitions[part].scheduler; if (!unit) continue;
+        if (!first) out << ',';
+        first=false; const auto& s=unit->stats(); const auto state=unit->read();
+        out << "{\"sm\":" << sm << ",\"partition\":" << part << ",\"backend\":\"rtl\",\"physical_slots\":32"
+            << ",\"limit\":" << 32/sms[sm]->partitions.size() << ",\"probe_ports\":1,\"storage_bits\":325"
+            << ",\"live\":" << state.live << ",\"boundary\":" << state.boundary << ",\"memory\":" << state.memory
+            << ",\"cursor\":" << state.cursor << ",\"skipped\":" << state.skipped
+            << ",\"clocks\":" << s.clocks << ",\"active_clocks\":" << s.active_clocks
+            << ",\"admitted\":" << s.admitted << ",\"released\":" << s.released << ",\"retired\":" << s.retired
+            << ",\"probes\":" << s.probes << ",\"issued\":" << s.issued << ",\"guard_stalls\":" << s.guard_stalls
+            << ",\"dependency_stalls\":" << s.dependency_stalls << ",\"boundary_stalls\":" << s.boundary_stalls
+            << ",\"memory_stalls\":" << s.memory_stalls << ",\"count_stalls\":" << s.count_stalls
+            << ",\"collector_stalls\":" << s.collector_stalls << ",\"completion_stalls\":" << s.completion_stalls
+            << ",\"peak_inflight\":" << s.peak_inflight << ",\"inflight\":[";
+        for (uint32_t slot=0; slot<32; ++slot) { if (slot) out << ','; out << state.inflight[slot]; }
+        out << "]}";
+    }
+    out << ']';
+}
+
+TimingStats scheduling_statistics(TimingStats result,const std::vector<std::unique_ptr<TimedSm>>& sms) {
+    for (const auto& sm : sms) for (const auto& partition : sm->partitions) {
+        if (!partition.scheduler) continue;
+        const auto& s=partition.scheduler->stats();
+        result.scoreboard_stalls+=s.guard_stalls+s.dependency_stalls;
+        result.boundary_stalls+=s.boundary_stalls; result.memory_order_stalls+=s.memory_stalls;
+        result.collector_stalls+=s.collector_stalls; result.completion_stalls+=s.completion_stalls+s.count_stalls;
+    }
+    return result;
+}
 // Report each physical file and actual accepted port events, including partitions that remain idle.
 // 报告每份物理寄存器堆与实际接受的端口事件，包括始终空闲的分区。
 void register_stats(std::ostream& out, const std::vector<std::unique_ptr<TimedSm>>& sms) {
@@ -252,17 +287,18 @@ void TimingMachine::trace(const Inflight& entry, const std::string& action) {
 }
 
 void TimingMachine::dump_statistics(std::ostream& out) const {
+    const auto stats=scheduling_statistics(stats_,sms_);
     out << "{\"model\":\"simt-research-v1\",\"cycles\":" << cycle_ - started_
         << ",\"clock_start\":" << started_ << ",\"clock_end\":" << cycle_
         << ",\"memory_counters_scope\":\"device_cumulative\""
-        << ",\"issued\":" << stats_.issued << ",\"retired\":" << stats_.retired
-        << ",\"scoreboard_stalls\":" << stats_.scoreboard_stalls << ",\"boundary_stalls\":" << stats_.boundary_stalls
-        << ",\"collector_stalls\":" << stats_.collector_stalls << ",\"register_bank_stalls\":" << stats_.register_stalls
-        << ",\"unit_stalls\":" << stats_.unit_stalls << ",\"writeback_stalls\":" << stats_.writeback_stalls
-        << ",\"completion_stalls\":" << stats_.completion_stalls
-        << ",\"cta_barrier_stalls\":" << stats_.cta_barrier_stalls
-        << ",\"memory_order_stalls\":" << stats_.memory_order_stalls << ",\"peak_ctas_per_sm\":" << stats_.peak_ctas
-        << ",\"dropped_trace\":" << stats_.dropped_trace;
+        << ",\"issued\":" << stats.issued << ",\"retired\":" << stats.retired
+        << ",\"scoreboard_stalls\":" << stats.scoreboard_stalls << ",\"boundary_stalls\":" << stats.boundary_stalls
+        << ",\"collector_stalls\":" << stats.collector_stalls << ",\"register_bank_stalls\":" << stats.register_stalls
+        << ",\"unit_stalls\":" << stats.unit_stalls << ",\"writeback_stalls\":" << stats.writeback_stalls
+        << ",\"completion_stalls\":" << stats.completion_stalls
+        << ",\"cta_barrier_stalls\":" << stats.cta_barrier_stalls
+        << ",\"memory_order_stalls\":" << stats.memory_order_stalls << ",\"peak_ctas_per_sm\":" << stats.peak_ctas
+        << ",\"dropped_trace\":" << stats.dropped_trace;
 }
 
 void TimingMachine::dump_memory(std::ostream& out) const {
@@ -320,6 +356,7 @@ void TimingMachine::dump_tensor(std::ostream& out) const {
 
 void TimingMachine::dump(std::ostream& out) const {
     dump_statistics(out);
+    scheduler_stats(out,sms_);
     scoreboard_stats(out, sms_);
     control_stats(out, sms_);
     frontend_stats(out, sms_);

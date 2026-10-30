@@ -40,9 +40,13 @@ void TimingMachine::commit(Inflight& entry) {
         advance_warp_pc(entry);
         sms_[entry.sm]->tensor_owner.reset();
     }
-    --timed.inflight;
-    if (f.boundary) timed.boundary = false;
-    if (f.pipe == Pipe::memory) timed.memory = false;
+    auto& scheduler=sms_[entry.sm]->partitions[entry.partition].scheduler;
+    if (scheduler) scheduler->retire(timed.slot/sms_[entry.sm]->partitions.size(),f.boundary,f.pipe==Pipe::memory);
+    else {
+        --timed.inflight;
+        if (f.boundary) timed.boundary = false;
+        if (f.pipe == Pipe::memory) timed.memory = false;
+    }
     ++stats_.retired; trace(entry, "retire");
 }
 

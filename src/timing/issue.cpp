@@ -69,9 +69,11 @@ void TimingMachine::reserve(Inflight& entry) {
     for (const auto& use : f.reads) timed.scoreboard->reserve_read(use.reg, use.mask);
     if (f.destination) timed.scoreboard->reserve_write(*f.destination, f.write_mask);
     if (f.predicate) timed.scoreboard->reserve_predicate(*f.predicate, f.write_mask);
-    ++timed.inflight;
-    timed.boundary |= f.boundary;
-    timed.memory |= f.pipe == Pipe::memory;
+    if (!sms_[entry.sm]->partitions[entry.partition].scheduler) {
+        ++timed.inflight;
+        timed.boundary |= f.boundary;
+        timed.memory |= f.pipe == Pipe::memory;
+    }
 }
 
 // Advance fetch PCs on ordinary issue; control instructions hold their continuation until retirement.

@@ -2,7 +2,7 @@
 
 构建 `SIMT_REGISTER_RTL=ON` 后，运行 `--timing --register-rtl --collector-rtl`，或使用 Python `Device(timing=True, register_rtl=True, collector_rtl=True)`。此模式实例化 `register_operand_unit.sv`，将实际寄存器堆的读端口直接接到 `operand_collector.sv`。数据不会先经 C++ 缓冲，再回填电路。
 
-本阶段电路负责收集槽分配、源寄存器/掩码、未收集位、年龄排序、bank 读授权、数据锁存、就绪、释放和同拍复用。C++ 仍负责指令解码、warp 调度、执行单元准入与尚未电路化的运算。它不是完整 RTL SM，也不是 NVIDIA operand collector 电路的精确逆向。
+本阶段电路负责收集槽分配、源寄存器/掩码、未收集位、年龄排序、bank 读授权、数据锁存、就绪、释放和同拍复用。[跨 warp 调度](RTL_WARP_SCHEDULER.md) 现已接入独立 RTL；C++ 仍负责指令解码、依赖查询组合、部分执行单元准入与尚未电路化的运算。它不是完整 RTL SM，也不是 NVIDIA operand collector 电路的精确逆向。
 
 ## 每个分区保存什么
 

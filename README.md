@@ -4,7 +4,7 @@
 
 项目使用 C++20 实现执行核心，Python 生成 ISA 编码接口、构造 kernel 和独立参考结果。默认设备含两个 SM，每个 warp 有 32 个逻辑线程。它运行在 CPU 上，模拟的是自定义机器的行为，不预测真实 GPU 周期、面积或功耗。
 
-这里使用自己的指令编码与数值规范，借鉴作者公开的设计方法，不宣称兼容 curryGPU 的私有二进制、NVIDIA SASS 或完整 CUDA。ISS 和时序模型已运行；缓存、scoreboard、寄存器 bank 仲裁及 Tensor 数值/乘加阵列已有验证的 RTL。L1/L2、Tensor、scoreboard、寄存器数据、操作数收集器、整数/浮点/集合执行、重聚令牌、warp PC/状态/分组选择、CTA/异步事务屏障、DMA 与写回 RTL 已可选接入 ISA 和主机 Graph；完整 RTL GPU、PTX 编译器和 FPGA 实现仍未完成。
+这里使用自己的指令编码与数值规范，借鉴作者公开的设计方法，不宣称兼容 curryGPU 的私有二进制、NVIDIA SASS 或完整 CUDA。ISS 和时序模型已运行；缓存、scoreboard、寄存器 bank 仲裁及 Tensor 数值/乘加阵列已有验证的 RTL。L1/L2、Tensor、scoreboard、寄存器数据、操作数收集器、整数/浮点/集合执行、重聚令牌、warp PC/状态/分组选择、跨 warp 调度、CTA/异步事务屏障、DMA 与写回 RTL 已可选接入 ISA 和主机 Graph；完整 RTL GPU、PTX 编译器和 FPGA 实现仍未完成。
 
 开发阶段、验收条件和当前进展见 [实施计划](docs/PLAN.md)、[主机与 Graph 扩展计划](docs/HOST_PLAN.md) 和 [开发记录](docs/DEVELOPMENT.md)。每个通过验收的阶段单独 Git 提交。
 
@@ -64,7 +64,7 @@ python3 examples/host_graph.py
 
 [RTL 执行后端](docs/RTL_BACKEND.md) 已将该阵列接入实际 ISA/TMEM 与主机 Graph。以 `-DSIMT_TENSOR_RTL=ON` 构建后，运行 `python3 examples/hardware_host.py --build build-rtl --tensor-rtl`；每个 SM 拥有独立 RTL 实例，格式转换和乘加结果由电路产生，其余系统仍由 C++ 模拟。没有构建 RTL 却请求它会明确报错。
 
-[L1/L2 RTL 后端](docs/RTL_CACHE_BACKEND.md) 已接入每 SM 64 KiB L1 和共享 256 KiB L2。额外以 `-DSIMT_CACHE_RTL=ON` 构建，通过 `--cache-rtl` 或 `Device(timing=True, cache_rtl=True)` 启用，可与 Tensor RTL 同时使用。实际 tag/data、缺失合并和返回来自电路，DRAM、调度及一致性协调仍为 C++。
+[L1/L2 RTL 后端](docs/RTL_CACHE_BACKEND.md) 已接入每 SM 64 KiB L1 和共享 256 KiB L2。额外以 `-DSIMT_CACHE_RTL=ON` 构建，通过 `--cache-rtl` 或 `Device(timing=True, cache_rtl=True)` 启用，可与 Tensor RTL 同时使用。实际 tag/data、缺失合并和返回来自电路，DRAM、跨分区调度及一致性协调仍为 C++。
 
 缓存 LRU 已按组实现为排名寄存器和局部比较电路，完整 256 KiB、8 路 L2 的保留存储综合、RTL 和 sanitizer 检查均通过。2/4 KiB 小配置另通过完整综合及相同网表行为检查；这些结果不等于具体 FPGA/ASIC 的存储宏映射或整 GPU 面积。
 
@@ -80,16 +80,18 @@ python3 examples/host_graph.py
 
 [浮点执行 RTL](docs/RTL_FLOATING.md) 随 collector 后端启用，FADD/FMUL/FFMA 经过 32 份四级 FMA，FSETP/I2F/F2I 使用位电路和对齐寄存器。结果在发射前预约 32 项有限存储，再直接送入写回端口 1。默认六拍保留，额外延迟由硬件计数；配置小于四拍明确拒绝。完整模块已通过实际综合网表检查，SFU 和部分控制仍为 C++。
 
-[谓词存储 RTL](docs/RTL_PREDICATES.md) 随寄存器后端启用，每 warp 七个 32 位字、三个读取多路器和一个掩码写端口；P7 为常量。发射 guard 和 VOTE 读取实际电路输出，collector 模式的比较/ELECT 结果经写回总线直接进入存储，包含同拍旁路与槽复用清零。8/32 槽完成综合与实际网表验证，跨 warp 发射仲裁仍有 C++；集合运算和 warp 内 PC/状态现有下述 RTL 通路。
+[谓词存储 RTL](docs/RTL_PREDICATES.md) 随寄存器后端启用，每 warp 七个 32 位字、三个读取多路器和一个掩码写端口；P7 为常量。发射 guard 和 VOTE 读取实际电路输出，collector 模式的比较/ELECT 结果经写回总线直接进入存储，包含同拍旁路与槽复用清零。8/32 槽完成综合与实际网表验证；集合运算、warp 内 PC/状态和跨 warp 候选选择现有下述 RTL 通路，取指译码仍有 C++。
 
-新增 [跨 lane 集合 RTL](docs/RTL_COLLECTIVES.md)：SHFL/VOTE/ELECT/ACTIVEMASK 通过 collector 控制端口、独立谓词读口、选择/归约电路和单项结果寄存器直接进入写回。跨 warp 发射仲裁和 CTA 屏障仍有 C++；集合单元已通过 RTL、sanitizer 和综合网表验证。
+新增 [跨 lane 集合 RTL](docs/RTL_COLLECTIVES.md)：SHFL/VOTE/ELECT/ACTIVEMASK 通过 collector 控制端口、独立谓词读口、选择/归约电路和单项结果寄存器直接进入写回。集合单元已通过 RTL、sanitizer 和综合网表验证；CTA 屏障与跨 warp 候选选择也已接入各自 RTL，实例间路由仍有 C++。
 
 新增 [分支与重聚令牌 RTL](docs/RTL_WARP_CONTROL.md)：每个实际使用的物理 warp 槽拥有 16 个令牌、1,568 位真实存储；EXIT/BRA/BSSY/BSYNC/BREAK/YIELD 的状态转换由电路产生。宿主令牌数组只供观察，实际 lane 状态现由下述前端直接提供。完整令牌子模块已通过综合和网表验证。
 
-新增 [Warp 状态与选择前端 RTL](docs/RTL_WARP_FRONTEND.md)：每物理 warp 用 3,233 位存储持有 PC、运行状态、等待元数据和轮转游标，直接连接重聚单元。五层比较树选择最小/最大/轮转 PC 组，YIELD 恢复与普通发射 PC 推进由电路完成；跨 warp 仲裁及 CTA/异步计数仍有 C++。完整组合前端包含 4,801 FF 位，已通过综合网表验证。
+新增 [Warp 状态与选择前端 RTL](docs/RTL_WARP_FRONTEND.md)：每物理 warp 用 3,233 位存储持有 PC、运行状态、等待元数据和轮转游标，直接连接重聚单元。五层比较树选择最小/最大/轮转 PC 组，YIELD 恢复与普通发射 PC 推进由电路完成；CTA/异步等待通过专用表的原始完成信号唤醒。完整组合前端包含 4,801 FF 位，已通过综合网表验证，取指译码和跨分区共享资源仲裁仍有 C++。
 
 新增 [4070 SUPER 访存实测](docs/MEMORY_CALIBRATION.md)：手写 CUDA/PTX 完成缓存依赖链、carveout、合并和 shared bank 实验，保存 118 组/590 个原始样本及 30 组实际模型探针。广播与冲突趋势有实测依据，但 shared 相对代价与模型不同；L2 容量辨识和 NCU sector 计数尚未完成，没有把这些曲线冒充完整硬件逆向。
 
 新增 [DMA RTL](docs/RTL_DMA.md)：每 SM 64 命令槽、64 片段槽和 8 KiB 返回载荷存储，分片、地址/掩码、请求选择与完成资格由电路产生。片段在 shared 写确认后释放，命令在事务发布后释放；外部票据桥、返回响应选择和 shared bank 服务仍有 C++。完整容量实际综合为 400,338 generic cells / 87,547 FF 位。
 
-当前默认 Debug 运行 27 套件、279 项（277 通过，2 项未构建 RTL 而跳过）。当前联合 Release 构建通过 56 套件、936 项；本阶段新增 DMA 电路六项与实际适配器四项独立 ASan/UBSan 检查，未重跑完整联合 sanitizer 或整机综合。构建范围、实际结果与各阶段失败记录见 [验证记录](docs/VALIDATION.md)。不同构建包含既有场景复跑，独立 RTL 检查另计，各套件按其目的选择后端，并非全部同时启用所有 RTL。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。
+新增 [跨 warp 调度 RTL](docs/RTL_WARP_SCHEDULER.md)：每分区 32 个物理槽、325 位持久状态，每拍最多检查一个候选。轮转/固定优先级、拒绝重试、在途数及边界/访存串行化由电路决定，退休和 CTA 释放经过实际时钟；取指译码、scoreboard 查询组合及跨分区共享资源仲裁仍有 C++。完整实例综合为 7,625 generic cells / 325 FF 位，五项独立 RTL、sanitizer 与实际网表检查通过。
+
+当前默认 Debug 运行 27 套件、279 项（277 通过，2 项未构建 RTL 而跳过）。当前联合 Release 构建通过 58 套件、945 项；本阶段另通过调度器电路五项与实际适配器四项独立 ASan/UBSan 检查，未重跑完整联合 sanitizer 或整机综合。构建范围、实际结果与各阶段失败记录见 [验证记录](docs/VALIDATION.md)。不同构建包含既有场景复跑，独立 RTL 检查另计，各套件按其目的选择后端，并非全部同时启用所有 RTL。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。
