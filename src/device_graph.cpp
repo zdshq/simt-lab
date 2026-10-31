@@ -84,6 +84,7 @@ void Device::expand_node(Job& parent) {
 // 一个共享图解码器每个设备时钟最多展开一个节点。
 void Device::service_graphs() {
     if (!hardware_) return;
+    if (cp_) { expand_circuit_graph(); return; }
     for (auto& [id, job] : jobs_) {
         static_cast<void>(id);
         if (job.command.kind != CommandKind::graph || job.state != JobState::running) continue;

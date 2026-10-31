@@ -20,6 +20,7 @@
 #include "simt/instruction_fetch.hpp"
 #include "simt/async_service.hpp"
 #include "simt/cta_resources.hpp"
+#include "simt/tensor_memory.hpp"
 #include <deque>
 
 namespace simt {
@@ -54,13 +55,11 @@ struct TimedSm {
     std::vector<std::optional<uint32_t>> cta_owners;
     std::unique_ptr<hw::SharedPort> shared;
     hw::BankedShared constant{{65536, 1, 4, 8}};
-    hw::BankedShared tmem;
+    std::unique_ptr<hw::TensorMemory> tmem;
     std::unique_ptr<hw::TensorEngine> array;
     std::unique_ptr<hw::ExecutionArbiter> execution_arbiter;
     std::unique_ptr<hw::InstructionFetch> instruction_fetch;
     std::optional<uint64_t> tensor_owner;
-    std::map<uint32_t, uint32_t> tensor_columns;
-    uint32_t allocated_columns = 0;
     std::deque<DmaCommand> copies;
     std::optional<BarrierJob> barrier_job;
     std::unique_ptr<hw::TransactionTable> transactions;
@@ -195,6 +194,7 @@ private:
     void advance_tensor(Inflight& entry);
     void start_tensor(Inflight& entry);
     void start_tensor_transfer(Inflight& entry);
+    uint32_t tensor_address(uint32_t cta,uint32_t row,uint32_t column);
     void start_tensor_descriptor(Inflight& entry, uint32_t address);
     void free_tensor(Inflight& entry, uint32_t address);
     void allocate_tensor(Inflight& entry);

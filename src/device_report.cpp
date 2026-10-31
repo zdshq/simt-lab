@@ -13,7 +13,7 @@ void Device::publish_monitor() {
     if (!monitor_) return;
     MonitorRecord record;
     record.sms = sms_; record.used = arena.allocated_bytes();
-    record.ticks = ticks_; record.completed = notifications_;
+    record.ticks = ticks_; record.completed = notified_count();
     record.compute = compute_.value_or(0); record.copy = copy_.value_or(0);
     monitor_->publish(record);
 }
@@ -62,8 +62,8 @@ std::string Device::job_json(JobId id) const {
 std::string Device::stats_json() const {
     std::ostringstream out;
     out << "{\"sms\":" << sms_ << ",\"capacity\":" << ring_.size() << ",\"write\":" << written_
-        << ",\"read\":" << fetched_ << ",\"doorbell\":" << published_ << ",\"ticks\":" << ticks_
-        << ",\"completed\":" << notifications_ << ",\"compute\":" << compute_.value_or(0)
+        << ",\"read\":" << fetched_count() << ",\"doorbell\":" << published_count() << ",\"ticks\":" << ticks_
+        << ",\"completed\":" << notified_count() << ",\"compute\":" << compute_.value_or(0)
         << ",\"copy\":" << copy_.value_or(0) << ",\"dropped_trace\":" << dropped_trace_
         << ",\"mode\":\"" << (hardware_ ? "timing" : "functional") << "\",\"tensor_backend\":\""
         << (hardware_ ? (tensor_rtl_ ? "rtl" : "model") : "functional")
@@ -74,7 +74,14 @@ std::string Device::stats_json() const {
         << "\",\"scoreboard_rtl_available\":" << (hw::scoreboard_rtl_available() ? "true" : "false")
         << ",\"register_backend\":\"" << (hardware_ ? (register_rtl_ ? "rtl" : "model") : "functional")
         << "\",\"register_rtl_available\":" << (hw::register_rtl_available() ? "true" : "false")
-        << ",\"collector_backend\":\"" << (hardware_ ? (collector_rtl_ ? "rtl" : "model") : "functional") << "\",\"hardware\":";
+        << ",\"collector_backend\":\"" << (hardware_ ? (collector_rtl_ ? "rtl" : "model") : "functional") << "\",\"cp_backend\":\"" << (cp_ ? "rtl" : hardware_ ? "model" : "functional") << "\"";
+    if (cp_) {
+        const auto& s = cp_->stats();
+        out << ",\"cp\":{\"clocks\":" << s.clocks << ",\"active_clocks\":" << s.active_clocks << ",\"fetched\":" << s.fetched
+            << ",\"dispatched\":" << s.dispatched << ",\"cancelled\":" << s.cancelled << ",\"completed\":" << s.completed
+            << ",\"failed\":" << s.failed << ",\"peak_slots\":" << s.peak_slots << ",\"slots\":16}";
+    }
+    out << ",\"hardware\":";
     if (hardware_) hardware_->dump(out); else out << "null";
     out << '}';
     return out.str();

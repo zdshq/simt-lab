@@ -21,6 +21,7 @@ void TimingMachine::refresh_resources(uint32_t sm_id) {
 // Kernel completion includes the final edge that actually returns the hardware credits.
 // kernel 完成包含真正归还硬件额度的最后一个边沿。
 bool TimingMachine::resources_empty() const {
+    for (const auto& sm : sms_) if (sm->tmem->pending() || sm->tmem->columns()) return false;
     for (const auto& sm : sms_)
         if (sm->resource_unit && (sm->resource_unit->pending() || sm->resource_unit->read().live)) return false;
     return true;

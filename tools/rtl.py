@@ -12,6 +12,9 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = {'cache': ('sector_cache', 'test_cache.cpp', ['sector_sram.sv', 'cache_lru.sv', 'sector_cache.sv']),
+           'dram': ('dram_controller', 'test_dram.cpp', ['dram_controller.sv']),
+           'command_processor': ('command_processor', 'test_command_processor.cpp', ['cp_oldest.sv', 'command_processor.sv']),
+           'tmem': ('tmem_memory', 'test_tmem.cpp', ['tmem_mapping.sv', 'tmem_translate.sv', 'tmem_select.sv', 'tmem_bank.sv', 'tmem_memory.sv']),
            'cta_resources': ('cta_resources', 'test_cta_resources.cpp', ['cta_resource_totals.sv', 'cta_resource_slot.sv', 'cta_resources.sv']),
            'shared': ('shared_memory', 'test_shared.cpp', ['shared_bank.sv', 'shared_select.sv', 'shared_memory.sv']),
            'async_service': ('async_service', 'test_async_service.cpp', ['async_service.sv']),
@@ -95,6 +98,7 @@ def verify_unchanged(paths, original):
 def compiler_flags(options):
     includes = f'-std=c++20 -I{ROOT / "include"} -I{ROOT / "tests/rtl"} -I{options.build / "generated"} -DSIMT_RTL_SETS={options.sets}'
     includes += f' -DSIMT_RTL_WAYS={options.ways}'
+    includes += f' -DSIMT_TMEM_BANKS={options.tmem_banks}'
     libraries = ' '.join(str(options.build/name) for name in ('libsimt_core.a', 'libsimt_hardware.a', 'libsimt_storage.a'))
     if 'SIMT_TENSOR_RTL:BOOL=ON' in (options.build/'CMakeCache.txt').read_text():
         libraries += ' '+str(options.build/'libsimt_tensor_circuit.a')
@@ -106,6 +110,9 @@ def compiler_flags(options):
         libraries += ' '+str(options.build/'libsimt_register_circuit.a')
         libraries += ' '+str(options.build/'libsimt_shared_circuit.a')
         libraries += ' '+str(options.build/'libsimt_cta_resource_circuit.a')
+        libraries += ' '+str(options.build/'libsimt_tmem_circuit.a')
+        libraries += ' '+str(options.build/'libsimt_command_processor_circuit.a')
+        libraries += ' '+str(options.build/'libsimt_dram_circuit.a')
     if sanitized(options):
         includes += ' -fsanitize=address,undefined -fno-omit-frame-pointer'
         libraries += ' -fsanitize=address,undefined'
@@ -165,6 +172,7 @@ def simulation_sources(options, name, destination):
     parameters = [f'-GSETS={options.sets}', f'-GWAYS={options.ways}'] if name == 'cache' else []
     if name in ('register_file', 'operand_unit', 'predicate'): parameters = [f'-GSLOTS={options.rf_slots}']
     if name == 'transaction_table': parameters = [f'-GSLOTS={options.transaction_slots}']
+    if name == 'tmem': parameters = [f'-GBANKS={options.tmem_banks}']
     if name in ('collector', 'dispatch', 'writeback', 'integer', 'floating'): parameters = [f'-GENTRIES={options.collector_entries}']
     return parameters+[str(path) for path in rtl_paths(options, name)]+[str(ROOT/'tests/rtl'/test)]
 
@@ -226,6 +234,7 @@ def verify_netlist(destination, paths, parameters):
 
 
 def cache_parameters(options, name):
+    if name == 'tmem': return {'BANKS': options.tmem_banks}
     if name == 'transaction_table': return {'SLOTS': options.transaction_slots}
     if name in ('register_file', 'operand_unit', 'predicate'): return {'SLOTS': options.rf_slots}
     if name in ('collector', 'dispatch', 'writeback', 'integer', 'floating'): return {'ENTRIES': options.collector_entries}
@@ -245,10 +254,14 @@ def synthesis(options, name):
     if name in ('collector', 'dispatch', 'writeback', 'integer', 'floating'): lines.append(f'chparam -set ENTRIES {options.collector_entries} {top}')
     if name in ('register_file', 'operand_unit', 'predicate'): lines.append(f'chparam -set SLOTS {options.rf_slots} {top}')
     if name == 'transaction_table': lines.append(f'chparam -set SLOTS {options.transaction_slots} {top}')
+    if name == 'tmem': lines.append(f'chparam -set BANKS {options.tmem_banks} {top}')
     if name == 'cache': lines.append(f'chparam -set SETS {options.sets} -set WAYS {options.ways} {top}')
     sharing = ' -noshare' if options.no_share else ''
-    lines += [f'synth -top {top} -run begin:fine{sharing}', 'check -assert',
-              'write_json inferred.json', 'tee -o inferred-stat.json stat -json']
+    lines += [f'synth -top {top} -run begin:fine{sharing}']
+    # Dependent parameter defaults make Yosys derive a hashed top; gate benches need the source name.
+    # 依赖型参数默认值使 Yosys 派生带哈希的顶层名；门级测试平台需要源码名称。
+    if name in ('tmem', 'dram'): lines.append(f'rename -top {top}')
+    lines += ['check -assert', 'write_json inferred.json', 'tee -o inferred-stat.json stat -json']
     if not options.infer_only:
         lines += [f'synth -top {top} -run fine: -noabc{sharing}',
                   'abc -exe '+yosys_string(tool('berkeley-abc'))+' -fast', 'clean', 'check -assert',
@@ -308,6 +321,7 @@ def parse_options():
     parser.add_argument('--collector-entries', type=int, choices=(2, 4, 8, 16, 32), default=32)
     parser.add_argument('--rf-slots', type=int, choices=(2, 4, 8, 16, 32), default=8)
     parser.add_argument('--transaction-slots', type=int, choices=(16, 1024), default=1024)
+    parser.add_argument('--tmem-banks', type=int, choices=(1, 2, 4, 8, 16, 32, 64, 128), default=16)
     parser.add_argument('--jobs', type=int, default=4)
     parser.add_argument('--timeout', type=int, default=600, help='Maximum seconds for each build, synthesis or simulation process.')
     parser.add_argument('--synth', action='store_true')

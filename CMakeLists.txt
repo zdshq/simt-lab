@@ -29,7 +29,7 @@ target_compile_options(simt_core PRIVATE -Wall -Wextra -Wpedantic -Werror -ffp-c
 add_executable(simt-run src/main.cpp)
 target_link_libraries(simt-run PRIVATE simt_core)
 target_compile_options(simt-run PRIVATE -Wall -Wextra -Wpedantic -Werror)
-add_library(simt_host src/device.cpp src/device_memory.cpp src/device_engines.cpp src/device_copy.cpp src/device_graph.cpp
+add_library(simt_host src/device.cpp src/device_memory.cpp src/device_engines.cpp src/device_circuit.cpp src/device_copy.cpp src/device_graph.cpp
     src/device_report.cpp src/protocol.cpp src/protocol_codec.cpp src/protocol_commands.cpp)
 add_library(simt_monitor src/monitor.cpp)
 target_include_directories(simt_monitor PUBLIC include)
@@ -40,8 +40,8 @@ target_compile_options(simt_host PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_executable(simt-device src/device_main.cpp)
 target_link_libraries(simt-device PRIVATE simt_host)
 target_compile_options(simt-device PRIVATE -Wall -Wextra -Wpedantic -Werror)
-add_library(simt_hardware src/hardware/port.cpp src/hardware/dram.cpp src/hardware/cache_tags.cpp src/hardware/cache_engine.cpp
-    src/hardware/cache_request.cpp src/hardware/cache_fill.cpp src/hardware/coalescer.cpp src/hardware/shared.cpp src/hardware/shared_engine.cpp
+add_library(simt_hardware src/hardware/port.cpp src/hardware/dram.cpp src/hardware/dram_engine.cpp src/hardware/cache_tags.cpp src/hardware/cache_engine.cpp
+    src/hardware/cache_request.cpp src/hardware/cache_fill.cpp src/hardware/coalescer.cpp src/hardware/shared.cpp src/hardware/shared_engine.cpp src/hardware/tensor_memory.cpp src/hardware/command_processor.cpp
     src/hardware/hierarchy.cpp src/hardware/scoreboard.cpp src/hardware/scoreboard_engine.cpp src/hardware/register_file.cpp src/hardware/resources.cpp src/hardware/local.cpp
     src/hardware/atomic_queue.cpp src/hardware/atomic_execute.cpp src/hardware/shared_atomic.cpp
     src/hardware/lifetime.cpp src/hardware/context.cpp src/hardware/instruction_memory.cpp src/hardware/warp_control.cpp src/hardware/warp_frontend.cpp src/hardware/cta_barrier.cpp src/hardware/cta_resources.cpp src/hardware/transaction_table.cpp src/hardware/dma_engine.cpp src/hardware/warp_scheduler.cpp src/hardware/execution_arbiter.cpp src/hardware/instruction_decoder.cpp src/hardware/instruction_fetch.cpp src/hardware/async_service.cpp)
@@ -228,6 +228,18 @@ if(SIMT_REGISTER_RTL)
     set_tests_properties(rtl_cta_resources_execution PROPERTIES TIMEOUT 300)
     add_simt_test(rtl_shared_execution test_rtl_shared.py)
     set_tests_properties(rtl_shared_execution PROPERTIES TIMEOUT 300)
+    add_executable(test-rtl-command-processor tests/test_rtl_command_processor.cpp)
+    target_link_libraries(test-rtl-command-processor PRIVATE simt_hardware)
+    target_compile_options(test-rtl-command-processor PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    add_test(NAME rtl_command_processor_adapter COMMAND test-rtl-command-processor)
+    add_simt_test(rtl_command_processor_host test_rtl_command_processor.py)
+    set_tests_properties(rtl_command_processor_host PROPERTIES TIMEOUT 600)
+    add_executable(test-rtl-tensor-memory tests/test_rtl_tensor_memory.cpp)
+    target_link_libraries(test-rtl-tensor-memory PRIVATE simt_hardware)
+    target_compile_options(test-rtl-tensor-memory PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    add_test(NAME rtl_tensor_memory_adapter COMMAND test-rtl-tensor-memory)
+    add_simt_test(rtl_tensor_memory_execution test_rtl_tensor_memory.py)
+    set_tests_properties(rtl_tensor_memory_execution PROPERTIES TIMEOUT 300)
     add_executable(test-rtl-instruction-decoder tests/test_rtl_instruction_decoder.cpp)
     target_link_libraries(test-rtl-instruction-decoder PRIVATE simt_hardware)
     target_compile_options(test-rtl-instruction-decoder PRIVATE -Wall -Wextra -Wpedantic -Werror)

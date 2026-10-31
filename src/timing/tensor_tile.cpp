@@ -10,7 +10,7 @@ void TimingMachine::tensor_descriptor(Inflight& entry) {
     flight.descriptor = decode_descriptor(words);
     const auto& d = flight.descriptor;
     for (uint32_t row = 0; row < d.m; ++row) for (uint32_t column = 0; column < d.n; ++column)
-        tensor_address(machine_.ctas_[entry.cta], d.row_d + row, d.column_d + column);
+        tensor_address(entry.cta, d.row_d + row, d.column_d + column);
     trace(entry, "tensor_descriptor"); begin_tensor_tile(entry);
 }
 
@@ -22,7 +22,7 @@ void TimingMachine::begin_tensor_tile(Inflight& entry) {
     flight.columns = std::min(machine_.config_.tensor.columns, d.n - flight.column);
     flight.k = 0; flight.fetched = {};
     if (d.flags & 1) for (uint32_t row = 0; row < flight.rows; ++row) for (uint32_t column = 0; column < flight.columns; ++column) {
-        const auto address = tensor_address(machine_.ctas_[entry.cta], d.row_d + flight.row + row, d.column_d + flight.column + column);
+        const auto address = tensor_address(entry.cta, d.row_d + flight.row + row, d.column_d + flight.column + column);
         tensor_transfer(flight, 2, address, 4, row * 4 + column);
     }
     flight.phase = TensorPhase::initial;
@@ -52,7 +52,7 @@ void TimingMachine::drain_tensor(Inflight& entry) {
     const auto result = sms_[entry.sm]->array->take();
     if (!result) return;
     for (uint32_t row = 0; row < flight.rows; ++row) for (uint32_t column = 0; column < flight.columns; ++column) {
-        const auto address = tensor_address(machine_.ctas_[entry.cta], d.row_d + flight.row + row, d.column_d + flight.column + column);
+        const auto address = tensor_address(entry.cta, d.row_d + flight.row + row, d.column_d + flight.column + column);
         tensor_transfer(flight, 2, address, 4, row * 4 + column, true, (*result)[row * 4 + column]);
     }
     trace(entry, "tensor_array_complete"); flight.phase = TensorPhase::store;

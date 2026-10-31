@@ -2,6 +2,7 @@
 #include "simt/machine.hpp"
 #include "simt/monitor.hpp"
 #include "simt/hardware_context.hpp"
+#include "simt/command_processor.hpp"
 #include <deque>
 #include <functional>
 #include <set>
@@ -59,6 +60,8 @@ struct Job {
     bool recovering = false;
     uint64_t started = 0, finished = 0;
     uint64_t instruction_steps = 0;
+    uint32_t cp_slot = 0;
+    std::vector<JobId> external;
 };
 struct TraceEntry { uint64_t tick; JobId job, parent; uint32_t node; std::string action; };
 
@@ -109,6 +112,18 @@ private:
     std::optional<JobId> compute_, copy_;
     CopyTransfer transfer_;
     std::unique_ptr<MonitorPublisher> monitor_;
+    std::unique_ptr<hw::CommandProcessor> cp_;
+    std::array<JobId, 16> cp_jobs_{};
+    uint64_t fetched_count() const;
+    uint64_t published_count() const;
+    uint64_t notified_count() const;
+    void release_compute();
+    void release_copy();
+    void fetch_circuit();
+    void dispatch_circuit();
+    void offer_external_dependencies();
+    std::optional<hw::CpNode> oldest_node() const;
+    void expand_circuit_graph();
     void validate(const Command& command) const;
     std::set<uint32_t> references(const Command& command) const;
     void fetch();

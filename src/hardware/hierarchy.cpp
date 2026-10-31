@@ -1,3 +1,4 @@
+#include "simt/dram_engine.hpp"
 #include "simt/hardware_memory.hpp"
 #include "simt/hardware_atomic.hpp"
 #include "simt/cache_engine.hpp"
@@ -5,8 +6,8 @@
 
 namespace simt::hw {
 MemoryHierarchy::MemoryHierarchy(MemoryBacking& memory, HierarchyConfig config)
-    : memory_(memory), config_(config), dram_(memory, config.dram),
-      l2_(make_cache(dram_, config.l2, config.cache_rtl, CacheLevel::l2)) {
+    : memory_(memory), config_(config), dram_(make_dram(memory, config.dram, config.dram_rtl)),
+      l2_(make_cache(*dram_, config.l2, config.cache_rtl, CacheLevel::l2)) {
     if (!config.sms || config.sms > 64 || !config.capacity) throw std::runtime_error("invalid_hierarchy_config");
     for (uint32_t sm = 0; sm < config.sms; ++sm)
         l1_.push_back(make_cache(*l2_, config.l1, config.cache_rtl, CacheLevel::l1));
@@ -93,7 +94,7 @@ void MemoryHierarchy::service_requests() {
 // All units advance once in bottom-up order; newly forwarded requests wait for a later clock.
 // 所有单元自底向上各推进一次，新转发请求等待后续时钟处理。
 void MemoryHierarchy::tick() {
-    dram_.tick();
+    dram_->tick();
     l2_->tick();
     for (auto& cache : l1_) cache->tick();
     atomics_->tick();

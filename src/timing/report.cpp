@@ -358,13 +358,21 @@ void TimingMachine::dump_tensor(std::ostream& out) const {
     for (uint32_t sm = 0; sm < sms_.size(); ++sm) {
         if (sm) out << ',';
         const auto& array = *sms_[sm]->array;
-        const auto& s = array.stats(); const auto& t = sms_[sm]->tmem.stats();
+        const auto& s = array.stats(); const auto& tmem=*sms_[sm]->tmem;
+        const auto& t = tmem.stats(); const auto& allocation=tmem.allocations();
         out << "{\"backend\":\"" << array.name() << "\",\"array_clocks\":" << array.cycle()
             << ",\"tiles\":" << s.tiles << ",\"waves\":" << s.waves << ",\"products\":" << s.products
             << ",\"skipped\":" << s.skipped << ",\"scale_products\":" << s.scale_products
             << ",\"scale_accumulates\":" << s.scale_accumulates << ",\"input_stalls\":" << s.input_stalls
             << ",\"queue_stalls\":" << s.queue_stalls << ",\"tmem_bank_services\":" << t.bank_services
-            << ",\"tmem_bank_stalls\":" << t.bank_stalls << ",\"tmem_broadcasts\":" << t.broadcasts << '}';
+            << ",\"tmem_bank_stalls\":" << t.bank_stalls << ",\"tmem_broadcasts\":" << t.broadcasts
+            << ",\"tmem_backend\":\"" << tmem.name() << "\",\"tmem_bytes\":131072,\"tmem_request_slots\":8"
+            << ",\"tmem_clocks\":" << tmem.cycle() << ",\"tmem_active_clocks\":" << t.active_clocks
+            << ",\"tmem_accepted\":" << t.accepted << ",\"tmem_consumed\":" << t.consumed
+            << ",\"tmem_outstanding\":" << tmem.outstanding() << ",\"tmem_pending\":" << tmem.pending()
+            << ",\"tmem_allocated_columns\":" << allocation.allocated << ",\"tmem_freed_columns\":" << allocation.freed
+            << ",\"tmem_reclaimed_columns\":" << allocation.reclaimed << ",\"tmem_peak_columns\":" << allocation.peak_columns
+            << ",\"tmem_used_columns\":" << tmem.columns() << '}';
     }
     out << ']';
 }

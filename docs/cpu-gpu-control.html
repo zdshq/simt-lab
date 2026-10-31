@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CPU 到 GPU 控制模块</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700&display=swap">
+<style>
+/* Layout: one wide diagram first, then the numbered steps it depicts. */
+:root {
+  --bg: #f5f7f9; --fg: #1c2530; --muted: #5b6875; --box: #ffffff;
+  --accent: #1a5fb4; --accent-soft: #e4eefa; --line: #c9d2db;
+  --font: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12171d; --fg: #e8edf2; --muted: #9dabb8; --box: #1c232b;
+    --accent: #7db2f5; --accent-soft: #1b2d42; --line: #3a4652; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12171d; --fg: #e8edf2; --muted: #9dabb8; --box: #1c232b;
+  --accent: #7db2f5; --accent-soft: #1b2d42; --line: #3a4652; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font-family: var(--font); line-height: 1.7; }
+main {
+  max-width: 1120px; margin: 0 auto; padding-block: 32px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+h1 { font-size: 26px; line-height: 1.3; margin: 0 0 6px; text-wrap: balance; }
+.lead { margin: 0 0 24px; font-size: 16px; color: var(--muted); max-width: 42em; }
+figure { margin: 0; }
+.scroll { overflow-x: auto; }
+svg { display: block; width: 100%; min-width: 900px; height: auto; color: var(--fg); }
+figcaption { margin-top: 10px; font-size: 14px; color: var(--muted); }
+.box { fill: var(--box); stroke: var(--fg); stroke-width: 1.5; }
+.row { fill: var(--accent-soft); stroke: var(--accent); }
+.module { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.inner { fill: var(--box); stroke: var(--accent); stroke-width: 1.5; }
+.flow { fill: none; stroke: currentColor; stroke-width: 1.6; }
+.data { stroke-dasharray: 6 4; }
+text { fill: var(--fg); font-family: var(--font); font-size: 14px; }
+.name { font-size: 15px; font-weight: 700; }
+.sub { font-size: 12.5px; fill: var(--muted); }
+.step { font-size: 13.5px; font-weight: 600; }
+.modname { font-size: 15px; font-weight: 700; fill: var(--accent); }
+.mid { text-anchor: middle; }
+.end { text-anchor: end; }
+h2 { font-size: 18px; margin: 32px 0 10px; }
+ol { margin: 0; padding-left: 1.6em; display: grid; gap: 6px; max-width: 46em; font-size: 15.5px; }
+.note { margin: 24px 0 0; padding-top: 14px; border-top: 1px solid var(--line); font-size: 15px; max-width: 46em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>CPU 的命令怎样变成 GPU 的计算</h1>
+  <p class="lead">例子是计算 c = a + b。蓝色区域就是 CPU 和 GPU 之间的控制模块，跟着 ①～⑦ 的顺序看。</p>
+
+  <figure>
+    <div class="scroll">
+      <svg viewBox="0 0 1040 520" role="img" aria-label="CPU 把四条命令写入命令队列并按门铃，命令处理器被叫醒后逐条取出命令，传数据的命令交给拷贝引擎，计算命令交给任务分发并拆给 SM，完成后 CPU 查到完成状态。">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 Z" fill="currentColor"/>
+          </marker>
+        </defs>
+
+        <!-- Control module -->
+        <rect class="module" x="230" y="50" width="410" height="335" rx="8"/>
+        <text class="modname" x="250" y="76">控制模块</text>
+
+        <!-- CPU -->
+        <rect class="box" x="20" y="190" width="120" height="120" rx="6"/>
+        <text class="name mid" x="80" y="245">CPU</text>
+        <text class="sub mid" x="80" y="268">你的程序</text>
+
+        <!-- Doorbell -->
+        <rect class="inner" x="250" y="90" width="130" height="50" rx="6"/>
+        <text class="name mid" x="315" y="120">门铃</text>
+
+        <!-- Queue with the example's four commands -->
+        <rect class="inner" x="250" y="185" width="170" height="180" rx="6"/>
+        <text class="name mid" x="335" y="210">命令队列</text>
+        <rect class="row" x="264" y="222" width="142" height="28" rx="3"/>
+        <text class="mid" x="335" y="241">1 传 a</text>
+        <rect class="row" x="264" y="254" width="142" height="28" rx="3"/>
+        <text class="mid" x="335" y="273">2 传 b</text>
+        <rect class="row" x="264" y="286" width="142" height="28" rx="3"/>
+        <text class="mid" x="335" y="305">3 开始计算</text>
+        <rect class="row" x="264" y="318" width="142" height="28" rx="3"/>
+        <text class="mid" x="335" y="337">4 传回 c</text>
+
+        <!-- Command processor -->
+        <rect class="inner" x="510" y="200" width="110" height="150" rx="6"/>
+        <text class="name mid" x="565" y="262">命令处理器</text>
+        <text class="sub mid" x="565" y="284">判断现在</text>
+        <text class="sub mid" x="565" y="302">能否执行</text>
+
+        <!-- Engines and memory -->
+        <rect class="box" x="720" y="90" width="120" height="60" rx="6"/>
+        <text class="name mid" x="780" y="126">拷贝引擎</text>
+        <rect class="box" x="720" y="320" width="120" height="60" rx="6"/>
+        <text class="name mid" x="780" y="346">任务分发</text>
+        <text class="sub mid" x="780" y="367">⑥ 拆成小块</text>
+        <rect class="box" x="900" y="90" width="120" height="60" rx="6"/>
+        <text class="name mid" x="960" y="126">GPU 显存</text>
+        <rect class="box" x="900" y="270" width="120" height="55" rx="6"/>
+        <text class="name mid" x="960" y="303">SM 0</text>
+        <rect class="box" x="900" y="375" width="120" height="55" rx="6"/>
+        <text class="name mid" x="960" y="408">SM 1</text>
+        <rect class="box" x="400" y="455" width="160" height="50" rx="6"/>
+        <text class="name mid" x="480" y="485">完成状态</text>
+
+        <!-- Command path -->
+        <path class="flow" d="M140 275 H250" marker-end="url(#arrow)"/>
+        <text class="step mid" x="187" y="266">① 写命令</text>
+        <path class="flow" d="M100 190 V115 H250" marker-end="url(#arrow)"/>
+        <text class="step mid" x="165" y="106">② 按门铃</text>
+        <path class="flow" d="M380 115 H565 V200" marker-end="url(#arrow)"/>
+        <text class="step mid" x="470" y="106">③ 叫醒</text>
+        <path class="flow" d="M420 275 H510" marker-end="url(#arrow)"/>
+        <text class="step mid" x="465" y="266">④ 取命令</text>
+        <path class="flow" d="M620 240 H680 V120 H720" marker-end="url(#arrow)"/>
+        <text class="step mid" x="682" y="110">⑤ 传数据</text>
+        <path class="flow" d="M620 310 H680 V350 H720" marker-end="url(#arrow)"/>
+        <text class="step mid" x="682" y="372">⑤ 开始计算</text>
+
+        <!-- Work split to SMs -->
+        <path class="flow" d="M840 350 H870 V297 H900" marker-end="url(#arrow)"/>
+        <path class="flow" d="M870 350 V402 H900" marker-end="url(#arrow)"/>
+
+        <!-- Data path -->
+        <path class="flow data" d="M50 190 V34 H780 V90" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+        <text class="step mid" x="415" y="24">数据通道：a、b 传给 GPU，c 传回 CPU</text>
+        <path class="flow data" d="M840 120 H900" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+        <path class="flow data" d="M960 150 V270" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+        <text class="step end" x="950" y="215">读 a、b，写 c</text>
+
+        <!-- Completion path -->
+        <path class="flow" d="M960 430 V480 H560" marker-end="url(#arrow)"/>
+        <text class="step mid" x="760" y="471">算完后记录</text>
+        <path class="flow" d="M400 480 H80 V310" marker-end="url(#arrow)"/>
+        <text class="step mid" x="240" y="471">⑦ CPU 查到已完成</text>
+      </svg>
+    </div>
+    <figcaption>实线是命令和通知，虚线是数据。为了让图清楚，拷贝引擎到“完成状态”的线没有画，它传完数据后也会记录完成。</figcaption>
+  </figure>
+
+  <h2>按顺序读一遍</h2>
+  <ol>
+    <li>CPU 把 4 条命令写进命令队列，写完就可以去做别的事。</li>
+    <li>CPU 按门铃，告诉 GPU 有新命令。</li>
+    <li>门铃叫醒命令处理器。</li>
+    <li>命令处理器从队列里逐条取命令，并判断能否执行。第 3 条要等 a、b 传完。</li>
+    <li>传数据的命令交给拷贝引擎，计算命令交给任务分发。</li>
+    <li>任务分发把计算拆成小块，分给 SM 0 和 SM 1。</li>
+    <li>做完后记录完成状态，CPU 查询时就知道结果好了。</li>
+  </ol>
+
+  <p class="note"><strong>在你的项目里：</strong>这张图的流程已经能跑通，但蓝色的控制模块只有 C++ 代码，还没有写成电路。</p>
+</main>
+</body>
+</html>

@@ -109,3 +109,5 @@ python3 examples/host_graph.py
 新增 [CTA 资源准入与退休 RTL](docs/RTL_CTA_RESOURCES.md)：64 个 CTA 记录、32 个物理 warp、寄存器/shared 额度和 DMA/事务清理状态由电路保存；原始 lane 状态和在途数在硬件内归约成回收资格。每 SM 每拍最多接受一个 CTA，槽复用等待调度器释放与资源归还边沿。跨 SM 请求、区域地址绑定和整机路由仍有 C++。
 
 当前默认 Debug 运行 28 套件、284 项（282 通过，2 项未构建 RTL 而跳过）。本阶段联合 Release 通过 73 套件、1014 项；CTA 资源控制器的五项独立 RTL、sanitizer 和完整综合网表检查、实际适配器的四项 sanitizer 检查也已通过，未执行整机联合 sanitizer 或整 GPU 综合。实际结果与失败记录见 [验证记录](docs/VALIDATION.md)。不同构建包含既有场景复跑，各套件按其目的选择后端，并非全部同时启用所有 RTL。完整 RTL 连接、参数校准及最终硬件审计仍未完成，完整剩余目标以硬件计划为准。
+
+新增 [TMEM 共享存储 RTL](docs/RTL_TMEM.md)：每 SM 128 KiB、16 bank 的电路保存张量数据，页表隔离各 CTA。新增 [命令处理器 RTL](docs/RTL_COMMAND_PROCESSOR.md)：门铃、队列指针、十六个解码槽、依赖等待和引擎占用改由电路保存，图解见 [cpu-gpu-control.html](docs/cpu-gpu-control.html)。结构总览见 [OVERVIEW.md](docs/OVERVIEW.md)，实际物理参数见 [PHYSICAL.md](docs/PHYSICAL.md)。

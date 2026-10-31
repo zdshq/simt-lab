@@ -1048,3 +1048,13 @@ python3 artifacts/rtl-cta-resources-final/audit.py
 最终审计为四份电路清单、一份实际适配器 sanitizer 清单、十份主机报告、384 个源码/模板/规范文件及三个联合可执行文件，位于 `artifacts/rtl-cta-resources-final/evidence-audit.json`。未重新综合未改动的巨大 shared 模块，保留其前阶段证据。
 
 剩余工作包括跨 SM/区域地址绑定与入站客户仲裁 RTL、存储互联和外部返回路由、TMEM/constant/DRAM、SFU、整数内部流水级、完整 SM/设备顶层、实卡校准、PTX 异步矩阵协议和最终验收。[总计划](HARDWARE_PLAN.md) 继续进行。
+
+## TMEM 与命令处理器电路（2026-10-31）
+
+TMEM 改由每 SM 一份 128 KiB、16 bank 的电路保存，命令处理器的指针、解码槽、依赖和引擎占用改由电路保存。说明见 [RTL_TMEM.md](RTL_TMEM.md) 与 [RTL_COMMAND_PROCESSOR.md](RTL_COMMAND_PROCESSOR.md)。
+
+向量和规约的 kernel 周期与上一阶段相同。GEMM 由 4362/4374 变为 4400/4412，Transformer 由 20688/20972 变为 20839/21123，下载结果仍通过原参考。主机跟踪在 GEMM 首次使用 TMEM 前逐条一致。
+
+`rtl/dram_controller.sv` 只是未完成的草稿，默认不启用。它自身的首项测试报 `closed-row latency wrong`，接入 collector 路径时有三个回归套件失败，因此已从该路径摘除。TMEM 完整网表的门级仿真尚未跑完。
+
+验证未覆盖：没有形式等价证明，没有物理实现，整机 sanitizer 未运行；RTL 专用 sanitizer 只覆盖独立电路测试。

@@ -84,14 +84,14 @@ void Device::complete_copy_chunk(Job& job) {
         std::copy_n(t.data.begin(), t.bytes, job.result.begin() + t.offset);
     job.offset += t.bytes;
     transfer_.stage = CopyTransfer::Stage::prepare;
-    if (job.offset == job.command.size) { copy_.reset(); finish(job); }
+    if (job.offset == job.command.size) { release_copy(); finish(job); }
 }
 
 // Every pending ticket and link transfer owns the single staging slot until completion.
 // 每个待完成 ticket 和链路传输持有唯一暂存槽，直至完成。
 void Device::service_timed_copy(Job& job) {
     auto& t = transfer_;
-    if (job.offset == job.command.size) { copy_.reset(); finish(job); return; }
+    if (job.offset == job.command.size) { release_copy(); finish(job); return; }
     if (t.ticket) { poll_copy(job); return; }
     if (t.stage == CopyTransfer::Stage::prepare) { prepare_copy(job); return; }
     if (t.stage == CopyTransfer::Stage::link_in || t.stage == CopyTransfer::Stage::link_out) {

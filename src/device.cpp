@@ -35,6 +35,7 @@ Device::Device(uint32_t sms, uint32_t capacity, bool timing, bool hardware_trace
             context->memory.invalidate_range(address, size);
         };
     }
+    if (collector_rtl) cp_ = hw::make_command_processor(capacity);
     if (std::getenv("SIMT_MONITOR_DIR")) monitor_ = std::make_unique<MonitorPublisher>(monitor_directory().string());
     publish_monitor();
 }
@@ -83,7 +84,7 @@ std::set<uint32_t> Device::references(const Command& c) const {
 // Stream ordering and explicit waits become dependencies on completion, never dequeue.
 // stream 顺序和显式等待依赖任务完成，而不是依赖命令出队。
 JobId Device::submit(uint32_t stream, Command command, std::vector<JobId> dependencies) {
-    if (written_ - fetched_ == ring_.size()) throw std::runtime_error("submission_queue_full");
+    if (written_ - fetched_count() == ring_.size()) throw std::runtime_error("submission_queue_full");
     validate(command);
     for (auto dependency : dependencies) query(dependency);
     if (stream_tail_.contains(stream)) dependencies.push_back(stream_tail_.at(stream));
@@ -107,11 +108,15 @@ JobId Device::submit(uint32_t stream, Command command, std::vector<JobId> depend
 
 // Publishing a write pointer makes preceding queue entries visible to the CP.
 // 发布写指针，使此前的队列项对 CP 可见。
-void Device::doorbell() { published_ = written_; }
+void Device::doorbell() {
+    if (cp_) cp_->ring_doorbell(written_);
+    else published_ = written_;
+}
 
 // The timed CP has sixteen decoded packet slots, retained through public completion.
 // 时序 CP 有十六个已解码包槽位，保留至公开任务完成。
 void Device::fetch() {
+    if (cp_) { fetch_circuit(); return; }
     if (fetched_ == published_) return;
     if (hardware_ && fetched_ - notifications_ >= 16) return;
     auto& job = jobs_.at(ring_[fetched_++ % ring_.size()]);
@@ -139,7 +144,10 @@ void Device::finish(Job& job, JobState state, std::string error) {
     job.machine.reset();
     arena.unpin(job.pinned); job.pinned.clear();
     if (job.command.kind == CommandKind::graph) --graphs_.at(job.command.graph).in_flight;
-    if (!job.parent) ++notifications_;
+    if (!job.parent) {
+        if (cp_) cp_->complete(job.cp_slot, state != JobState::complete);
+        else ++notifications_;
+    }
     trace(job, state_name(state));
 }
 
@@ -156,8 +164,8 @@ void Device::wait(JobId id, uint64_t limit) {
 // A device-wide wait drains all submissions, including independent streams after errors.
 // 设备级等待排空全部提交，包括错误后仍独立的 stream。
 void Device::synchronize(uint64_t limit) {
-    while (notifications_ != written_ && limit--) tick();
-    if (notifications_ != written_) throw std::runtime_error("wait_timeout");
+    while (notified_count() != written_ && limit--) tick();
+    if (notified_count() != written_) throw std::runtime_error("wait_timeout");
     for (const auto& [id, job] : jobs_) {
         static_cast<void>(id);
         if (!job.parent && job.state != JobState::complete) throw std::runtime_error(job.error);

@@ -59,6 +59,7 @@ void Device::start_copy(Job& job) {
 // Oldest ready commands claim free engines without blocking other streams on dependencies.
 // 最早就绪命令取得空闲引擎，依赖等待不阻塞其他 stream。
 void Device::dispatch() {
+    if (cp_) { dispatch_circuit(); return; }
     for (auto& [id, job] : jobs_) {
         static_cast<void>(id);
         if (job.state != JobState::waiting) continue;
@@ -85,13 +86,13 @@ void Device::service_compute() {
     auto& job = jobs_.at(*compute_);
     if (job.recovering) {
         if (!job.machine->drain()) return;
-        compute_.reset();
+        release_compute();
         finish(job, JobState::error, job.error);
         return;
     }
     try {
         if (!job.machine->advance()) return;
-        compute_.reset();
+        release_compute();
         finish(job);
     } catch (const std::exception& error) {
         if (hardware_) {
@@ -99,7 +100,7 @@ void Device::service_compute() {
             trace(job, "fault_drain");
             return;
         }
-        compute_.reset();
+        release_compute();
         finish(job, JobState::error, error.what());
     }
 }
@@ -122,7 +123,7 @@ void Device::service_copy() {
             arena.memory->write(uint64_t{c.destination} + offset, 1, value);
         }
     }
-    if (job.offset == c.size) { copy_.reset(); finish(job); }
+    if (job.offset == c.size) { release_copy(); finish(job); }
 }
 
 // Timing mode advances one shared clock; functional mode retains service-opportunity semantics.
@@ -136,6 +137,7 @@ void Device::tick() {
     service_copy();
     service_compute();
     finish_graphs();
+    if (cp_) cp_->tick();
     if (ticks_ % 64 == 0) publish_monitor();
 }
 }

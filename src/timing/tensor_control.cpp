@@ -8,11 +8,7 @@ namespace simt {
 void TimingMachine::allocate_tensor(Inflight& entry) {
     auto& flight = *entry.tensor; auto& sm = *sms_[entry.sm]; auto& cta = machine_.ctas_[entry.cta];
     const auto count = entry.instruction.imm;
-    if (!count || count > 256 || count % 8) throw std::runtime_error("invalid_tensor_allocation");
-    if (count > machine_.config_.tensor.tmem_columns - sm.allocated_columns)
-        throw std::runtime_error("tensor_out_of_columns");
-    flight.base = reserve_tensor_columns(cta, count);
-    sm.tensor_columns[entry.cta] += count; sm.allocated_columns += count;
+    flight.base = sm.tmem->allocate(cta.tmem,count);
     flight.cursor = flight.base * 128; flight.end = (flight.base + count) * 128;
     flight.phase = TensorPhase::zero;
     write_register(entry.result, entry.instruction.rd, std::countr_zero(entry.mask), flight.base);
@@ -31,10 +27,10 @@ void TimingMachine::zero_tensor(Inflight& entry) {
 // Validate every participating lane before any TMEM transfer can be submitted.
 // 提交任何 TMEM 事务前检查全部参与 lane。
 void TimingMachine::start_tensor_transfer(Inflight& entry) {
-    auto& flight = *entry.tensor; auto& cta = machine_.ctas_[entry.cta]; const auto& i = entry.instruction;
+    auto& flight = *entry.tensor; const auto& i = entry.instruction;
     for (uint32_t lane = 0; lane < lanes; ++lane) {
         if (!(entry.mask & lane_bit(lane))) continue;
-        const auto address = tensor_address(cta, read_register(entry.operands, i.ra, lane), read_register(entry.operands, i.rb, lane));
+        const auto address = tensor_address(entry.cta, read_register(entry.operands, i.ra, lane), read_register(entry.operands, i.rb, lane));
         tensor_transfer(flight, 2, address, 4, lane, i.op == Op::STT, read_register(entry.operands, i.rc, lane));
     }
     flight.phase = TensorPhase::transfer;
@@ -42,9 +38,13 @@ void TimingMachine::start_tensor_transfer(Inflight& entry) {
 
 void TimingMachine::free_tensor(Inflight& entry, uint32_t address) {
     const auto count = entry.instruction.imm;
-    free_tensor_columns(machine_.ctas_[entry.cta], address, count);
-    sms_[entry.sm]->allocated_columns -= count; sms_[entry.sm]->tensor_columns[entry.cta] -= count;
+    sms_[entry.sm]->tmem->free(machine_.ctas_[entry.cta].tmem,address,count);
     entry.tensor->phase = TensorPhase::complete;
+}
+
+uint32_t TimingMachine::tensor_address(uint32_t cta_id,uint32_t row,uint32_t column) {
+    auto& cta=machine_.ctas_[cta_id];
+    return sms_[cta.sm_id]->tmem->coordinate(cta.tmem,row,column);
 }
 
 void TimingMachine::start_tensor_descriptor(Inflight& entry, uint32_t address) {

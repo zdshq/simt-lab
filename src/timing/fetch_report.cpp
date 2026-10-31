@@ -21,7 +21,7 @@ void TimingMachine::dump_instruction_fetch(std::ostream& out) const {
         first=false; const auto& s=unit->stats();
         out << "{\"sm\":" << sm << ",\"backend\":\"rtl\",\"physical_partitions\":8,\"partition_limit\":" << sms_[sm]->partitions.size()
             << ",\"bytes_per_partition\":4096,\"line_bytes\":64,\"refill_ports\":1,\"memory_backend\":\"shared_l2_dram\""
-            << ",\"l2_backend\":\"" << memory_->l2_cache().name() << "\",\"dram_backend\":\"model\""
+            << ",\"l2_backend\":\"" << memory_->l2_cache().name() << "\",\"dram_backend\":\"" << memory_->dram().name() << "\""
             << ",\"image_address\":" << instruction_image_->address() << ",\"image_words\":" << instruction_image_->words()
             << ",\"clocks\":" << s.clocks << ",\"busy\":" << (unit->busy() ? "true" : "false")
             << ",\"memory_requests\":" << s.memory_requests << ",\"memory_responses\":" << s.memory_responses

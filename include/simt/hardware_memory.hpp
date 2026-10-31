@@ -46,14 +46,21 @@ struct DramStats { uint64_t reads = 0, writes = 0, row_hits = 0, row_misses = 0,
 struct DramBank { std::optional<uint64_t> row; uint64_t available = 0; };
 struct DramRequest { Ticket ticket; Packet packet; uint64_t due = 0; };
 
+class DramPort : public SectorPort {
+public:
+    virtual const DramStats& stats() const = 0;
+    virtual std::string_view name() const = 0;
+};
+
 // Open-page FCFS banks and a shared data bus form an explicit research DRAM controller.
 // open-page FCFS bank 与共享数据总线构成显式的研究型 DRAM 控制器。
-class Dram final : public SectorPort {
+class Dram final : public DramPort {
 public:
     Dram(MemoryBacking& memory, DramConfig config = {});
     std::optional<Ticket> submit(const Packet& packet) override;
     void tick() override;
-    const DramStats& stats() const { return stats_; }
+    const DramStats& stats() const override { return stats_; }
+    std::string_view name() const override { return "model"; }
 private:
     MemoryBacking& memory_;
     DramConfig config_;
@@ -167,6 +174,7 @@ struct HierarchyConfig {
     DramConfig dram;
     AtomicConfig atomic;
     bool cache_rtl = false;
+    bool dram_rtl = false;
 };
 struct SectorFlight { size_t index; Ticket ticket; };
 struct WarpRequest {
@@ -194,17 +202,18 @@ public:
     void invalidate();
     void invalidate_range(uint64_t address, uint64_t size);
     bool drain_owner(uint64_t owner);
-    uint64_t cycle() const { return dram_.cycle(); }
+    uint64_t cycle() const { return dram_->cycle(); }
     const CacheStats& l1_stats(uint32_t sm) const;
     const CacheStats& l2_stats() const { return l2_->stats(); }
     const CachePort& l1_cache(uint32_t sm) const;
     const CachePort& l2_cache() const { return *l2_; }
-    const DramStats& dram_stats() const { return dram_.stats(); }
+    const DramStats& dram_stats() const { return dram_->stats(); }
+    const DramPort& dram() const { return *dram_; }
     const AtomicStats& atomic_stats() const;
 private:
     MemoryBacking& memory_;
     HierarchyConfig config_;
-    Dram dram_;
+    std::unique_ptr<DramPort> dram_;
     std::unique_ptr<CachePort> l2_;
     std::vector<std::unique_ptr<CachePort>> l1_;
     std::unique_ptr<GlobalAtomics> atomics_;

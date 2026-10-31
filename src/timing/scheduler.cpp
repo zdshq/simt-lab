@@ -15,7 +15,7 @@ void validate_async_config(const hw::AsyncConfig& config) {
 TimedSm::TimedSm(const hw::PipelineConfig& config, const hw::TensorConfig& tensor, const hw::AtomicConfig& atomic)
     : resources(config), owners(config.max_warps),
       shared(hw::make_shared_engine({65536, 32, 2, 8, atomic.latency},config.collector_rtl)),
-      tmem({131072, tensor.tmem_banks, tensor.tmem_latency, 8}), array(hw::make_tensor_engine(tensor)) {
+      tmem(hw::make_tensor_memory(tensor,config.collector_rtl)), array(hw::make_tensor_engine(tensor)) {
     if (config.collector_rtl) resource_unit=hw::make_cta_resources(config);
     if (config.collector_rtl) execution_arbiter=hw::make_execution_arbiter(config.partitions,
         {config.integer_interval,config.float_interval,config.special_interval});
@@ -106,6 +106,7 @@ bool TimingMachine::admit() {
 void TimingMachine::place(uint32_t block, uint32_t sm, const hw::Residency& residency, uint32_t slot) {
     machine_.initialize_cta(block, sm);
     admit_cta_barrier(block, sm, slot);
+    sms_[sm]->tmem->attach(machine_.ctas_[block].tmem,slot,131072);
     const auto shared_size=machine_.config_.cta_shared_bytes;
     sms_[sm]->shared->attach(machine_.ctas_[block].shared,cta_slots_[block]*((shared_size+127)/128*128),shared_size);
     warps_[block].resize(residency.slots.size());
@@ -167,8 +168,7 @@ void TimingMachine::retire_ctas() {
         if (sm.resource_unit) sm.resource_unit->release(cta.block_id);
         else sm.resources.release(cta.block_id);
         if (!sm.cta_owners.empty()) sm.cta_owners[cta_slots_[cta.block_id]].reset();
-        sm.allocated_columns -= sm.tensor_columns[cta.block_id];
-        sm.tensor_columns.erase(cta.block_id);
+        sm.tmem->detach(cta.tmem);
         sm.barrier_entries -= static_cast<uint32_t>(cta.transactions.size());
         cta.completed = true; ++machine_.completed_;
         Inflight event; event.cta = cta.block_id; event.sm = cta.sm_id; trace(event, "cta_retire");
@@ -205,7 +205,7 @@ bool TimingMachine::advance() {
     }
     admit();
     if (!external_clock_) { hardware_->tick(); cycle_ = hardware_->cycle(); }
-    for (auto& sm : sms_) { sm->shared->tick(); sm->constant.tick(); sm->tmem.tick(); sm->array->tick(); }
+    for (auto& sm : sms_) { sm->shared->tick(); sm->constant.tick(); sm->tmem->tick(); sm->array->tick(); }
     progress_async_units();
     retire_results(); collect_operands(); launch_ready();
     bool issued = false;
